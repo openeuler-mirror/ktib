@@ -8,15 +8,14 @@ Software architecture description
 
 #### Installation
 
-1.  xxxx
-2.  xxxx
-3.  xxxx
+1.  make build
+2.  make install
 
 #### Instructions
 
-1.  xxxx
-2.  xxxx
-3.  xxxx
+1. Integration of S2I and B2I image production functions
+2. Integrated code security scanning function and container image scanning function
+3. Build configuration persistent storage function and CICD function
 
 #### Contribution
 
