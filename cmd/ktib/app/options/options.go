@@ -53,7 +53,7 @@ type PushOption struct {
 }
 
 type RemoveOption struct {
-	Force bool
+	entities.RmOptions
 }
 
 type BuildersOption struct {
