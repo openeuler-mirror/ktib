@@ -14,37 +14,52 @@ package app
 import (
 	"context"
 	o "gitee.com/openeuler/ktib/cmd/ktib/app/options"
+	"gitee.com/openeuler/ktib/pkg/types"
+	"github.com/aquasecurity/trivy/pkg/commands/artifact"
 	"github.com/spf13/cobra"
+	"github.com/urfave/cli/v2"
 )
 
 func runScan(c *cobra.Command, args []string, opt o.Option) error {
 	//TODO 解析context 构造scanner  in pkg/scanner
-	if len(args) > 0 {
-		return nil
-	}
-	runner, err := NewRunner(opt)
+	var ctx cli.Context
+	option, err := artifact.InitOption(&ctx)
 	if err != nil {
-		// TODO
 		return err
 	}
+	//TODO: 需要对比ktib option和trivy option的区别，参数不足需要额外赋值
+	opt.Option = option
+	runner, err := artifact.NewRunner(opt.Option)
+	if err != nil {
+		return err
+	}
+	defer runner.Close(context.Background())
+	var report types.Report
+	re := report.Report
 	switch c.Use {
 	case "Source":
 		// TODO  report = runner.ScanSource()
-		return nil
+		re, err = runner.ScanFilesystem(context.Background(), opt.Option)
+		if err != nil {
+			return err
+		}
 	case "RPMs":
 		// TODO  report = runner.ScanRPMs()
 		return nil
 	case "Dockerfile":
-		// TODO  report = runner.ScanDockerfile()
-		_, err := runner.ScanDockerfile(context.Background())
+		re, err = runner.ScanFilesystem(context.Background(), opt.Option)
 		if err != nil {
 			return err
 		}
-		return nil
-	default:
-		// 默认走...
-		return nil
 	}
+	re, err = runner.Filter(context.Background(), opt.Option, report.Report)
+	if err != nil {
+		return err
+	}
+	if err = runner.Report(opt.Option, re); err != nil {
+		return err
+	}
+	return nil
 
 }
 
@@ -54,10 +69,6 @@ func newCmdScan() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "scan",
 		Short: "Run this command in order to scan source, rpms, dockerfile ...",
-		//RunE: func(cmd *cobra.Command, args []string) error {
-		//	return runScan(cmd, args, option)
-		//},
-		//Args: cobra.NoArgs,
 	}
 	// TODO 添加子命令 scan source, rpms, dockerfile
 	cmd.AddCommand(
@@ -73,9 +84,15 @@ func newCmdScan() *cobra.Command {
 }
 
 func newSubCmdSource() *cobra.Command {
+	var option o.Option
 	cmd := &cobra.Command{
-		Use:   "Source",
-		Short: "Run this command in order to scan Source ...",
+		Use:     "Source",
+		Aliases: []string{"-S"},
+		Short:   "Run this command in order to scan Source ...",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runScan(cmd, args, option)
+		},
+		Args: cobra.MinimumNArgs(1),
 	}
 	return cmd
 }
@@ -91,16 +108,13 @@ func newSubCmdRPMs() *cobra.Command {
 func newSubCmdDokcerfile() *cobra.Command {
 	var option o.Option
 	cmd := &cobra.Command{
-		Use:   "Dockerfile",
-		Short: "Run this command in order to scan dockerfile ...",
+		Use:     "Dockerfile",
+		Aliases: []string{"-D"},
+		Short:   "Run this command in order to scan dockerfile ...",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runScan(cmd, args, option)
 		},
-		Args: cobra.NoArgs,
+		Args: cobra.MinimumNArgs(1),
 	}
-
-	// TODO 添加flag
-	flag := cmd.Flags()
-	flag.StringVarP(&option.Driver, "diver", "d", "kysec-CIS", "support dockerfile-audit|trivy|kysec-CIS")
 	return cmd
 }

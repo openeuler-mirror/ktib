@@ -12,6 +12,7 @@
 package options
 
 import (
+	"github.com/aquasecurity/trivy/pkg/commands/artifact"
 	"github.com/containers/buildah"
 	"github.com/containers/podman/v4/cmd/podman/common"
 	"github.com/containers/podman/v4/pkg/domain/entities"
@@ -19,6 +20,7 @@ import (
 )
 
 type Option struct {
+	artifact.Option
 	Driver string
 }
 

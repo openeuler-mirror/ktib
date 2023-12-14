@@ -11,6 +11,8 @@
 
 package types
 
+import "github.com/aquasecurity/trivy/pkg/types"
+
 type ContainerStartReport struct {
 	Id       string //nolint:revive,stylecheck
 	RawInput string
@@ -18,4 +20,5 @@ type ContainerStartReport struct {
 	ExitCode int
 }
 type Report struct {
+	types.Report
 }
