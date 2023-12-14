@@ -38,6 +38,7 @@ func newCmdBuilder() *cobra.Command {
 		builders.ListBuildersCmd(),
 		builders.MOUNTCmd(),
 		builders.RUNCmd(),
+		builders.RMCmd(),
 		builders.UMOUNTCmd())
 	return cmd
 }

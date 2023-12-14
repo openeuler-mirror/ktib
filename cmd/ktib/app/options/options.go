@@ -1,9 +1,9 @@
 /*
    Copyright (c) 2023 KylinSoft Co., Ltd.
    Kylin trusted image builder(ktib) is licensed under Mulan PSL v2.
-   You can use this software according to the terms and conditions of the Mulan PSL v2. 
+   You can use this software according to the terms and conditions of the Mulan PSL v2.
    You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2 
+            http://license.coscl.org.cn/MulanPSL2
    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING
    BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
    See the Mulan PSL v2 for more details.
@@ -12,6 +12,7 @@
 package options
 
 import (
+	"github.com/aquasecurity/trivy/pkg/commands/artifact"
 	"github.com/containers/buildah"
 	"github.com/containers/podman/v4/cmd/podman/common"
 	"github.com/containers/podman/v4/pkg/domain/entities"
@@ -19,6 +20,7 @@ import (
 )
 
 type Option struct {
+	artifact.Option
 	Driver string
 }
 
@@ -53,7 +55,7 @@ type PushOption struct {
 }
 
 type RemoveOption struct {
-	Force bool
+	entities.RmOptions
 }
 
 type BuildersOption struct {
