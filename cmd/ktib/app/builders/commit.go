@@ -23,41 +23,6 @@ import (
 )
 
 func commit(cmd *cobra.Command, args []string, option *options.CommitOption) error {
-	//var imageName string
-	//if len(args) == 2 {
-	//	imageName = args[1]
-	//}
-	//store, err := utils.GetStore(cmd)
-	//container := args[0]
-	//
-	//b, err := builder.FindBuilder(store, container)
-	//if err != nil {
-	//	return err
-	//}
-	//// TODO set flags
-	//if option.Maintainer != "" {
-	//	b.SetMaintainer(option.Maintainer)
-	//}
-	//if len(option.Env) != 0 {
-	//	b.SetEnv(option.Env)
-	//}
-	//if option.EntryPoint != "" {
-	//	b.SetEntryPoint(option.EntryPoint)
-	//}
-	//if option.Message != "" {
-	//	b.SetMessage(option.Message)
-	//}
-	//err = b.Commit(imageName)
-	//if err != nil {
-	//	return err
-	//}
-	//if option.Remove {
-	//	err := b.Remove()
-	//	if err != nil {
-	//		return err
-	//	}
-	//}
-	//return nil
 	container := strings.TrimPrefix(args[0], "/")
 	if len(args) == 2 {
 		option.ImageName = args[1]
