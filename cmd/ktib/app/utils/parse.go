@@ -70,27 +70,20 @@ func sortImages(imgs []*libimage.Image) ([]imageReport, error) {
 		if err != nil {
 			return nil, err
 		}
-		if len(img.Names()) < 1 {
-			imgReport = append(imgReport, imageReport{
-				Name:     unknownState,
-				ID:       img.ID()[:10],
-				Digest:   img.Digest(),
-				TopLayer: img.TopLayer()[0:10],
-				Created:  units.HumanDuration(time.Since(img.Created())) + " ago",
-				Size:     humanSize(size),
-			})
-		}
-		for _, name := range img.Names() {
+		createdAgo := units.HumanDuration(time.Since(img.Created())) + " ago"
+		topLayer := img.TopLayer()[0:10]
+		imgID := img.ID()[:10]
+
+		for _, name := range append(img.Names(), unknownState)[:1] {
 			imgReport = append(imgReport, imageReport{
 				Name:     name,
-				ID:       img.ID()[:10],
+				ID:       imgID,
 				Digest:   img.Digest(),
-				TopLayer: img.TopLayer()[0:10],
-				Created:  units.HumanDuration(time.Since(img.Created())) + " ago",
+				TopLayer: topLayer,
+				Created:  createdAgo,
 				Size:     humanSize(size),
 			})
 		}
-
 	}
 	return imgReport, nil
 }
