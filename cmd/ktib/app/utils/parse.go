@@ -14,6 +14,9 @@ package utils
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"time"
+
 	"gitee.com/openeuler/ktib/cmd/ktib/app/options"
 	"gitee.com/openeuler/ktib/pkg/builder"
 	ktype "gitee.com/openeuler/ktib/pkg/types"
@@ -25,9 +28,9 @@ import (
 	"github.com/opencontainers/go-digest"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"os"
-	"time"
 )
+
+const unknownState = "<none>"
 
 type imageReport struct {
 	Name     string
@@ -67,14 +70,27 @@ func sortImages(imgs []*libimage.Image) ([]imageReport, error) {
 		if err != nil {
 			return nil, err
 		}
-		imgReport = append(imgReport, imageReport{
-			Name:     img.Names()[0],
-			ID:       img.ID()[:10],
-			Digest:   img.Digest(),
-			TopLayer: img.TopLayer()[0:10],
-			Created:  units.HumanDuration(time.Since(img.Created())) + " ago",
-			Size:     humanSize(size),
-		})
+		if len(img.Names()) < 1 {
+			imgReport = append(imgReport, imageReport{
+				Name:     unknownState,
+				ID:       img.ID()[:10],
+				Digest:   img.Digest(),
+				TopLayer: img.TopLayer()[0:10],
+				Created:  units.HumanDuration(time.Since(img.Created())) + " ago",
+				Size:     humanSize(size),
+			})
+		}
+		for _, name := range img.Names() {
+			imgReport = append(imgReport, imageReport{
+				Name:     name,
+				ID:       img.ID()[:10],
+				Digest:   img.Digest(),
+				TopLayer: img.TopLayer()[0:10],
+				Created:  units.HumanDuration(time.Since(img.Created())) + " ago",
+				Size:     humanSize(size),
+			})
+		}
+
 	}
 	return imgReport, nil
 }
