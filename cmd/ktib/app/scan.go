@@ -13,6 +13,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	o "gitee.com/openeuler/ktib/cmd/ktib/app/options"
 	"gitee.com/openeuler/ktib/pkg/types"
 	"github.com/aquasecurity/trivy/pkg/commands/artifact"
@@ -29,6 +30,8 @@ func runScan(c *cobra.Command, args []string, opt o.Option) error {
 	}
 	//TODO: 需要对比ktib option和trivy option的区别，参数不足需要额外赋值
 	opt.Option = option
+	// 1111111111
+	fmt.Println(option)
 	runner, err := artifact.NewRunner(opt.Option)
 	if err != nil {
 		return err

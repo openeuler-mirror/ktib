@@ -14,7 +14,6 @@ package options
 import (
 	"github.com/aquasecurity/trivy/pkg/commands/artifact"
 	"github.com/containers/buildah"
-	"github.com/containers/podman/v4/cmd/podman/common"
 	"github.com/containers/podman/v4/pkg/domain/entities"
 	"io"
 )
@@ -60,7 +59,8 @@ type RemoveOption struct {
 
 type BuildersOption struct {
 	Json bool
-	common.BuildFlagsWrapper
+	entities.BuildOptions
+	//common.BuildFlagsWrapper
 }
 
 type FromOption struct {
