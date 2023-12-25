@@ -20,7 +20,8 @@ import (
 
 type Option struct {
 	artifact.Option
-	Driver string
+	Driver   string
+	Severity string
 }
 
 type ImagesOption struct {
