@@ -15,13 +15,23 @@ import (
 	"errors"
 	"gitee.com/openeuler/ktib/cmd/ktib/app/options"
 	"github.com/containers/buildah/pkg/cli"
-	"github.com/containers/podman/v4/cmd/podman/common"
 	"github.com/containers/podman/v4/cmd/podman/registry"
 	"github.com/containers/podman/v4/cmd/podman/utils"
 	"github.com/spf13/cobra"
 	"os"
 	"os/exec"
 )
+
+//type buildFlagsWrapper struct {
+//	// Buildah stuff first
+//	cli.BudResults
+//	cli.LayerResults
+//	cli.FromAndBudResults
+//	cli.NameSpaceResults
+//	cli.UserNSResults
+//	// SquashAll squashes all layers into a single layer.
+//	SquashAll bool
+//}
 
 func BUILDCmd() *cobra.Command {
 	var op options.BuildersOption
@@ -33,20 +43,20 @@ func BUILDCmd() *cobra.Command {
 			return build(cmd, args, op)
 		},
 	}
-	common.DefineBuildFlags(cmd, &op.BuildFlagsWrapper)
+	//TODO: 需要补全buildFlags
 	return cmd
 }
 
+// TODO: 需要完善，暂时build不了
 func build(cmd *cobra.Command, args []string, op options.BuildersOption) error {
-	buildOptions, err := common.ParseBuildOpts(cmd, args, &op.BuildFlagsWrapper)
-	if err != nil {
-		return err
-	}
+	var containerFiles []string
 	imageEngine, err := registry.NewImageEngine(cmd, args)
 	if err != nil {
 		return err
 	}
-	report, err := imageEngine.Build(registry.GetContext(), buildOptions.ContainerFiles, *buildOptions)
+	// TODO: 需要Parse buildOptions
+	buildOptions := op.BuildOptions
+	report, err := imageEngine.Build(registry.GetContext(), containerFiles, buildOptions)
 	if err != nil {
 		exitCode := cli.ExecErrorCodeGeneric
 		if registry.IsRemote() {
@@ -63,8 +73,9 @@ func build(cmd *cobra.Command, args []string, op options.BuildersOption) error {
 		registry.SetExitCode(exitCode)
 		return err
 	}
+	//TODO: buildFlagsWrapperToOptions
 	if cmd.Flag("iidfile").Changed {
-		f, err := os.Create(op.Iidfile)
+		f, err := os.Create(cli.BudResults{}.Iidfile)
 		if err != nil {
 			return err
 		}
