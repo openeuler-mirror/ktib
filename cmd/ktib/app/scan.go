@@ -16,10 +16,11 @@ import (
 	o "gitee.com/openeuler/ktib/cmd/ktib/app/options"
 	"gitee.com/openeuler/ktib/pkg/types"
 	"github.com/aquasecurity/trivy/pkg/commands/artifact"
+	"github.com/aquasecurity/trivy/pkg/fanal/analyzer"
+	tt "github.com/aquasecurity/trivy/pkg/types"
+	"github.com/aquasecurity/trivy/pkg/utils"
 	"github.com/spf13/cobra"
 	"github.com/urfave/cli/v2"
-	"os"
-	"path/filepath"
 )
 
 func runScan(c *cobra.Command, args []string, opt o.Option) error {
@@ -29,6 +30,10 @@ func runScan(c *cobra.Command, args []string, opt o.Option) error {
 	ctx.Context = context.Background()
 	ctx.App = cli.NewApp()
 	scanOption, err := o.InitScanOptions(opt, ctx)
+	if scanOption.Input == "" {
+		scanOption.Target = args[0]
+	}
+	scanOption.Severities = o.GetSeverity(scanOption.Logger, o.Severity)
 	runner, err := artifact.NewRunner(scanOption)
 	if err != nil {
 		return err
@@ -47,7 +52,7 @@ func runScan(c *cobra.Command, args []string, opt o.Option) error {
 		// TODO  report = runner.ScanRPMs()
 		return nil
 	case "Dockerfile":
-		re, err = runner.ScanFilesystem(context.Background(), scanOption)
+		re, err = configRun(runner, context.Background(), scanOption)
 		if err != nil {
 			return err
 		}
@@ -115,15 +120,15 @@ func newSubCmdDokcerfile() *cobra.Command {
 	}
 	flag := cmd.Flags()
 	flag.StringArrayVar(&option.PolicyNamespaces, "namespaces", []string{"users"}, "Rego namespaces")
-	flag.StringVar(&option.CacheDir, "cache-dir", defaultCacheDir(), "cache directory")
+	flag.StringVar(&option.CacheDir, "cache-dir", utils.DefaultCacheDir(), "cache directory")
 	flag.StringVar(&option.Format, "format", "table", "report format table")
 	return cmd
 }
 
-func defaultCacheDir() string {
-	tmpDir, err := os.UserCacheDir()
-	if err != nil {
-		tmpDir = os.TempDir()
-	}
-	return filepath.Join(tmpDir, "ktib")
+func configRun(runner artifact.Runner, ctx context.Context, sop artifact.Option) (tt.Report, error) {
+	sop.DisabledAnalyzers = append(analyzer.TypeOSes, analyzer.TypeLanguages...)
+	sop.VulnType = nil
+	sop.SecurityChecks = []string{tt.SecurityCheckConfig}
+	report, err := runner.ScanFilesystem(ctx, sop)
+	return report, err
 }
