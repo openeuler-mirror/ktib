@@ -8,6 +8,7 @@ import (
 	"go.uber.org/zap"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/urfave/cli/v2"
 )
@@ -37,21 +38,22 @@ func NewConfigOption(opt Option) option.ConfigOption {
 
 func NewReportOption(opt Option) option.ReportOption {
 	return option.ReportOption{
-		Format:       opt.Format,
-		IgnorePolicy: ".ktibignore",
-		Output:       os.Stdout,
-		ListAllPkgs:  false,
+		Format:      opt.Format,
+		Output:      os.Stdout,
+		ListAllPkgs: false,
 	}
 }
 
 func InitScanOptions(opt Option, ctx cli.Context) (artifact.Option, error) {
 	globalOption, err := NewGlobalOption(opt, ctx)
+	artifactOption := option.NewArtifactOption(&ctx)
+	artifactOption.Timeout = time.Second * 300
 	if err != nil {
 		return artifact.Option{}, err
 	}
 	return artifact.Option{
 		GlobalOption:     globalOption,
-		ArtifactOption:   option.NewArtifactOption(&ctx),
+		ArtifactOption:   artifactOption,
 		DBOption:         option.NewDBOption(&ctx),
 		ImageOption:      option.NewImageOption(&ctx),
 		ReportOption:     NewReportOption(opt),
