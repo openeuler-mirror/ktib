@@ -16,19 +16,24 @@ import (
 	o "gitee.com/openeuler/ktib/cmd/ktib/app/options"
 	"gitee.com/openeuler/ktib/pkg/types"
 	"github.com/aquasecurity/trivy/pkg/commands/artifact"
+	"github.com/aquasecurity/trivy/pkg/fanal/analyzer"
+	tt "github.com/aquasecurity/trivy/pkg/types"
+	"github.com/aquasecurity/trivy/pkg/utils"
 	"github.com/spf13/cobra"
 	"github.com/urfave/cli/v2"
-	"os"
-	"path/filepath"
 )
 
+var option o.Option
+
 func runScan(c *cobra.Command, args []string, opt o.Option) error {
-	//TODO 解析context 构造scanner  in pkg/scanner
-	//TODO: 需要对比ktib option和trivy option的区别，参数不足需要额外赋值
 	var ctx cli.Context
 	ctx.Context = context.Background()
 	ctx.App = cli.NewApp()
 	scanOption, err := o.InitScanOptions(opt, ctx)
+	if scanOption.Input == "" {
+		scanOption.Target = args[0]
+	}
+	scanOption.Severities = o.GetSeverity(scanOption.Logger, o.Severity)
 	runner, err := artifact.NewRunner(scanOption)
 	if err != nil {
 		return err
@@ -38,7 +43,8 @@ func runScan(c *cobra.Command, args []string, opt o.Option) error {
 	re := report.Report
 	switch c.Use {
 	case "Source":
-		// TODO  report = runner.ScanSource()
+		scanOption.VulnType = nil
+		scanOption.SecurityChecks = []string{tt.VulnTypeLibrary}
 		re, err = runner.ScanFilesystem(context.Background(), scanOption)
 		if err != nil {
 			return err
@@ -47,12 +53,12 @@ func runScan(c *cobra.Command, args []string, opt o.Option) error {
 		// TODO  report = runner.ScanRPMs()
 		return nil
 	case "Dockerfile":
-		re, err = runner.ScanFilesystem(context.Background(), scanOption)
+		re, err = configRun(runner, context.Background(), scanOption)
 		if err != nil {
 			return err
 		}
 	}
-	re, err = runner.Filter(context.Background(), scanOption, report.Report)
+	re, err = runner.Filter(context.Background(), scanOption, re)
 	if err != nil {
 		return err
 	}
@@ -64,7 +70,6 @@ func runScan(c *cobra.Command, args []string, opt o.Option) error {
 
 func newCmdScan() *cobra.Command {
 	// TODO 构造命令 command args flag 等
-	var option o.Option
 	cmd := &cobra.Command{
 		Use:   "scan",
 		Short: "Run this command in order to scan source, rpms, dockerfile ...",
@@ -83,7 +88,6 @@ func newCmdScan() *cobra.Command {
 }
 
 func newSubCmdSource() *cobra.Command {
-	var option o.Option
 	cmd := &cobra.Command{
 		Use:   "Source",
 		Short: "Run this command in order to scan Source ...",
@@ -92,19 +96,11 @@ func newSubCmdSource() *cobra.Command {
 		},
 		Args: cobra.MinimumNArgs(1),
 	}
-	return cmd
-}
-
-func newSubCmdRPMs() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "RPMs",
-		Short: "Run this command in order to scan RPMs ...",
-	}
+	initFlags(cmd)
 	return cmd
 }
 
 func newSubCmdDokcerfile() *cobra.Command {
-	var option o.Option
 	cmd := &cobra.Command{
 		Use:   "Dockerfile",
 		Short: "Run this command in order to scan dockerfile ...",
@@ -113,17 +109,30 @@ func newSubCmdDokcerfile() *cobra.Command {
 		},
 		Args: cobra.MinimumNArgs(1),
 	}
-	flag := cmd.Flags()
-	flag.StringArrayVar(&option.PolicyNamespaces, "namespaces", []string{"users"}, "Rego namespaces")
-	flag.StringVar(&option.CacheDir, "cache-dir", defaultCacheDir(), "cache directory")
-	flag.StringVar(&option.Format, "format", "table", "report format table")
+	initFlags(cmd)
 	return cmd
 }
 
-func defaultCacheDir() string {
-	tmpDir, err := os.UserCacheDir()
-	if err != nil {
-		tmpDir = os.TempDir()
+func newSubCmdRPMs() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "RPMs",
+		Short: "Run this command in order to scan RPMs ...",
 	}
-	return filepath.Join(tmpDir, "ktib")
+	initFlags(cmd)
+	return cmd
+}
+
+func initFlags(cmd *cobra.Command) {
+	flag := cmd.Flags()
+	flag.StringArrayVar(&option.PolicyNamespaces, "namespaces", []string{"users"}, "Rego namespaces")
+	flag.StringVar(&option.CacheDir, "cache-dir", utils.DefaultCacheDir(), "cache directory")
+	flag.StringVar(&option.Format, "format", "table", "report format table")
+}
+
+func configRun(runner artifact.Runner, ctx context.Context, sop artifact.Option) (tt.Report, error) {
+	sop.DisabledAnalyzers = append(analyzer.TypeOSes, analyzer.TypeLanguages...)
+	sop.VulnType = nil
+	sop.SecurityChecks = []string{tt.SecurityCheckConfig}
+	report, err := runner.ScanFilesystem(ctx, sop)
+	return report, err
 }
