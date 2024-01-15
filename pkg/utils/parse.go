@@ -14,10 +14,10 @@ package utils
 import (
 	"encoding/json"
 	"fmt"
+	"gitee.com/openeuler/ktib/pkg/options"
 	"os"
 	"time"
 
-	"gitee.com/openeuler/ktib/cmd/ktib/app/options"
 	"gitee.com/openeuler/ktib/pkg/builder"
 	ktype "gitee.com/openeuler/ktib/pkg/types"
 	libimage "github.com/containers/common/libimage"

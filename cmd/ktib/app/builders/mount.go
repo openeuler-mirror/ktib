@@ -12,15 +12,15 @@
 package builders
 
 import (
-	"gitee.com/openeuler/ktib/cmd/ktib/app/options"
-	"gitee.com/openeuler/ktib/cmd/ktib/app/utils"
 	"gitee.com/openeuler/ktib/pkg/builder"
+	"gitee.com/openeuler/ktib/pkg/options"
+	utils2 "gitee.com/openeuler/ktib/pkg/utils"
 	"github.com/spf13/cobra"
 )
 
 func mount(cmd *cobra.Command, args []string, option *options.MountOption) error {
 	var builders []*builder.Builder
-	store, err := utils.GetStore(cmd)
+	store, err := utils2.GetStore(cmd)
 	if err != nil {
 		return err
 	}
@@ -43,9 +43,9 @@ func mount(cmd *cobra.Command, args []string, option *options.MountOption) error
 		}
 	}
 	if option.Json {
-		return utils.JsonFormatMountInfo(builders)
+		return utils2.JsonFormatMountInfo(builders)
 	}
-	return utils.FormatMountInfo(builders)
+	return utils2.FormatMountInfo(builders)
 }
 
 func MOUNTCmd() *cobra.Command {

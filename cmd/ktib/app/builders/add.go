@@ -12,7 +12,7 @@
 package builders
 
 import (
-	"gitee.com/openeuler/ktib/cmd/ktib/app/options"
+	"gitee.com/openeuler/ktib/pkg/options"
 	"github.com/spf13/cobra"
 )
 

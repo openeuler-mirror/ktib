@@ -12,13 +12,13 @@
 package builders
 
 import (
-	"gitee.com/openeuler/ktib/cmd/ktib/app/options"
-	"gitee.com/openeuler/ktib/cmd/ktib/app/utils"
+	"gitee.com/openeuler/ktib/pkg/options"
+	utils2 "gitee.com/openeuler/ktib/pkg/utils"
 	"github.com/spf13/cobra"
 )
 
 func listBuilders(c *cobra.Command, args []string, ops options.BuildersOption) error {
-	store, err := utils.GetStore(c)
+	store, err := utils2.GetStore(c)
 	if err != nil {
 		return err
 	}
@@ -27,9 +27,9 @@ func listBuilders(c *cobra.Command, args []string, ops options.BuildersOption) e
 		return err
 	}
 	if ops.Json {
-		return utils.JsonFormatBuilders(containers, ops)
+		return utils2.JsonFormatBuilders(containers, ops)
 	}
-	return utils.FormatBuilders(containers, ops)
+	return utils2.FormatBuilders(containers, ops)
 }
 
 func ListBuildersCmd() *cobra.Command {

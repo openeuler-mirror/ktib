@@ -13,7 +13,7 @@ package images
 
 import (
 	"context"
-	"gitee.com/openeuler/ktib/cmd/ktib/app/options"
+	"gitee.com/openeuler/ktib/pkg/options"
 	"github.com/containers/common/pkg/auth"
 	"github.com/containers/image/v5/types"
 	"github.com/spf13/cobra"
@@ -38,13 +38,10 @@ func LoginCmd() *cobra.Command {
 	flags.StringVarP(&op.Username, "username", "u", "", "Username")
 	flags.BoolVarP(&op.TLSVerify, "tls-verify", "", false, "Require HTTPS and verify certificates when contacting registries")
 	flags.BoolVar(&op.GetLoginSet, "get-login", false, "Return the current login user for the registry")
-	//op.Stdin = os.Stdin
-	//op.Stdout = os.Stdout
 	return cmd
 }
 
 func login(cmd *cobra.Command, args []string, lops *options.LoginOption) error {
-	//TODO return auth.Login(ctx, tempsystemContext, temploginops, tempargs)
 	ctx := context.Background()
 	var loginOps *auth.LoginOptions
 	loginOps = &auth.LoginOptions{

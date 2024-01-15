@@ -12,44 +12,32 @@
 package images
 
 import (
-	"context"
 	"errors"
-	"gitee.com/openeuler/ktib/cmd/ktib/app/options"
-	"gitee.com/openeuler/ktib/cmd/ktib/app/utils"
-	"github.com/containers/common/libimage"
-	"github.com/containers/image/v5/types"
+	"gitee.com/openeuler/ktib/pkg/imagemanager"
+	"gitee.com/openeuler/ktib/pkg/options"
+	utils2 "gitee.com/openeuler/ktib/pkg/utils"
 	"github.com/spf13/cobra"
 )
 
 // TODO: 当dockerfile制作镜像时，超过一层会panic；commit已有镜像名也会panic
-func imageList(c *cobra.Command, args []string, ops options.ImagesOption) error {
+func imageList(cmd *cobra.Command, args []string, ops options.ImagesOption) error {
 	// 判断args长度, 按照docker设计两个imageName时会报错
 	if len(args) > 1 {
 		return errors.New("\"docker images\" requires at most 1 argument")
 	}
-	store, err := utils.GetStore(c)
+	store, err := utils2.GetStore(cmd)
 	if err != nil {
 		return err
 	}
-	var systemContext *types.SystemContext
-	//systemContext.BigFilesTemporaryDir = "/tmp"
-	runtime, err := libimage.RuntimeFromStore(store, &libimage.RuntimeOptions{SystemContext: systemContext})
+	imageManager, err := imagemanager.NewImageManager(store)
 	if err != nil {
 		return err
 	}
-
-	// get current context
-	ctx := context.Background()
-	opts := &libimage.ListImagesOptions{}
-
-	// TODO set opts.Filters = ops.Filter impl filter images
-
-	images, err := runtime.ListImages(ctx, args, opts)
+	images, err := imageManager.ListImage(args)
 	if ops.Json {
-		return utils.JsonFormatImages(images, ops)
+		return utils2.JsonFormatImages(images.KtibImage, ops)
 	}
-
-	return utils.FormatImages(images, ops)
+	return utils2.FormatImages(images.KtibImage, ops)
 }
 
 func ImageListCmd() *cobra.Command {

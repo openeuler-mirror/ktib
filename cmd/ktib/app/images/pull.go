@@ -14,8 +14,8 @@ package images
 import (
 	"context"
 	"fmt"
-	"gitee.com/openeuler/ktib/cmd/ktib/app/options"
-	"gitee.com/openeuler/ktib/cmd/ktib/app/utils"
+	"gitee.com/openeuler/ktib/pkg/options"
+	"gitee.com/openeuler/ktib/pkg/utils"
 	"github.com/containers/common/libimage"
 	"github.com/containers/common/pkg/config"
 	"github.com/containers/image/v5/types"

@@ -13,27 +13,19 @@ package app
 
 import (
 	"context"
-	o "gitee.com/openeuler/ktib/cmd/ktib/app/options"
+	o "gitee.com/openeuler/ktib/pkg/options"
 	"gitee.com/openeuler/ktib/pkg/types"
 	"github.com/aquasecurity/trivy/pkg/commands/artifact"
 	"github.com/aquasecurity/trivy/pkg/fanal/analyzer"
 	tt "github.com/aquasecurity/trivy/pkg/types"
 	"github.com/aquasecurity/trivy/pkg/utils"
 	"github.com/spf13/cobra"
-	"github.com/urfave/cli/v2"
 )
 
 var option o.Option
 
 func runScan(c *cobra.Command, args []string, opt o.Option) error {
-	var ctx cli.Context
-	ctx.Context = context.Background()
-	ctx.App = cli.NewApp()
-	scanOption, err := o.InitScanOptions(opt, ctx)
-	if scanOption.Input == "" {
-		scanOption.Target = args[0]
-	}
-	scanOption.Severities = o.GetSeverity(scanOption.Logger, o.Severity)
+	scanOption, err := o.InitScanOption(args, opt)
 	runner, err := artifact.NewRunner(scanOption)
 	if err != nil {
 		return err
@@ -43,9 +35,7 @@ func runScan(c *cobra.Command, args []string, opt o.Option) error {
 	re := report.Report
 	switch c.Use {
 	case "Source":
-		scanOption.VulnType = nil
-		scanOption.SecurityChecks = []string{tt.VulnTypeLibrary}
-		re, err = runner.ScanFilesystem(context.Background(), scanOption)
+		re, err = sourceRun(runner, context.Background(), scanOption)
 		if err != nil {
 			return err
 		}
@@ -133,6 +123,17 @@ func configRun(runner artifact.Runner, ctx context.Context, sop artifact.Option)
 	sop.DisabledAnalyzers = append(analyzer.TypeOSes, analyzer.TypeLanguages...)
 	sop.VulnType = nil
 	sop.SecurityChecks = []string{tt.SecurityCheckConfig}
+	report, err := runner.ScanFilesystem(ctx, sop)
+	return report, err
+}
+
+func sourceRun(runner artifact.Runner, ctx context.Context, sop artifact.Option) (tt.Report, error) {
+	sop.VulnType = []string{tt.VulnTypeOS, tt.VulnTypeLibrary}
+	sop.SecurityChecks = []string{tt.SecurityCheckVulnerability, tt.SecurityCheckSecret}
+	sop.SkipDBUpdate = true
+	//TODO: 数据库来源需要定
+	sop.DBRepository = ""
+	//TODO: DB PANIC
 	report, err := runner.ScanFilesystem(ctx, sop)
 	return report, err
 }

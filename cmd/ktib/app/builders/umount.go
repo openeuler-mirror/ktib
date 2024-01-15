@@ -13,8 +13,8 @@ package builders
 
 import (
 	"fmt"
-	"gitee.com/openeuler/ktib/cmd/ktib/app/utils"
 	"gitee.com/openeuler/ktib/pkg/builder"
+	"gitee.com/openeuler/ktib/pkg/utils"
 	"github.com/spf13/cobra"
 )
 

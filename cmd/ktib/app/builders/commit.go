@@ -14,7 +14,7 @@ package builders
 import (
 	"context"
 	"fmt"
-	"gitee.com/openeuler/ktib/cmd/ktib/app/options"
+	"gitee.com/openeuler/ktib/pkg/options"
 	"github.com/containers/podman/v4/cmd/podman/common"
 	"github.com/containers/podman/v4/cmd/podman/registry"
 	"github.com/spf13/cobra"
@@ -23,7 +23,7 @@ import (
 )
 
 func commit(cmd *cobra.Command, args []string, option *options.CommitOption) error {
-	container := strings.TrimPrefix(args[0], "/")
+	containerid := strings.TrimPrefix(args[0], "/")
 	if len(args) == 2 {
 		option.ImageName = args[1]
 	}
@@ -34,7 +34,7 @@ func commit(cmd *cobra.Command, args []string, option *options.CommitOption) err
 	if err != nil {
 		return err
 	}
-	res, err := engine.ContainerCommit(context.Background(), container, option.CommitOptions)
+	res, err := engine.ContainerCommit(context.Background(), containerid, option.CommitOptions)
 	if err != nil {
 		fmt.Println(option.CommitOptions.Format)
 		return err
