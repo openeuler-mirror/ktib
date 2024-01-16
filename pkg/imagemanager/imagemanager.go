@@ -2,9 +2,12 @@ package imagemanager
 
 import (
 	"context"
+	"gitee.com/openeuler/ktib/pkg/options"
 	"github.com/containers/common/libimage"
+	"github.com/containers/common/pkg/auth"
 	"github.com/containers/image/v5/types"
 	"github.com/containers/storage"
+	"os"
 )
 
 type ImageManager struct {
@@ -43,8 +46,26 @@ func (im *ImageManager) ListImage(args []string) (*Image, error) {
 }
 
 // TODO: 以下函数需要重构到这里
-func (im *ImageManager) Login() error {
-	return nil
+func (im *ImageManager) KtibLogin(ctx context.Context, lops *options.LoginOption, args []string, getLoginSet bool) error {
+	var loginOps *auth.LoginOptions
+	loginOps = &auth.LoginOptions{
+		Password:                  lops.Password,
+		Username:                  lops.Username,
+		StdinPassword:             lops.PasswordStdin,
+		GetLoginSet:               true,
+		Stdin:                     os.Stdin,
+		Stdout:                    os.Stdout,
+		AcceptRepositories:        true,
+		AcceptUnspecifiedRegistry: true,
+	}
+	sctx := &types.SystemContext{
+		AuthFilePath:                      loginOps.AuthFile,
+		DockerCertPath:                    loginOps.CertDir,
+		DockerDaemonInsecureSkipTLSVerify: lops.TLSVerify,
+	}
+	setRegistriesConfPath(sctx)
+	loginOps.GetLoginSet = getLoginSet
+	return auth.Login(ctx, sctx, loginOps, args)
 }
 
 func (im *ImageManager) Logout() error {
@@ -61,4 +82,18 @@ func (im *ImageManager) Remove() error {
 
 func (im *ImageManager) Tag() error {
 	return nil
+}
+
+func setRegistriesConfPath(systemContext *types.SystemContext) {
+	if systemContext.SystemRegistriesConfPath != "" {
+		return
+	}
+	if envOverride, ok := os.LookupEnv("CONTAINERS_REGISTRIES_CONF"); ok {
+		systemContext.SystemRegistriesConfPath = envOverride
+		return
+	}
+	if envOverride, ok := os.LookupEnv("REGISTRIES_CONFIG_PATH"); ok {
+		systemContext.SystemRegistriesConfPath = envOverride
+		return
+	}
 }
