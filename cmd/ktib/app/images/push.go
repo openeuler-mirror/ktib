@@ -12,28 +12,23 @@
 package images
 
 import (
-	"context"
 	"errors"
+	"gitee.com/openeuler/ktib/pkg/imagemanager"
 	"gitee.com/openeuler/ktib/pkg/options"
 	"gitee.com/openeuler/ktib/pkg/utils"
-	"github.com/containers/common/libimage"
-	"github.com/containers/image/v5/types"
 	"github.com/spf13/cobra"
 )
 
 func push(cmd *cobra.Command, args []string) error {
-	// TODO images, err := runtime.Push()
-	pushOptions := &libimage.PushOptions{}
 	store, err := utils.GetStore(cmd)
-	imageName := args[0]
-	destination := args[len(args)-1]
-	var systemContext *types.SystemContext
-	runtime, err := libimage.RuntimeFromStore(store, &libimage.RuntimeOptions{SystemContext: systemContext})
-	_, err = runtime.Push(context.Background(), imageName, destination, pushOptions)
 	if err != nil {
 		return err
 	}
-	return nil
+	imageManager, err := imagemanager.NewImageManager(store)
+	if err != nil {
+		return err
+	}
+	return imageManager.Push(args)
 }
 func PushCmd() *cobra.Command {
 	var op options.PushOption

@@ -33,7 +33,6 @@ func newCmdImage() *cobra.Command {
 		imagetool.LogoutCmd(),
 		imagetool.PullCmd(),
 		imagetool.PushCmd(),
-		imagetool.RemoveBuildersCmd(),
 		imagetool.RemoveImagesCmd(),
 		imagetool.TAGCmd())
 	return cmd

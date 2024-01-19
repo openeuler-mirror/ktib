@@ -12,39 +12,22 @@
 package images
 
 import (
-	"context"
-	"fmt"
+	"gitee.com/openeuler/ktib/pkg/imagemanager"
 	"gitee.com/openeuler/ktib/pkg/options"
 	"gitee.com/openeuler/ktib/pkg/utils"
-	"github.com/containers/common/libimage"
-	"github.com/containers/common/pkg/config"
-	"github.com/containers/image/v5/types"
 	"github.com/spf13/cobra"
 )
 
 func Pull(cmd *cobra.Command, imageName string, ops options.PullOption) error {
-	// TODO images, err := runtime.Pull()
 	store, err := utils.GetStore(cmd)
 	if err != nil {
 		return err
 	}
-	var systemContext *types.SystemContext
-	runtime, err := libimage.RuntimeFromStore(store, &libimage.RuntimeOptions{SystemContext: systemContext})
+	imageManager, err := imagemanager.NewImageManager(store)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	pullPolicy, err := config.ParsePullPolicy("always")
-	if err != nil {
-		return err
-	}
-	pullOptions := &libimage.PullOptions{}
-	images, err := runtime.Pull(ctx, imageName, pullPolicy, pullOptions)
-	if err != nil {
-		return err
-	}
-	fmt.Printf("%s\n", images[0].ID())
-	return nil
+	return imageManager.Pull(imageName)
 }
 
 func PullCmd() *cobra.Command {
