@@ -14,7 +14,7 @@ package builders
 import (
 	"errors"
 	"fmt"
-	"gitee.com/openeuler/ktib/cmd/ktib/app/options"
+	"gitee.com/openeuler/ktib/pkg/options"
 	"github.com/containers/buildah/copier"
 	"github.com/containers/podman/v4/cmd/podman/registry"
 	"github.com/containers/podman/v4/pkg/copy"
@@ -61,7 +61,6 @@ func Cp(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	// TODO: 缺少从容器拷贝到容器的实现
 	if len(destContainerStr) > 0 && len(sourceContainerStr) > 0 {
 		return copyFromContainerToContainer(sourceContainerStr, sourcePath, destContainerStr, destPath, containerEngine)
 	} else if len(destContainerStr) > 0 && len(sourceContainerStr) == 0 {
@@ -300,7 +299,9 @@ func containerShouldExist(containerID string, engine entities.ContainerEngine) e
 	}
 	return nil
 }
+
 func doCopy(funcA func() error, funcB func() error) error {
+	//todo licenses
 	errChan := make(chan error)
 	go func() {
 		errChan <- funcA()

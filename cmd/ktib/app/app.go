@@ -11,7 +11,9 @@
 
 package app
 
-import "gitee.com/openeuler/ktib/cmd/ktib/app/utils"
+import (
+	"gitee.com/openeuler/ktib/pkg/utils"
+)
 
 func Run() error {
 	//A library subroutine needed to run a subprocess.

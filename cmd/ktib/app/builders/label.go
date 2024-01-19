@@ -13,8 +13,8 @@ package builders
 
 import (
 	"fmt"
-	"gitee.com/openeuler/ktib/cmd/ktib/app/options"
-	"gitee.com/openeuler/ktib/cmd/ktib/app/utils"
+	"gitee.com/openeuler/ktib/pkg/options"
+	"gitee.com/openeuler/ktib/pkg/utils"
 	"github.com/containers/buildah"
 	"github.com/spf13/cobra"
 	"golang.org/x/net/context"

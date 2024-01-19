@@ -13,7 +13,7 @@ package main
 
 import (
 	"gitee.com/openeuler/ktib/cmd/ktib/app"
-	ktibutils "gitee.com/openeuler/ktib/cmd/ktib/app/utils"
+	ktibutils "gitee.com/openeuler/ktib/pkg/utils"
 )
 
 var version = "dev"

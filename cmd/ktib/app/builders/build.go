@@ -13,7 +13,7 @@ package builders
 
 import (
 	"errors"
-	"gitee.com/openeuler/ktib/cmd/ktib/app/options"
+	"gitee.com/openeuler/ktib/pkg/options"
 	"github.com/containers/buildah/pkg/cli"
 	"github.com/containers/podman/v4/cmd/podman/registry"
 	"github.com/containers/podman/v4/cmd/podman/utils"

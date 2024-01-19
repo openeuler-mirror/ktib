@@ -14,8 +14,8 @@ package images
 import (
 	"context"
 	"fmt"
-	"gitee.com/openeuler/ktib/cmd/ktib/app/options"
-	"gitee.com/openeuler/ktib/cmd/ktib/app/utils"
+	"gitee.com/openeuler/ktib/pkg/options"
+	"gitee.com/openeuler/ktib/pkg/utils"
 	"github.com/containers/common/libimage"
 	"github.com/containers/image/v5/types"
 	"github.com/spf13/cobra"
@@ -41,6 +41,8 @@ func removeImages(cmd *cobra.Command, imageName []string, op options.RemoveOptio
 }
 
 func removeBuilders() error {
+	// todo： 需要实现
+	// todo： rm builders 转到builders目录
 	return nil
 }
 

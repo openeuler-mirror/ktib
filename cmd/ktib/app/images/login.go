@@ -13,11 +13,10 @@ package images
 
 import (
 	"context"
-	"gitee.com/openeuler/ktib/cmd/ktib/app/options"
-	"github.com/containers/common/pkg/auth"
-	"github.com/containers/image/v5/types"
+	"gitee.com/openeuler/ktib/pkg/imagemanager"
+	"gitee.com/openeuler/ktib/pkg/options"
+	utils2 "gitee.com/openeuler/ktib/pkg/utils"
 	"github.com/spf13/cobra"
-	"os"
 )
 
 func LoginCmd() *cobra.Command {
@@ -38,45 +37,19 @@ func LoginCmd() *cobra.Command {
 	flags.StringVarP(&op.Username, "username", "u", "", "Username")
 	flags.BoolVarP(&op.TLSVerify, "tls-verify", "", false, "Require HTTPS and verify certificates when contacting registries")
 	flags.BoolVar(&op.GetLoginSet, "get-login", false, "Return the current login user for the registry")
-	//op.Stdin = os.Stdin
-	//op.Stdout = os.Stdout
 	return cmd
 }
 
 func login(cmd *cobra.Command, args []string, lops *options.LoginOption) error {
-	//TODO return auth.Login(ctx, tempsystemContext, temploginops, tempargs)
+	store, err := utils2.GetStore(cmd)
+	if err != nil {
+		return err
+	}
+	imageManager, err := imagemanager.NewImageManager(store)
+	if err != nil {
+		return err
+	}
 	ctx := context.Background()
-	var loginOps *auth.LoginOptions
-	loginOps = &auth.LoginOptions{
-		Password:                  lops.Password,
-		Username:                  lops.Username,
-		StdinPassword:             lops.PasswordStdin,
-		GetLoginSet:               true,
-		Stdin:                     os.Stdin,
-		Stdout:                    os.Stdout,
-		AcceptRepositories:        true,
-		AcceptUnspecifiedRegistry: true,
-	}
-	sctx := &types.SystemContext{
-		AuthFilePath:                      loginOps.AuthFile,
-		DockerCertPath:                    loginOps.CertDir,
-		DockerDaemonInsecureSkipTLSVerify: lops.TLSVerify,
-	}
-	setRegistriesConfPath(sctx)
-	loginOps.GetLoginSet = cmd.Flag("get-login").Changed
-	return auth.Login(ctx, sctx, loginOps, args)
-}
-
-func setRegistriesConfPath(systemContext *types.SystemContext) {
-	if systemContext.SystemRegistriesConfPath != "" {
-		return
-	}
-	if envOverride, ok := os.LookupEnv("CONTAINERS_REGISTRIES_CONF"); ok {
-		systemContext.SystemRegistriesConfPath = envOverride
-		return
-	}
-	if envOverride, ok := os.LookupEnv("REGISTRIES_CONFIG_PATH"); ok {
-		systemContext.SystemRegistriesConfPath = envOverride
-		return
-	}
+	getLoginSet := cmd.Flag("get-login").Changed
+	return imageManager.KtibLogin(ctx, lops, args, getLoginSet)
 }
