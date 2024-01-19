@@ -12,38 +12,23 @@
 package images
 
 import (
-	"context"
 	"fmt"
+	"gitee.com/openeuler/ktib/pkg/imagemanager"
 	"gitee.com/openeuler/ktib/pkg/options"
 	"gitee.com/openeuler/ktib/pkg/utils"
-	"github.com/containers/common/libimage"
-	"github.com/containers/image/v5/types"
 	"github.com/spf13/cobra"
 )
 
 func removeImages(cmd *cobra.Command, imageName []string, op options.RemoveOption) error {
-	// TODO images, err := runtime.RemoveImages()
-	rmOptions := &libimage.RemoveImagesOptions{}
-	rmOptions.Force = op.Force
 	store, err := utils.GetStore(cmd)
 	if err != nil {
 		return err
 	}
-	var systemContext *types.SystemContext
-	runtime, err := libimage.RuntimeFromStore(store, &libimage.RuntimeOptions{SystemContext: systemContext})
-	_, errs := runtime.RemoveImages(context.Background(), imageName, rmOptions)
-	for _, err := range errs {
-		if err != nil {
-			return err
-		}
+	imageManager, err := imagemanager.NewImageManager(store)
+	if err != nil {
+		return err
 	}
-	return nil
-}
-
-func removeBuilders() error {
-	// todo： 需要实现
-	// todo： rm builders 转到builders目录
-	return nil
+	return imageManager.Remove(imageName, op)
 }
 
 func RemoveImagesCmd() *cobra.Command {
@@ -61,16 +46,5 @@ func RemoveImagesCmd() *cobra.Command {
 	}
 	flags := cmd.Flags()
 	flags.BoolVarP(&op.Force, "force", "f", false, "Force will remove all builders from the local storage.")
-	return cmd
-}
-
-func RemoveBuildersCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "rmb",
-		Short: "Remove one or more working builder",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return removeBuilders()
-		},
-	}
 	return cmd
 }

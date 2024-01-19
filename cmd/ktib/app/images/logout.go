@@ -1,9 +1,9 @@
 /*
    Copyright (c) 2023 KylinSoft Co., Ltd.
    Kylin trusted image builder(ktib) is licensed under Mulan PSL v2.
-   You can use this software according to the terms and conditions of the Mulan PSL v2. 
+   You can use this software according to the terms and conditions of the Mulan PSL v2.
    You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2 
+            http://license.coscl.org.cn/MulanPSL2
    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING
    BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
    See the Mulan PSL v2 for more details.
@@ -13,24 +13,21 @@ package images
 
 import (
 	"errors"
-	"github.com/containers/common/pkg/auth"
-	"github.com/containers/image/v5/types"
+	"gitee.com/openeuler/ktib/pkg/imagemanager"
+	utils2 "gitee.com/openeuler/ktib/pkg/utils"
 	"github.com/spf13/cobra"
-	"os"
 )
 
 func logout(cmd *cobra.Command, args []string) error {
-	// TODO return auth.Logout(...)
-	var logoutOps *auth.LogoutOptions
-	logoutOps = &auth.LogoutOptions{
-		Stdout:                    os.Stdout,
-		AcceptUnspecifiedRegistry: true,
-		AcceptRepositories:        true,
+	store, err := utils2.GetStore(cmd)
+	if err != nil {
+		return err
 	}
-	sctx := &types.SystemContext{
-		AuthFilePath: logoutOps.AuthFile,
+	imageManager, err := imagemanager.NewImageManager(store)
+	if err != nil {
+		return err
 	}
-	return auth.Logout(sctx, logoutOps, args)
+	return imageManager.Logout(args)
 }
 
 func LogoutCmd() *cobra.Command {

@@ -13,29 +13,26 @@ package images
 
 import (
 	"errors"
+	"gitee.com/openeuler/ktib/pkg/imagemanager"
 	"gitee.com/openeuler/ktib/pkg/utils"
 	"github.com/spf13/cobra"
 )
 
+// TODO: 有bug，执行ktib images tag image tagimage 后无报错；执行ktib images list查看只能看到tag后的名字tagimage，查看不到原镜像。
 func tag(cmd *cobra.Command, args []string) error {
 	if len(args) < 2 {
 		err := errors.New("requires exactly 2 arguments")
 		return err
 	}
-	name := args[0]
 	store, err := utils.GetStore(cmd)
-	if !store.Exists(name) {
-		err := errors.New("image not exist")
-		return err
-	}
 	if err != nil {
 		return err
 	}
-	err = store.AddNames(name, args[1:])
+	imageManager, err := imagemanager.NewImageManager(store)
 	if err != nil {
 		return err
 	}
-	return nil
+	return imageManager.Tag(store, args)
 }
 
 func TAGCmd() *cobra.Command {
