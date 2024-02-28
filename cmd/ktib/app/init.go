@@ -17,7 +17,7 @@ import (
 )
 
 type InitOption struct {
-	BuildType string
+	buildType string
 }
 
 func runInit(c *cobra.Command, args []string, option InitOption) error {
@@ -26,7 +26,7 @@ func runInit(c *cobra.Command, args []string, option InitOption) error {
 		return c.Help()
 	}
 	boot := project.NewBootstrap(args[0], args[1])
-	boot.InitWorkDir(option)
+	boot.InitWorkDir()
 	boot.AddDockerfile()
 	boot.AddScript()
 	boot.AddTestcase()
@@ -53,6 +53,6 @@ func newCmdInit() *cobra.Command {
 		Args: cobra.NoArgs,
 	}
 	flags := cmd.Flags()
-	flags.StringVar(&option.BuildType, "buildType", "RPM", "")
+	flags.StringVar(&option.buildType, "buildType", "RPM", "")
 	return cmd
 }

@@ -27,7 +27,7 @@ func NewCommand() *cobra.Command {
 			    │ Trusted access controll tool for kcr                     │
 			    │                                                          │
 			    │ Please give us feedback at:                              │
-			    │ https://gitee.com/openeuler/ktib/issues                  │
+			    │ http://172.17.66.176/kylin-virtualization/ktib/-/issues  │
 			    └──────────────────────────────────────────────────────────┘
 
 			Example usage:
