@@ -1,9 +1,9 @@
 /*
    Copyright (c) 2023 KylinSoft Co., Ltd.
    Kylin trusted image builder(ktib) is licensed under Mulan PSL v2.
-   You can use this software according to the terms and conditions of the Mulan PSL v2. 
+   You can use this software according to the terms and conditions of the Mulan PSL v2.
    You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2 
+            http://license.coscl.org.cn/MulanPSL2
    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING
    BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
    See the Mulan PSL v2 for more details.
@@ -12,23 +12,39 @@
 package builder
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"gitee.com/openeuler/ktib/pkg/options"
+	"github.com/containers/buildah/copier"
 	"github.com/containers/image/v5/transports/alltransports"
+	"github.com/containers/podman/v4/cmd/podman/registry"
+	"github.com/containers/podman/v4/pkg/copy"
+	"github.com/containers/podman/v4/pkg/domain/entities"
+	"github.com/containers/podman/v4/pkg/domain/infra"
+	"github.com/containers/podman/v4/pkg/errorhandling"
 	"github.com/containers/storage"
+	"github.com/containers/storage/pkg/idtools"
 	"github.com/containers/storage/pkg/ioutils"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/sirupsen/logrus"
+	"io"
 	"io/ioutil"
 	"os"
+	"os/user"
 	"path/filepath"
+	"strconv"
+	"strings"
 )
 
 const (
-	DefaultRuntime = "runc"
-	CRuntime       = "crun"
-	RustRuntime    = "youki"
-	stateFile      = "ktib.json"
-	configFile     = "config.json"
-	DefaultWorkdir = "/"
+	stateFile = "ktib.json"
+)
+
+var (
+	chown     bool
+	cpOptions options.CopyOption
 )
 
 type Builder struct {
@@ -45,12 +61,14 @@ type Builder struct {
 	Env         []string
 	Message     string
 	OCIv1       v1.Image
+	Engine      entities.ContainerEngine
 }
 
 type BuilderOptions struct {
 	FromImage  string
 	Container  string
 	PullPolicy bool
+	BOptions   entities.PodmanConfig
 }
 
 func newBuidler(store storage.Store, options BuilderOptions) (*Builder, error) {
@@ -58,6 +76,12 @@ func newBuidler(store storage.Store, options BuilderOptions) (*Builder, error) {
 	name := options.Container
 	coptions := storage.ContainerOptions{}
 	container, err := store.CreateContainer("", []string{name}, image, "", "", &coptions)
+	if err != nil {
+		return nil, err
+	}
+	option := BuilderOptions{}
+	option.BOptions = *registry.PodmanConfig()
+	engine, err := infra.NewContainerEngine(&option.BOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -69,6 +93,7 @@ func newBuidler(store storage.Store, options BuilderOptions) (*Builder, error) {
 		FromImageID: "",
 		Container:   name,
 		ContainerID: container.ID,
+		Engine:      engine,
 	}
 	if err := builder.Save(); err != nil {
 		return nil, err
@@ -129,99 +154,23 @@ func FindAllBuilders(store storage.Store) ([]*Builder, error) {
 	return bl, nil
 }
 
-//func (b *Builder) Run(args []string, option *options.RUNOption, data *libimage.ImageData, store storage.Store) error {
-//	//cdir, err := b.store.ContainerDirectory(b.ContainerID)
-//	//if err != nil {
-//	//	return err
-//	//}
-//	//var cruntime string
-//	//var runtimeCommond []string
-//	//switch option.Runtime {
-//	//case 1:
-//	//	cruntime = DefaultRuntime
-//	//case 2:
-//	//	cruntime = CRuntime
-//	//case 3:
-//	//	cruntime = RustRuntime
-//	//default:
-//	//	cruntime = DefaultRuntime
-//	//}
-//	//// TODO ioutils.AtomicWriteFile config.json by github.com/opencontainers/runtime-tools
-//	//specgen, err := generate.New(runtime.GOOS)
-//	//
-//	//if option.TTY {
-//	//	specgen.SetProcessTerminal(option.TTY)
-//	//} else {
-//	//	specgen.SetProcessTerminal(false)
-//	//}
-//	//if option.Workdir != "" {
-//	//	specgen.SetProcessCwd(option.Workdir)
-//	//} else {
-//	//	specgen.SetProcessCwd(DefaultWorkdir)
-//	//}
-//	//specstate, err := json.Marshal(specgen.Config)
-//	//if err != nil {
-//	//	return err
-//	//}
-//	//err = ioutils.AtomicWriteFile(filepath.Join(cdir, configFile), specstate, 0600)
-//	//if err != nil {
-//	//	return err
-//	//}
-//	//
-//	//// TODO make bundle path
-//	//u, err := user.Current()
-//	//uid, err := strconv.Atoi(u.Uid)
-//	//gid, err := strconv.Atoi(u.Gid)
-//	//overlayDest := store.GraphRoot()
-//	//rPath := "userdata/" + "rootfs"
-//	//contentDir, err := overlay.GenerateStructure(overlayDest, b.ContainerID, rPath, uid, gid)
-//	//if err != nil {
-//	//	return err
-//	//}
-//	//if err != nil {
-//	//	return err
-//	//}
-//	//var lastPath string
-//	//for _, layer := range data.RootFS.Layers {
-//	//	path := strings.LastIndex(string(layer), ":")
-//	//	if path != -1 {
-//	//		lastPath = string(layer)[path+1:]
-//	//	}
-//	//}
-//	//rootfs := filepath.Join(store.GraphRoot(), "/overlay/", lastPath+"/diff")
-//	//op := &overlay.Options{
-//	//	UpperDirOptionFragment: rootfs,
-//	//	WorkDirOptionFragment:  contentDir,
-//	//	GraphOpts:              store.GraphOptions(),
-//	//	ReadOnly:               false,
-//	//	RootUID:                uid,
-//	//	RootGID:                gid,
-//	//}
-//	//
-//	//overlayMount, err := overlay.MountWithOptions(op.WorkDirOptionFragment, op.UpperDirOptionFragment, overlayDest, op)
-//	////content: /var/lib/containers/storage/overlay-containers/5a4c5398332e0fe913c3407cd7a94c875f73790a0e8eac259bae9a19e50b9aef/userdata/rootfs
-//	////rootfs: /var/lib/containers/storage/overlay/3d24ee258efc3bfe4066a1a9fb83febf6dc0b1548dfe896161533668281c9f4f/diff
-//	////overlaydest /var/lib/containers/storage
-//	//// TODO: lowerdir=镜像层；
-//	//// TODO: workdir=merge=/var/lib/containers/storage/overlay-containers/5a4c5398332e0fe913c3407cd7a94c875f73790a0e8eac259bae9a19e50b9aef/userdata/rootfs
-//	////[lowerdir=rootfs upperdir=rootfs workdir=content private]
-//	//if err != nil {
-//	//	return fmt.Errorf("rootfs-overlay: creating overlay failed %q: %w", rootfs, err)
-//	//}
-//	//b.MountPoint = overlayMount.Source
-//	//rtargs := append(runtimeCommond, "run", "-b", cdir, b.ContainerID)
-//	//cmd := exec.Command(cruntime, rtargs...)
-//	//cmd.Dir = b.MountPoint
-//	//cmd.Stdin = os.Stdin
-//	//cmd.Stdout = os.Stdout
-//	//cmd.Stderr = os.Stderr
-//	//err = cmd.Run()
-//	//if err != nil {
-//	//	return err
-//	//}
-//	//return nil
-//}
-
+// sourceContainerStr: 如果从容器拷贝到本地，sourceContainerStr是容器id；反之为空。
+// sourcePath: 要拷贝的文件路径。
+// destContainerStr： 如果从本地拷贝到容器，destContainerStr是容器id；反之为空。
+// destPath: 文件要被拷贝到的本地目录或容器目录。
+func (b *Builder) Copy(args []string) error {
+	engine := b.Engine
+	sourceContainerStr, sourcePath, destContainerStr, destPath, err := copy.ParseSourceAndDestination(args[0], args[1])
+	if err != nil {
+		return err
+	}
+	if len(destContainerStr) > 0 && len(sourceContainerStr) > 0 {
+		return copyFromContainerToContainer(sourceContainerStr, sourcePath, destContainerStr, destPath, engine)
+	} else if len(destContainerStr) > 0 && len(sourceContainerStr) == 0 {
+		return copyToContainer(destContainerStr, destPath, sourcePath, engine)
+	}
+	return copyToHost(sourceContainerStr, sourcePath, destPath, engine)
+}
 func (b *Builder) Label(args []string) error {
 	return nil
 }
@@ -270,46 +219,6 @@ func (b *Builder) SetMessage(args string) {
 	b.Message = args
 }
 
-//func (b *Builder) Commit(args []string) error {
-// TODO github.com/containers/image/v5/copy Image func
-//Only one policy is now implemented: insecure
-//policy := &signature.Policy{Default: []signature.PolicyRequirement{signature.NewPRInsecureAcceptAnything()}}
-//policyContext, err := signature.NewPolicyContext(policy)
-//defer func() {
-//	_ = policyContext.Destroy()
-//}()
-//if err != nil {
-//	return err
-//}
-//srcRef, err := alltransports.ParseImageName(b.ID)
-//if err != nil {
-//	return err
-//}
-//// TODO containers-storage: is default transport, orther support dir:// docker:// oci://
-//transport := checkTransport(args[1])
-//destRef, err := alltransports.ParseImageName(transport + args[1])
-//if err != nil {
-//	return err
-//}
-//cops := &cp.Options{
-//	RemoveSignatures:      true,
-//	SignBy:                "",
-//	ReportWriter:          os.Stdout,
-//	SourceCtx:             &types.SystemContext{},
-//	DestinationCtx:        &types.SystemContext{},
-//	ForceManifestMIMEType: "",
-//	ImageListSelection:    1,
-//	OciDecryptConfig:      nil,
-//	OciEncryptLayers:      nil,
-//	OciEncryptConfig:      nil,
-//}
-//_, err = cp.Image(context.Background(), policyContext, destRef, srcRef, cops)
-//if err != nil {
-//	return err
-//}
-//return nil
-//}
-
 func (b *Builder) Remove() error {
 	return nil
 }
@@ -330,10 +239,264 @@ func (b *Builder) Save() error {
 	return ioutils.AtomicWriteFile(filepath.Join(cdir, stateFile), buildstate, 0600)
 }
 
+func (b Builder) Commit(containerid string, option *options.CommitOption) error {
+	engine := b.Engine
+	res, err := engine.ContainerCommit(context.Background(), containerid, option.CommitOptions)
+	if err != nil {
+		fmt.Println(option.CommitOptions.Format)
+		return err
+	}
+	fmt.Println(res.Id)
+	return nil
+}
+
 func checkTransport(imageref string) string {
 	transportType := alltransports.TransportFromImageName(imageref)
 	if transportType != nil {
 		return transportType.Name() + "://"
 	}
 	return "containers-storage:"
+}
+
+func copyToContainer(containerID string, containerPath string, copyPath string, engine entities.ContainerEngine) error {
+	if err := containerShouldExist(containerID, engine); err != nil {
+		return err
+	}
+	// hostInfo.LinkTarget && containerInfo.LinkTarget: 绝对路径
+	hostInfo, err := copy.ResolveHostPath(copyPath)
+	if err != nil {
+		return fmt.Errorf("unable to find the file path %v to copy: %v", copyPath, err)
+	}
+	containerInfo, err := engine.ContainerStat(registry.GetContext(), containerID, containerPath)
+	if err != nil {
+		return err
+	}
+	if strings.HasSuffix(containerPath, "/") {
+		return fmt.Errorf("could not found %v on container %v: %v", containerPath, containerID, err)
+	}
+	var containerBaseName string
+	if containerInfo != nil {
+		containerBaseName = filepath.Base(containerInfo.LinkTarget)
+	} else {
+		containerBaseName = filepath.Base(containerPath)
+	}
+	hostTarget := hostInfo.LinkTarget
+	if hostInfo.IsDir && filepath.Base(hostTarget) == "." {
+		hostTarget = filepath.Dir(hostTarget)
+	}
+	if hostInfo.IsDir && !containerInfo.IsDir {
+		return errors.New("destination must be a directory when copying a directory")
+	}
+	reader, writer := io.Pipe()
+	hostCopy := func() error {
+		defer writer.Close()
+		getOptions := copier.GetOptions{
+			KeepDirectoryNames: hostInfo.IsDir && filepath.Base(hostTarget) != ".",
+		}
+		if !hostInfo.IsDir && !containerInfo.IsDir {
+			// If we're having a file-to-file copy, make sure to
+			// rename accordingly.
+			getOptions.Rename = map[string]string{filepath.Base(hostTarget): containerBaseName}
+		}
+		if err := copier.Get("/", "", getOptions, []string{hostTarget}, writer); err != nil {
+			return fmt.Errorf("copying from host: %w", err)
+		}
+		return nil
+	}
+	containerCopy := func() error {
+		defer reader.Close()
+		target := containerInfo.FileInfo.LinkTarget
+		if !containerInfo.IsDir {
+			target = filepath.Dir(target)
+		}
+
+		copyFunc, err := engine.ContainerCopyFromArchive(registry.GetContext(), containerID, target, reader, entities.CopyOptions{Chown: chown, NoOverwriteDirNonDir: !cpOptions.OverwriteDirNonDir})
+		if err != nil {
+			return err
+		}
+		if err := copyFunc(); err != nil {
+			return fmt.Errorf("copying to container: %w", err)
+		}
+		return nil
+	}
+	return doCopy(hostCopy, containerCopy)
+}
+
+func copyToHost(containerID string, copyPath string, hostPath string, engine entities.ContainerEngine) error {
+	if err := containerShouldExist(containerID, engine); err != nil {
+		return err
+	}
+	containerInfo, err := engine.ContainerStat(registry.GetContext(), containerID, copyPath)
+	if err != nil {
+		return err
+	}
+	var hostBaseName string
+	var resolvedToHostParentDir bool
+	hostInfo, err := copy.ResolveHostPath(hostPath)
+	if err != nil {
+		if strings.HasSuffix(hostPath, "/") {
+			return fmt.Errorf("%q could not be found on the host: %w", hostPath, err)
+		}
+		parentDir := filepath.Dir(hostPath)
+		hostInfo, err = copy.ResolveHostPath(parentDir)
+		if err != nil {
+			return fmt.Errorf("%q could not be found on the host: %w", hostPath, err)
+		}
+		hostBaseName = filepath.Base(hostPath)
+		resolvedToHostParentDir = true
+	} else {
+		hostBaseName = filepath.Base(hostInfo.LinkTarget)
+	}
+	containerTarget := containerInfo.LinkTarget
+	if resolvedToHostParentDir && containerInfo.IsDir && filepath.Base(containerTarget) == "." {
+		containerTarget = filepath.Dir(containerTarget)
+	}
+
+	if containerInfo.IsDir && !hostInfo.IsDir {
+		return errors.New("destination must be a directory when copying a directory")
+	}
+	reader, writer := io.Pipe()
+	hostCopy := func() error {
+		defer reader.Close()
+		groot, err := user.Current()
+		if err != nil {
+			return err
+		}
+		idPair := idtools.IDPair{}
+		if i, err := strconv.Atoi(groot.Uid); err == nil {
+			idPair.UID = i
+		} else {
+			logrus.Debugf("Error converting UID %q to int: %v", groot.Uid, err)
+		}
+		if i, err := strconv.Atoi(groot.Gid); err == nil {
+			idPair.GID = i
+		} else {
+			logrus.Debugf("Error converting GID %q to int: %v", groot.Gid, err)
+		}
+
+		putOptions := copier.PutOptions{
+			ChownDirs:            &idPair,
+			ChownFiles:           &idPair,
+			IgnoreDevices:        true,
+			NoOverwriteDirNonDir: !cpOptions.OverwriteDirNonDir,
+			NoOverwriteNonDirDir: !cpOptions.OverwriteDirNonDir,
+		}
+		if (!containerInfo.IsDir && !hostInfo.IsDir) || resolvedToHostParentDir {
+			// If we're having a file-to-file copy, make sure to
+			// rename accordingly.
+			putOptions.Rename = map[string]string{filepath.Base(containerTarget): hostBaseName}
+		}
+		dir := hostInfo.LinkTarget
+		if !hostInfo.IsDir {
+			dir = filepath.Dir(dir)
+		}
+		if err := copier.Put(dir, "", putOptions, reader); err != nil {
+			return fmt.Errorf("copying to host: %w", err)
+		}
+		return nil
+	}
+	containerCopy := func() error {
+		defer writer.Close()
+		copyFunc, err := engine.ContainerCopyToArchive(registry.GetContext(), containerID, containerTarget, writer)
+		if err != nil {
+			return err
+		}
+		if err := copyFunc(); err != nil {
+			return fmt.Errorf("copying from container: %w", err)
+		}
+		return nil
+	}
+	return doCopy(containerCopy, hostCopy)
+}
+
+func copyFromContainerToContainer(sourceContainerID string, sourcePath string, destContainerID string, destPath string, engine entities.ContainerEngine) error {
+	if err := containerShouldExist(sourceContainerID, engine); err != nil {
+		return err
+	}
+	if err := containerShouldExist(destContainerID, engine); err != nil {
+		return err
+	}
+	sourceContainerInfo, err := engine.ContainerStat(registry.GetContext(), sourceContainerID, sourcePath)
+	if err != nil {
+		return err
+	}
+	destContainerInfo, err := engine.ContainerStat(registry.GetContext(), destContainerID, destPath)
+	if err != nil {
+		return err
+	}
+	if strings.HasSuffix(destPath, "/") {
+		return fmt.Errorf("%v can't be found on container %v: %v", destPath, destContainerID, err)
+	}
+	var baseName string
+	if destContainerInfo != nil {
+		baseName = filepath.Base(destContainerInfo.LinkTarget)
+	} else {
+		baseName = filepath.Base(destPath)
+	}
+	if sourceContainerInfo.IsDir && !destContainerInfo.IsDir {
+		return errors.New("destination must be a directory when copying a directory")
+	}
+	sourceContainerTarget := sourceContainerInfo.LinkTarget
+	destContainerTarget := destContainerInfo.LinkTarget
+	if !destContainerInfo.IsDir {
+		destContainerTarget = filepath.Dir(destPath)
+	}
+	if sourceContainerInfo.IsDir && filepath.Base(sourcePath) == "." {
+		sourceContainerTarget = filepath.Dir(sourceContainerTarget)
+	}
+	reader, writer := io.Pipe()
+	sourceContainerCopy := func() error {
+		defer writer.Close()
+		copyFunc, err := engine.ContainerCopyToArchive(registry.GetContext(), sourceContainerID, sourceContainerTarget, writer)
+		if err != nil {
+			return err
+		}
+		if err := copyFunc(); err != nil {
+			return fmt.Errorf("copying from container: %w", err)
+		}
+		return nil
+	}
+	destContainerCopy := func() error {
+		defer reader.Close()
+
+		copyOptions := entities.CopyOptions{Chown: chown, NoOverwriteDirNonDir: !cpOptions.OverwriteDirNonDir}
+		if !sourceContainerInfo.IsDir && !destContainerInfo.IsDir {
+			// If we're having a file-to-file copy, make sure to
+			// rename accordingly.
+			copyOptions.Rename = map[string]string{filepath.Base(sourceContainerTarget): baseName}
+		}
+
+		copyFunc, err := engine.ContainerCopyFromArchive(registry.GetContext(), destContainerID, destContainerTarget, reader, copyOptions)
+		if err != nil {
+			return err
+		}
+		if err := copyFunc(); err != nil {
+			return fmt.Errorf("copying to container: %w", err)
+		}
+		return nil
+	}
+	return doCopy(sourceContainerCopy, destContainerCopy)
+}
+
+func containerShouldExist(containerID string, engine entities.ContainerEngine) error {
+	ex, err := engine.ContainerExists(registry.GetContext(), containerID, options.ExistOption{}.ContainerExistsOptions)
+	if err != nil {
+		return err
+	}
+	if !ex.Value {
+		return fmt.Errorf("container %v does not exits", containerID)
+	}
+	return nil
+}
+
+func doCopy(funcA func() error, funcB func() error) error {
+	//todo licenses
+	errChan := make(chan error)
+	go func() {
+		errChan <- funcA()
+	}()
+	var copyErrors []error
+	copyErrors = append(copyErrors, funcB())
+	copyErrors = append(copyErrors, <-errChan)
+	return errorhandling.JoinErrors(copyErrors)
 }
