@@ -21,11 +21,12 @@ type InitOption struct {
 }
 
 func runInit(c *cobra.Command, args []string, option InitOption) error {
-	// TODO 解析参数 构建app
-	if len(args) >= 0 {
+	// TODO 解析参数 构建app, dir = args[0], imageName = args[1]
+	if len(args) < 2 {
 		return c.Help()
 	}
-	boot := project.NewBootstrap("rpm or binary", "/tmp")
+	boot := project.NewBootstrap(args[0], args[1])
+	boot.InitWorkDir()
 	boot.AddDockerfile()
 	boot.AddScript()
 	boot.AddTestcase()
@@ -42,7 +43,7 @@ func newCmdInit() *cobra.Command {
 			return runInit(cmd, args, option)
 		},
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			//TODO init 前检查函数
+			//TODO init 前检查函数，检查相关rpm包是否安装：containers-common
 			return nil
 		},
 		PersistentPostRunE: func(cmd *cobra.Command, args []string) error {

@@ -22,17 +22,6 @@ import (
 	"os/exec"
 )
 
-//type buildFlagsWrapper struct {
-//	// Buildah stuff first
-//	cli.BudResults
-//	cli.LayerResults
-//	cli.FromAndBudResults
-//	cli.NameSpaceResults
-//	cli.UserNSResults
-//	// SquashAll squashes all layers into a single layer.
-//	SquashAll bool
-//}
-
 func BUILDCmd() *cobra.Command {
 	var op options.BuildersOption
 	cmd := &cobra.Command{
