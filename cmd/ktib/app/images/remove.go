@@ -28,7 +28,13 @@ func removeImages(cmd *cobra.Command, imageName []string, op options.RemoveOptio
 	if err != nil {
 		return err
 	}
-	return imageManager.Remove(imageName, op)
+	errors := imageManager.Remove(imageName, op)
+	for _, rmErr := range errors {
+		if rmErr != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func RemoveImagesCmd() *cobra.Command {

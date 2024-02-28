@@ -10,6 +10,7 @@ import (
 	"github.com/containers/common/pkg/config"
 	"github.com/containers/image/v5/types"
 	"github.com/containers/storage"
+	"github.com/sirupsen/logrus"
 	"os"
 )
 
@@ -113,17 +114,19 @@ func (im *ImageManager) Push(args []string) error {
 	return nil
 }
 
-func (im *ImageManager) Remove(image []string, op options.RemoveOption) error {
+func (im *ImageManager) Remove(image []string, op options.RemoveOption) []error {
 	runtime := im.Manager
 	rmOptions := &libimage.RemoveImagesOptions{}
 	rmOptions.Force = op.Force
+	var allErrors []error
 	_, errs := runtime.RemoveImages(context.Background(), image, rmOptions)
-	for _, err := range errs {
+	for n, err := range errs {
 		if err != nil {
-			return err
+			logrus.Errorf("An error occurrd when delete image: %v, err: %v", image[n], err)
+			allErrors = append(allErrors, err)
 		}
 	}
-	return nil
+	return allErrors
 }
 
 func (im *ImageManager) Tag(store storage.Store, args []string) error {
