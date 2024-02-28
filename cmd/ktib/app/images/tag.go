@@ -13,6 +13,7 @@ package images
 
 import (
 	"errors"
+
 	"gitee.com/openeuler/ktib/pkg/imagemanager"
 	"gitee.com/openeuler/ktib/pkg/utils"
 	"github.com/spf13/cobra"
@@ -37,7 +38,8 @@ func tag(cmd *cobra.Command, args []string) error {
 
 func TAGCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use: "tag",
+		Use:   "tag",
+		Short: "Create a tag TARGET_IMAGE that refers to SOURCE_IMAGE",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return tag(cmd, args)
 		},
