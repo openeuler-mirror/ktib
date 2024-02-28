@@ -13,6 +13,7 @@ package images
 
 import (
 	"errors"
+
 	"gitee.com/openeuler/ktib/pkg/imagemanager"
 	"gitee.com/openeuler/ktib/pkg/options"
 	"gitee.com/openeuler/ktib/pkg/utils"
@@ -36,8 +37,8 @@ func PushCmd() *cobra.Command {
 		Use:   "push",
 		Short: "Push an images or a repository to a registry",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) > 1 {
-				return errors.New("")
+			if len(args) < 1 {
+				return errors.New("requires exactly 1 argument")
 			}
 			return push(cmd, args)
 		},
