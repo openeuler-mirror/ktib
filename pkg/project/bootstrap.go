@@ -43,14 +43,17 @@ func (b *Bootstrap) AddDockerfile() {
 
 func (b *Bootstrap) AddTestcase() {
 	// TODO
+	b.initialize(templates.Testcase, "Testcase", 0600)
 }
 
 func (b *Bootstrap) AddScript() {
 	// TODO
+	b.initialize(templates.Script, "Script", 0600)
 }
 
 func (b *Bootstrap) AddChangeInfo() {
 	// TODO
+	b.initialize(templates.ChangeInfo, "ChangeInfo", 0600)
 }
 
 func (b *Bootstrap) initialize(t string, file string, perm os.FileMode) {
