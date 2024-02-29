@@ -14,9 +14,10 @@ package utils
 import (
 	"encoding/json"
 	"fmt"
-	"gitee.com/openeuler/ktib/pkg/options"
 	"os"
 	"time"
+
+	"gitee.com/openeuler/ktib/pkg/options"
 
 	"gitee.com/openeuler/ktib/pkg/builder"
 	ktype "gitee.com/openeuler/ktib/pkg/types"
@@ -74,9 +75,20 @@ func sortImages(imgs []*libimage.Image) ([]imageReport, error) {
 		topLayer := img.TopLayer()[0:10]
 		imgID := img.ID()[:10]
 
-		for _, name := range append(img.Names(), unknownState)[:1] {
+		if len(img.Names()) > 0 {
+			for _, name := range append(img.Names(), unknownState)[:len(img.Names())] {
+				imgReport = append(imgReport, imageReport{
+					Name:     name,
+					ID:       imgID,
+					Digest:   img.Digest(),
+					TopLayer: topLayer,
+					Created:  createdAgo,
+					Size:     humanSize(size),
+				})
+			}
+		} else {
 			imgReport = append(imgReport, imageReport{
-				Name:     name,
+				Name:     unknownState,
 				ID:       imgID,
 				Digest:   img.Digest(),
 				TopLayer: topLayer,
