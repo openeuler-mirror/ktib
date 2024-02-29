@@ -12,6 +12,7 @@
 package project
 
 import (
+	"gitee.com/openeuler/ktib/cmd/ktib/app"
 	"gitee.com/openeuler/ktib/pkg/templates"
 	"github.com/sirupsen/logrus"
 	"os"
@@ -25,6 +26,15 @@ type Bootstrap struct {
 
 func NewBootstrap(dir, imageName string) *Bootstrap {
 	return &Bootstrap{DestinationDir: dir, ImageName: imageName}
+}
+
+func (b *Bootstrap) InitWorkDir(initOption app.InitOption) {
+	switch initOption.BuildType {
+	case "source":
+		os.MkdirAll(b.DestinationDir+"/"+"init"+"/"+"source", 0700)
+	case "rpm":
+		os.MkdirAll(b.DestinationDir+"/"+"init"+"/"+"rpm", 0700)
+	}
 }
 
 func (b *Bootstrap) AddDockerfile() {
@@ -41,11 +51,6 @@ func (b *Bootstrap) AddScript() {
 
 func (b *Bootstrap) AddChangeInfo() {
 	// TODO
-}
-
-func (b *Bootstrap) InitWorkDir() {
-	os.MkdirAll(b.DestinationDir+"/"+"init"+"/"+"source", 0700)
-	os.MkdirAll(b.DestinationDir+"/"+"init"+"/"+"rpm", 0700)
 }
 
 func (b *Bootstrap) initialize(t string, file string, perm os.FileMode) {
