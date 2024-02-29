@@ -81,3 +81,34 @@ KTIB 是一个为 KCR 提供可信访问控制的工具。
 
     builder-machine# ktib images [command]
 
+可用命令:
+
+* list: 列出本地或远程的镜像。
+
+        用法: ktib images list 
+
+* login: 登录到 Docker 镜像仓库。
+
+        用法: ktib images login [registry]
+
+* logout: 从 Docker 镜像仓库注销。
+
+        用法: ktib images logout [registry]
+
+* pull: 从镜像仓库拉取镜像或仓库。
+
+        用法: ktib images pull [image-name]
+
+* push: 推送镜像或仓库到镜像仓库。
+
+        用法: ktib images push [image-name]
+
+* rmi: 移除一个或多个镜像。
+
+        用法: ktib images rmi [image-name]
+
+* tag: 给镜像打标签。
+
+        用法: ktib images tag [image-name] [tag-name]
+
+
