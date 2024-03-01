@@ -48,7 +48,8 @@ func (b *Bootstrap) AddTestcase() {
 
 func (b *Bootstrap) AddScript() {
 	// TODO
-	b.initialize(templates.Script, "Script", 0600)
+	os.MkdirAll(b.DestinationDir+"/"+"scripts", 0700)
+	b.initialize(templates.Script, "scripts/Script", 0755)
 }
 
 func (b *Bootstrap) AddChangeInfo() {
