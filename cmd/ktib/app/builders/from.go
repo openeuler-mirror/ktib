@@ -29,7 +29,6 @@ func from(cmd *cobra.Command, args []string, op *options.FromOption) error {
 		return errors.New("too many arguments specified")
 	}
 	store, err := utils.GetStore(cmd)
-	store.GraphRoot()
 	if err != nil {
 		return err
 	}
