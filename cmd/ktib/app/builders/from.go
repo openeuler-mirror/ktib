@@ -14,6 +14,7 @@ package builders
 import (
 	"errors"
 	"fmt"
+
 	"gitee.com/openeuler/ktib/pkg/builder"
 	"gitee.com/openeuler/ktib/pkg/options"
 	"gitee.com/openeuler/ktib/pkg/utils"
@@ -56,12 +57,13 @@ func FROMCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "from",
 		Aliases: []string{"from", "create-builder"},
+		Short:   "Create a new builder based on an image.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return from(cmd, args, &op)
 		},
 	}
 	flags := cmd.Flags()
-	flags.StringVarP(&op.Names, "-name", "n", "", "Container name")
+	flags.StringVarP(&op.Names, "-name", "n", "", "Image name")
 	flags.BoolVar(&op.PullPolicy, "pullpolicy", false, "Force images pull policy set ifnotparent")
 	flags.BoolVar(&op.HostUIDMap, "-hostuidmap", false, "Force host UID map")
 	flags.BoolVar(&op.HostGIDMap, "-hostgidmap", false, "Force host GID map")
