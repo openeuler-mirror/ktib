@@ -23,6 +23,8 @@ type InitOption struct {
 	BuildType string
 }
 
+var PackagesToCheck = []string{"containers-common", "another-packages"}
+
 func runInit(c *cobra.Command, args []string, option InitOption) error {
 	// TODO 解析参数 构建app, dir = args[0], imageName = args[1]
 	if len(args) < 2 {
@@ -47,9 +49,11 @@ func newCmdInit() *cobra.Command {
 		},
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			//TODO init 前检查函数，检查相关rpm包是否安装：containers-common
-			err := checkRpmPackageInstalled("containers-common")
-			if err != nil {
-				return err
+			for _, packageName := range PackagesToCheck {
+				err := checkRpmPackageInstalled(packageName)
+				if err != nil {
+					return err
+				}
 			}
 			return nil
 		},
@@ -65,16 +69,16 @@ func newCmdInit() *cobra.Command {
 }
 
 func checkRpmPackageInstalled(packageName string) error {
-	// Run the rpm command to check if the package is installed
+	// 运行 rpm 命令来检查包是否已安装
 	cmd := exec.Command("rpm", "-q", packageName)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		// An error occurred while running the command
+		// 运行命令时出错
 		return err
 	}
-	// Check if the package is installed
+	// 检查包是否已安装
 	if !strings.Contains(string(output), packageName) {
-		return fmt.Errorf("%s package is not installed", packageName)
+		return fmt.Errorf("%s 包未安装", packageName)
 	}
 	return nil
 }
