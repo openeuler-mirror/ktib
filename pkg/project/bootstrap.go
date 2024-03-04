@@ -38,12 +38,14 @@ func (b *Bootstrap) InitWorkDir(initOption app.InitOption) {
 }
 
 func (b *Bootstrap) AddDockerfile() {
-	b.initialize(templates.Dockerfile, "Dockerfile", 0600)
+	os.MkdirAll(b.DestinationDir+"/"+"docker-build", 0700)
+	b.initialize(templates.Dockerfile, "Dockerfile", 0755)
 }
 
 func (b *Bootstrap) AddTestcase() {
 	// TODO
-	b.initialize(templates.Testcase, "Testcase", 0600)
+	os.MkdirAll(b.DestinationDir+"/"+"test", 0700)
+	b.initialize(templates.Testcase, "Testcase", 0755)
 }
 
 func (b *Bootstrap) AddScript() {
