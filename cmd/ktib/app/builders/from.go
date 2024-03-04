@@ -32,6 +32,9 @@ func from(cmd *cobra.Command, args []string, op *options.FromOption) error {
 	if err != nil {
 		return err
 	}
+	if op.Names == "" {
+		return errors.New("builder name is necessary，You have to provide a nonempty args as name")
+	}
 	if store.Exists(op.Names) {
 		return errors.New("builder name is exists, You have to remove that container to be able to reuse the name")
 	}
