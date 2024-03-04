@@ -12,8 +12,11 @@
 package app
 
 import (
+	"fmt"
 	"gitee.com/openeuler/ktib/pkg/project"
 	"github.com/spf13/cobra"
+	"os/exec"
+	"strings"
 )
 
 type InitOption struct {
@@ -44,6 +47,10 @@ func newCmdInit() *cobra.Command {
 		},
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			//TODO init 前检查函数，检查相关rpm包是否安装：containers-common
+			err := checkRpmPackageInstalled("containers-common")
+			if err != nil {
+				return err
+			}
 			return nil
 		},
 		PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
@@ -55,4 +62,19 @@ func newCmdInit() *cobra.Command {
 	flags := cmd.Flags()
 	flags.StringVar(&option.BuildType, "buildType", "RPM", "")
 	return cmd
+}
+
+func checkRpmPackageInstalled(packageName string) error {
+	// Run the rpm command to check if the package is installed
+	cmd := exec.Command("rpm", "-q", packageName)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		// An error occurred while running the command
+		return err
+	}
+	// Check if the package is installed
+	if !strings.Contains(string(output), packageName) {
+		return fmt.Errorf("%s package is not installed", packageName)
+	}
+	return nil
 }
