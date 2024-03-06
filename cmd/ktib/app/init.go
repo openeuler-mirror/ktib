@@ -12,13 +12,18 @@
 package app
 
 import (
+	"fmt"
 	"gitee.com/openeuler/ktib/pkg/project"
 	"github.com/spf13/cobra"
+	"os/exec"
+	"strings"
 )
 
 type InitOption struct {
 	BuildType string
 }
+
+var PackagesToCheck = []string{"containers-common", "another-packages"}
 
 func runInit(c *cobra.Command, args []string, option InitOption) error {
 	// TODO 解析参数 构建app, dir = args[0], imageName = args[1]
@@ -44,6 +49,12 @@ func newCmdInit() *cobra.Command {
 		},
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			//TODO init 前检查函数，检查相关rpm包是否安装：containers-common
+			for _, packageName := range PackagesToCheck {
+				err := checkRpmPackageInstalled(packageName)
+				if err != nil {
+					return err
+				}
+			}
 			return nil
 		},
 		PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
@@ -55,4 +66,19 @@ func newCmdInit() *cobra.Command {
 	flags := cmd.Flags()
 	flags.StringVar(&option.BuildType, "buildType", "RPM", "")
 	return cmd
+}
+
+func checkRpmPackageInstalled(packageName string) error {
+	// 运行 rpm 命令来检查包是否已安装
+	cmd := exec.Command("rpm", "-q", packageName)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		// 运行命令时出错
+		return err
+	}
+	// 检查包是否已安装
+	if !strings.Contains(string(output), packageName) {
+		return fmt.Errorf("%s 包未安装", packageName)
+	}
+	return nil
 }

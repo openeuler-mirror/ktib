@@ -28,20 +28,35 @@ func NewBootstrap(dir, imageName string) *Bootstrap {
 	return &Bootstrap{DestinationDir: dir, ImageName: imageName}
 }
 
+func (b *Bootstrap) InitWorkDir(initOption app.InitOption) {
+	switch initOption.BuildType {
+	case "source":
+		os.MkdirAll(b.DestinationDir+"/"+"init"+"/"+"source", 0700)
+	case "rpm":
+		os.MkdirAll(b.DestinationDir+"/"+"init"+"/"+"rpm", 0700)
+	}
+}
+
 func (b *Bootstrap) AddDockerfile() {
-	b.initialize(templates.Dockerfile, "Dockerfile", 0600)
+	os.MkdirAll(b.DestinationDir+"/"+"docker-build", 0700)
+	b.initialize(templates.Dockerfile, "Dockerfile", 0755)
 }
 
 func (b *Bootstrap) AddTestcase() {
 	// TODO
+	os.MkdirAll(b.DestinationDir+"/"+"test", 0700)
+	b.initialize(templates.Testcase, "Testcase", 0755)
 }
 
 func (b *Bootstrap) AddScript() {
 	// TODO
+	os.MkdirAll(b.DestinationDir+"/"+"scripts", 0700)
+	b.initialize(templates.Script, "scripts/Script", 0755)
 }
 
 func (b *Bootstrap) AddChangeInfo() {
 	// TODO
+	b.initialize(templates.ChangeInfo, "ChangeInfo", 0600)
 }
 
 func (b *Bootstrap) initialize(t string, file string, perm os.FileMode) {
@@ -62,14 +77,5 @@ func (b *Bootstrap) initialize(t string, file string, perm os.FileMode) {
 	defer f.Close()
 	if err := tpl.Execute(f, b); err != nil {
 		logrus.Errorf("Error processing %s template: %v", file, err)
-	}
-}
-
-func (b *Bootstrap) InitWorkDir(initOption app.InitOption) {
-	switch initOption.BuildType {
-	case "source":
-		os.MkdirAll(b.DestinationDir+"/"+"init"+"/"+"source", 0700)
-	case "rpm":
-		os.MkdirAll(b.DestinationDir+"/"+"init"+"/"+"rpm", 0700)
 	}
 }
