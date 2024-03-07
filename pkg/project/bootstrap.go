@@ -12,11 +12,11 @@
 package project
 
 import (
-	"gitee.com/openeuler/ktib/cmd/ktib/app"
-	"gitee.com/openeuler/ktib/pkg/templates"
-	"github.com/sirupsen/logrus"
 	"os"
 	"text/template"
+
+	"gitee.com/openeuler/ktib/pkg/templates"
+	"github.com/sirupsen/logrus"
 )
 
 type Bootstrap struct {
@@ -28,8 +28,8 @@ func NewBootstrap(dir, imageName string) *Bootstrap {
 	return &Bootstrap{DestinationDir: dir, ImageName: imageName}
 }
 
-func (b *Bootstrap) InitWorkDir(initOption app.InitOption) {
-	switch initOption.BuildType {
+func (b *Bootstrap) InitWorkDir(types string) {
+	switch types {
 	case "source":
 		os.MkdirAll(b.DestinationDir+"/"+"init"+"/"+"source", 0700)
 	case "rpm":
