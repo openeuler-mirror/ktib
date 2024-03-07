@@ -13,10 +13,11 @@ package app
 
 import (
 	"fmt"
-	"gitee.com/openeuler/ktib/pkg/project"
-	"github.com/spf13/cobra"
 	"os/exec"
 	"strings"
+
+	"gitee.com/openeuler/ktib/pkg/project"
+	"github.com/spf13/cobra"
 )
 
 type InitOption struct {
@@ -31,7 +32,7 @@ func runInit(c *cobra.Command, args []string, option InitOption) error {
 		return c.Help()
 	}
 	boot := project.NewBootstrap(args[0], args[1])
-	boot.InitWorkDir(option)
+	boot.InitWorkDir(option.BuildType)
 	boot.AddDockerfile()
 	boot.AddScript()
 	boot.AddTestcase()
@@ -64,7 +65,7 @@ func newCmdInit() *cobra.Command {
 		Args: cobra.NoArgs,
 	}
 	flags := cmd.Flags()
-	flags.StringVar(&option.BuildType, "buildType", "RPM", "")
+	flags.StringVar(&option.BuildType, "buildType", "rpm", "")
 	return cmd
 }
 
