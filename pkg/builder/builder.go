@@ -33,6 +33,7 @@ import (
 	"github.com/containers/podman/v4/pkg/domain/infra"
 	"github.com/containers/podman/v4/pkg/errorhandling"
 	"github.com/containers/storage"
+	"github.com/containers/storage/pkg/archive"
 	"github.com/containers/storage/pkg/idtools"
 	"github.com/containers/storage/pkg/ioutils"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
@@ -62,6 +63,7 @@ type Builder struct {
 	Env         []string
 	Message     string
 	OCIv1       v1.Image
+	Workdir     string
 	Engine      entities.ContainerEngine
 }
 
@@ -251,7 +253,62 @@ func (b Builder) Commit(containerid string, option *options.CommitOption) error 
 	return nil
 }
 
-func (b *Builder) Add(source string, args []string, extract bool) error {
+func (b *Builder) SetWorkdir(args string) {
+	b.Workdir = args
+}
+
+func (b *Builder) Add(dest string, source []string, extract bool) error {
+	if err := b.Mount(""); err != nil {
+		return err
+	}
+	mountPoint := b.MountPoint
+	if filepath.IsAbs(dest) {
+		dest = filepath.Join(mountPoint, dest)
+	} else {
+		dest = filepath.Join(mountPoint, b.Workdir, dest)
+	}
+	def, err := os.Stat(dest)
+	if err != nil {
+		return err
+	}
+	archiver := archive.NewDefaultArchiver()
+	for _, src := range source {
+		srf, err := os.Stat(src)
+		if err != nil {
+			return err
+		}
+		if srf.IsDir() {
+			d := dest
+			if err := os.MkdirAll(d, 0755); err != nil {
+				return fmt.Errorf("error ensuring directory %q exists", d)
+			}
+			logrus.Debugf("copying %q to %q", src+string(os.PathSeparator)+"*", d+string(os.PathSeparator)+"*")
+			// CopyWithTar creates a tar archive of filesystem path `src`, and unpacks it at filesystem path `dst`
+			if err := archiver.CopyWithTar(src, d); err != nil {
+				return fmt.Errorf("error copying %q to %q", src, d)
+			}
+			continue
+		}
+		// IsArchivePath checks if the (possibly compressed) file at the given path starts with a tar file header.
+		if !extract || !archive.IsArchivePath(src) {
+			d := dest
+			if def != nil && def.IsDir() {
+				d = filepath.Join(dest, filepath.Base(src))
+			}
+			logrus.Debugf("copying %q to %q", src, d)
+			// CopyFileWithTar emulates the behavior of the 'cp' command-line for a single file. It copies a regular
+			// file from path `src` to path `dst`, and preserves all its metadata.
+			if err := archiver.CopyFileWithTar(src, d); err != nil {
+				return fmt.Errorf("error copying %q to %q", src, d)
+			}
+			continue
+		}
+		logrus.Debugf("extracting contents of %q into %q", src, dest)
+		// UntarPath untar a file from path to a destination, src is the source tar file path.
+		if err := archiver.UntarPath(src, dest); err != nil {
+			return fmt.Errorf("error extracting %q into %q", src, dest)
+		}
+	}
 	return nil
 }
 
