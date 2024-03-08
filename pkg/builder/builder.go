@@ -16,6 +16,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"io/ioutil"
+	"os"
+	"os/user"
+	"path/filepath"
+	"strconv"
+	"strings"
+
 	"gitee.com/openeuler/ktib/pkg/options"
 	"github.com/containers/buildah/copier"
 	"github.com/containers/image/v5/transports/alltransports"
@@ -29,13 +37,6 @@ import (
 	"github.com/containers/storage/pkg/ioutils"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/sirupsen/logrus"
-	"io"
-	"io/ioutil"
-	"os"
-	"os/user"
-	"path/filepath"
-	"strconv"
-	"strings"
 )
 
 const (
@@ -247,6 +248,10 @@ func (b Builder) Commit(containerid string, option *options.CommitOption) error 
 		return err
 	}
 	fmt.Println(res.Id)
+	return nil
+}
+
+func (b *Builder) Add(source string, args []string, extract bool) error {
 	return nil
 }
 
