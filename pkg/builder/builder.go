@@ -12,7 +12,6 @@
 package builder
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -30,7 +29,6 @@ import (
 	"github.com/containers/podman/v4/cmd/podman/registry"
 	"github.com/containers/podman/v4/pkg/copy"
 	"github.com/containers/podman/v4/pkg/domain/entities"
-	"github.com/containers/podman/v4/pkg/domain/infra"
 	"github.com/containers/podman/v4/pkg/errorhandling"
 	"github.com/containers/storage"
 	"github.com/containers/storage/pkg/archive"
@@ -64,7 +62,6 @@ type Builder struct {
 	Message     string
 	OCIv1       v1.Image
 	Workdir     string
-	Engine      entities.ContainerEngine
 }
 
 type BuilderOptions struct {
@@ -84,7 +81,6 @@ func newBuidler(store storage.Store, options BuilderOptions) (*Builder, error) {
 	}
 	option := BuilderOptions{}
 	option.BOptions = *registry.PodmanConfig()
-	engine, err := infra.NewContainerEngine(&option.BOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +92,6 @@ func newBuidler(store storage.Store, options BuilderOptions) (*Builder, error) {
 		FromImageID: "",
 		Container:   name,
 		ContainerID: container.ID,
-		Engine:      engine,
 	}
 	if err := builder.Save(); err != nil {
 		return nil, err
@@ -157,23 +152,10 @@ func FindAllBuilders(store storage.Store) ([]*Builder, error) {
 	return bl, nil
 }
 
-// sourceContainerStr: 如果从容器拷贝到本地，sourceContainerStr是容器id；反之为空。
-// sourcePath: 要拷贝的文件路径。
-// destContainerStr： 如果从本地拷贝到容器，destContainerStr是容器id；反之为空。
-// destPath: 文件要被拷贝到的本地目录或容器目录。
 func (b *Builder) Copy(args []string) error {
-	engine := b.Engine
-	sourceContainerStr, sourcePath, destContainerStr, destPath, err := copy.ParseSourceAndDestination(args[0], args[1])
-	if err != nil {
-		return err
-	}
-	if len(destContainerStr) > 0 && len(sourceContainerStr) > 0 {
-		return copyFromContainerToContainer(sourceContainerStr, sourcePath, destContainerStr, destPath, engine)
-	} else if len(destContainerStr) > 0 && len(sourceContainerStr) == 0 {
-		return copyToContainer(destContainerStr, destPath, sourcePath, engine)
-	}
-	return copyToHost(sourceContainerStr, sourcePath, destPath, engine)
+	return nil
 }
+
 func (b *Builder) Label(args []string) error {
 	return nil
 }
@@ -243,13 +225,6 @@ func (b *Builder) Save() error {
 }
 
 func (b Builder) Commit(containerid string, option *options.CommitOption) error {
-	engine := b.Engine
-	res, err := engine.ContainerCommit(context.Background(), containerid, option.CommitOptions)
-	if err != nil {
-		fmt.Println(option.CommitOptions.Format)
-		return err
-	}
-	fmt.Println(res.Id)
 	return nil
 }
 
