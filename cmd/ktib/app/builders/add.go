@@ -13,6 +13,7 @@ package builders
 
 import (
 	"errors"
+	"fmt"
 
 	"gitee.com/openeuler/ktib/pkg/builder"
 	"gitee.com/openeuler/ktib/pkg/utils"
@@ -44,11 +45,11 @@ func add(cmd *cobra.Command, name, destination string, source []string) error {
 	}
 	builderobj, err := builder.FindBuilder(store, name)
 	if err != nil {
-		return errors.New("Not found the builder")
+		return errors.New(fmt.Sprintf("Not found the %s builder", name))
 	}
 	err = builderobj.Add(destination, source, true)
 	if err != nil {
-		return errors.New("error adding content to builder")
+		return errors.New(fmt.Sprintf("error adding content to builder: %s", err))
 	}
 	return nil
 }
