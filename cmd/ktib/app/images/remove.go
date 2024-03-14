@@ -13,9 +13,11 @@ package images
 
 import (
 	"fmt"
+
 	"gitee.com/openeuler/ktib/pkg/imagemanager"
 	"gitee.com/openeuler/ktib/pkg/options"
 	"gitee.com/openeuler/ktib/pkg/utils"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
@@ -28,10 +30,10 @@ func removeImages(cmd *cobra.Command, imageName []string, op options.RemoveOptio
 	if err != nil {
 		return err
 	}
-	errors := imageManager.Remove(imageName, op)
-	for _, rmErr := range errors {
+	errs := imageManager.Remove(store, imageName, op)
+	for i, rmErr := range errs {
 		if rmErr != nil {
-			return err
+			logrus.Error(fmt.Sprintf("unable to remove repository reference '%s': %s", imageName[i], rmErr))
 		}
 	}
 	return nil
