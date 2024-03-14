@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"strings"
+
 	"gitee.com/openeuler/ktib/pkg/options"
 	"github.com/containers/common/libimage"
 	"github.com/containers/common/pkg/auth"
@@ -11,7 +14,6 @@ import (
 	"github.com/containers/image/v5/types"
 	"github.com/containers/storage"
 	"github.com/sirupsen/logrus"
-	"os"
 )
 
 type ImageManager struct {
@@ -134,6 +136,14 @@ func (im *ImageManager) Tag(store storage.Store, args []string) error {
 	if !store.Exists(name) {
 		err := errors.New("image not exist")
 		return err
+	}
+	for i, arg := range args[1:] {
+		if strings.HasSuffix(arg, ":") {
+			return errors.New(fmt.Sprintf("Error parsing reference: %s is not a valid repository/tag: invalid reference format", arg))
+		}
+		if !strings.Contains(arg, ":") {
+			args[1:][i] += ":latest"
+		}
 	}
 	err := store.AddNames(name, args[1:])
 	if err != nil {
