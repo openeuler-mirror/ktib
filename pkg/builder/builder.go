@@ -206,7 +206,10 @@ func (b *Builder) SetMessage(args string) {
 }
 
 func (b *Builder) Remove() error {
-	b.Store.DeleteContainer(b.ContainerID)
+	if err := b.Store.DeleteContainer(b.ContainerID); err != nil {
+		logrus.Error(fmt.Sprintf("delete builder failed: %s", err))
+		return err
+	}
 	return nil
 }
 
