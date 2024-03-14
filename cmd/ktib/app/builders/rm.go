@@ -1,27 +1,23 @@
 package builders
 
 import (
-	"context"
 	"errors"
 	"fmt"
+	"strings"
+
+	"gitee.com/openeuler/ktib/pkg/builder"
 	"gitee.com/openeuler/ktib/pkg/options"
+	"gitee.com/openeuler/ktib/pkg/utils"
 	"github.com/containers/common/pkg/completion"
 	"github.com/containers/podman/v4/cmd/podman/common"
 	"github.com/containers/podman/v4/cmd/podman/registry"
-	"github.com/containers/podman/v4/cmd/podman/utils"
 	"github.com/containers/podman/v4/cmd/podman/validate"
 	"github.com/containers/podman/v4/libpod/define"
-	"github.com/containers/podman/v4/pkg/domain/entities"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"os"
-	"strings"
 )
 
 var (
-	op = options.RemoveOption{
-		RmOptions: entities.RmOptions{Filters: make(map[string][]string)},
-	}
+	op         = options.RemoveOption{}
 	filters    []string
 	rmCidFiles = []string{}
 )
@@ -50,56 +46,22 @@ func RMCmd() *cobra.Command {
 }
 
 func rm(cmd *cobra.Command, args []string, op options.RemoveOption) error {
-	var errs utils.OutputErrors
-	for _, cidFile := range rmCidFiles {
-		content, err := os.ReadFile(cidFile)
-		if err != nil {
-			if op.Ignore && errors.Is(err, os.ErrNotExist) {
-				continue
-			}
-			return fmt.Errorf("reading CIDFile: %w", err)
-		}
-		id := strings.Split(string(content), "\n")[0]
-		args = append(args, id)
-	}
-
-	for _, f := range filters {
-		split := strings.SplitN(f, "=", 2)
-		if len(split) < 2 {
-			return fmt.Errorf("invalid filter %q", f)
-		}
-		op.Filters[split[0]] = append(op.Filters[split[0]], split[1])
-	}
-	containerEngine, err := registry.NewContainerEngine(cmd, args)
+	name := args[0]
+	store, err := utils.GetStore(cmd)
 	if err != nil {
 		return err
 	}
-	nameOrID := utils.RemoveSlash(args)
-	res, err := containerEngine.ContainerRm(context.Background(), nameOrID, op.RmOptions)
+	builderobj, err := builder.FindBuilder(store, name)
 	if err != nil {
-		if op.Force && strings.Contains(err.Error(), define.ErrNoSuchCtr.Error()) {
-			return nil
-		}
-		setExitCode(err)
-		return err
+		return errors.New(fmt.Sprintf("Not found the %s builder", name))
 	}
-	for _, r := range res {
-		switch {
-		case r.Err != nil:
-			if errors.Is(r.Err, define.ErrWillDeadlock) {
-				logrus.Errorf("Potential deadlock detected - please run 'podman system renumber' to resolve")
-			}
-			if op.Force && strings.Contains(r.Err.Error(), define.ErrNoSuchCtr.Error()) {
-				continue
-			}
-			setExitCode(r.Err)
-			errs = append(errs, r.Err)
-		default:
-			fmt.Println(r.Id)
-		}
+	err = builderobj.Remove()
+	if err != nil {
+		return errors.New(fmt.Sprintf("failed to  remove the builder of %s: %s", name, err))
 	}
-	return errs.PrintErrors()
+	return nil
 }
+
 func setExitCode(err error) {
 	// If error is set to no such container, do not reset
 	if registry.GetExitCode() == 1 {
