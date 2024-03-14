@@ -53,7 +53,7 @@ func rm(cmd *cobra.Command, args []string, op options.RemoveOption) error {
 	}
 	builderobj, err := builder.FindBuilder(store, name)
 	if err != nil {
-		return errors.New(fmt.Sprintf("Not found the %s builder", name))
+		return errors.New(fmt.Sprintf("Not found the %s builder: %s", name, err))
 	}
 	err = builderobj.Remove()
 	if err != nil {
