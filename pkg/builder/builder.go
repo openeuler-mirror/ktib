@@ -206,6 +206,7 @@ func (b *Builder) SetMessage(args string) {
 }
 
 func (b *Builder) Remove() error {
+	b.Store.DeleteContainer(b.ContainerID)
 	return nil
 }
 
