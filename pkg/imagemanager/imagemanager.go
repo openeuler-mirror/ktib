@@ -122,10 +122,15 @@ func (im *ImageManager) Remove(store storage.Store, images []string, op options.
 		// If more than one tag exists for the image, the Untag operation is performed
 		names, err := store.Names(img)
 		if err != nil {
-			return err
+			logrus.Errorf("No such image: %s", img)
+			continue
 		}
 		if len(names) > 1 {
-			return store.RemoveNames(img, images[i:i+1])
+			if err := store.RemoveNames(img, images[i:i+1]); err != nil {
+				logrus.Errorf("Untaged %s failed.", img)
+			}
+			logrus.Infof("Untagged: %s", img)
+			continue
 		}
 		_, err = store.DeleteImage(img, op.Force)
 		if err != nil {
