@@ -234,8 +234,9 @@ func JsonFormatMountInfo(builders []*builder.Builder) error {
 		if b.MountPoint != "" {
 			jsonBuilders = append(jsonBuilders,
 				ktype.JsonBuilder{
-					ID:    b.ID,
-					Mount: b.MountPoint,
+					ID:      b.ID,
+					Mount:   b.MountPoint,
+					ImageID: b.FromImageID,
 				})
 		}
 	}

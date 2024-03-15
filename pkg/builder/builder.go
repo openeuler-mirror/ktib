@@ -81,6 +81,7 @@ func newBuidler(store storage.Store, options BuilderOptions) (*Builder, error) {
 	}
 	option := BuilderOptions{}
 	option.BOptions = *registry.PodmanConfig()
+	iMage, err := store.Image(image)
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +90,7 @@ func newBuidler(store storage.Store, options BuilderOptions) (*Builder, error) {
 		ID:          container.ID,
 		Store:       store,
 		FromImage:   image,
-		FromImageID: "",
+		FromImageID: iMage.ID,
 		Container:   name,
 		ContainerID: container.ID,
 	}
