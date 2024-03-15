@@ -13,6 +13,7 @@ import (
 	"github.com/containers/common/pkg/config"
 	"github.com/containers/image/v5/types"
 	"github.com/containers/storage"
+	"github.com/sirupsen/logrus"
 )
 
 type ImageManager struct {
@@ -115,15 +116,19 @@ func (im *ImageManager) Push(args []string) error {
 	return nil
 }
 
-func (im *ImageManager) Remove(store storage.Store, images []string, op options.RemoveOption) []error {
+func (im *ImageManager) Remove(store storage.Store, images []string, op options.RemoveOption) error {
 	var allErrors []error
 	for _, img := range images {
 		_, err := store.DeleteImage(img, op.Force)
 		if err != nil {
 			allErrors = append(allErrors, err)
+			logrus.Error(fmt.Sprintf("unable to remove repository reference '%s': %s", img, err))
 		}
 	}
-	return allErrors
+	if len(allErrors) > 0 {
+		return errors.New("The remove operation failed.")
+	}
+	return nil
 }
 
 func (im *ImageManager) Tag(store storage.Store, args []string) error {
