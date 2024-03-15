@@ -142,7 +142,9 @@ func FindAllBuilders(store storage.Store) ([]*Builder, error) {
 		if err != nil && os.IsNotExist(err) {
 			return nil, err
 		}
-		b := &Builder{}
+		b := &Builder{
+			Store: store,
+		}
 		err = json.Unmarshal(buildstate, &b)
 		if err != nil {
 			return nil, err
