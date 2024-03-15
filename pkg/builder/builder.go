@@ -12,6 +12,7 @@
 package builder
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -25,7 +26,10 @@ import (
 
 	"gitee.com/openeuler/ktib/pkg/options"
 	"github.com/containers/buildah/copier"
+	cpier "github.com/containers/image/v5/copy"
+	"github.com/containers/image/v5/signature"
 	"github.com/containers/image/v5/transports/alltransports"
+	"github.com/containers/image/v5/types"
 	"github.com/containers/podman/v4/cmd/podman/registry"
 	"github.com/containers/podman/v4/pkg/copy"
 	"github.com/containers/podman/v4/pkg/domain/entities"
@@ -39,7 +43,8 @@ import (
 )
 
 const (
-	stateFile = "ktib.json"
+	stateFile        = "ktib.json"
+	defaultTransport = "containers-storage:"
 )
 
 var (
@@ -232,7 +237,42 @@ func (b *Builder) Save() error {
 	return ioutils.AtomicWriteFile(filepath.Join(cdir, stateFile), buildstate, 0600)
 }
 
-func (b Builder) Commit(containerid string, option *options.CommitOption) error {
+func (b Builder) Commit(exportTo string, option *options.CommitOption) error {
+	ctx := context.Background()
+	systemContext := types.SystemContext{}
+	policy, err := signature.DefaultPolicy(&systemContext)
+	if err != nil {
+		return err
+	}
+	policyContext, err := signature.NewPolicyContext(policy)
+	importFrom := b.FromImage
+	if !b.Store.Exists(importFrom) {
+		iMage, err := b.Store.Image(b.FromImageID)
+		if err != nil {
+			return err
+		}
+		importFrom = iMage.Names[0]
+	}
+	// set transport to oci
+	importFrom = defaultTransport + importFrom
+	importRef, err := alltransports.ParseImageName(importFrom)
+	if err != nil {
+		return err
+	}
+	if b.Store.Exists(exportTo) {
+		return errors.New(fmt.Sprintf("The image %s is exists.", exportTo))
+	}
+	// set transport to oci
+	exportTo = defaultTransport + exportTo
+	exportRef, err := alltransports.ParseImageName(exportTo)
+	if err != nil {
+		return err
+	}
+	ops := &cpier.Options{}
+	_, err = cpier.Image(ctx, policyContext, exportRef, importRef, ops)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
