@@ -118,8 +118,16 @@ func (im *ImageManager) Push(args []string) error {
 
 func (im *ImageManager) Remove(store storage.Store, images []string, op options.RemoveOption) error {
 	var allErrors []error
-	for _, img := range images {
-		_, err := store.DeleteImage(img, op.Force)
+	for i, img := range images {
+		// If more than one tag exists for the image, the Untag operation is performed
+		names, err := store.Names(img)
+		if err != nil {
+			return err
+		}
+		if len(names) > 1 {
+			return store.RemoveNames(img, images[i:i+1])
+		}
+		_, err = store.DeleteImage(img, op.Force)
 		if err != nil {
 			allErrors = append(allErrors, err)
 			logrus.Error(fmt.Sprintf("unable to remove repository reference '%s': %s", img, err))
