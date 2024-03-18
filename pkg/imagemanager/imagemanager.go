@@ -11,6 +11,7 @@ import (
 	"github.com/containers/common/libimage"
 	"github.com/containers/common/pkg/auth"
 	"github.com/containers/common/pkg/config"
+	"github.com/containers/image/v5/docker/reference"
 	"github.com/containers/image/v5/types"
 	"github.com/containers/storage"
 	"github.com/sirupsen/logrus"
@@ -158,6 +159,15 @@ func (im *ImageManager) Tag(store storage.Store, args []string) error {
 			args[1:][i] += ":latest"
 		}
 	}
+
+	for i, s := range args[1:] {
+		noralName, err := reference.ParseNormalizedNamed(s)
+		if err != nil {
+			return err
+		}
+		args[i+1] = noralName.String()
+	}
+
 	err := store.AddNames(name, args[1:])
 	if err != nil {
 		return err
