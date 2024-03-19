@@ -246,6 +246,8 @@ func (b Builder) Commit(exportTo string, option *options.CommitOption) error {
 	}
 	policyContext, err := signature.NewPolicyContext(policy)
 	importFrom := b.FromImage
+	var imageLayer string
+	var containerLayer string
 	if !b.Store.Exists(importFrom) {
 		iMage, err := b.Store.Image(b.FromImageID)
 		if err != nil {
@@ -269,6 +271,41 @@ func (b Builder) Commit(exportTo string, option *options.CommitOption) error {
 		return err
 	}
 	ops := &cpier.Options{}
+
+	// First need to determine whether there are changes in the builder's layers, if there are changes you need to
+	// merge the layers, no changes only need to copy the image.
+	iM, _ := b.Store.Image(b.FromImageID)
+	imageLayer = iM.TopLayer
+	ctr, _ := b.Store.Container(b.ContainerID)
+	containerLayer = ctr.LayerID
+	changes, err := b.Store.Changes(imageLayer, containerLayer)
+	if err != nil {
+		return err
+	}
+	for _, change := range changes {
+		switch change.Kind {
+		case archive.ChangeModify:
+			logrus.Infof("modify %s", change.Path)
+		case archive.ChangeAdd:
+			logrus.Infof("add %s", change.Path)
+		case archive.ChangeDelete:
+			logrus.Infof("delete %s", change.Path)
+		}
+	}
+	if len(changes) > 0 {
+		var diffOps storage.DiffOptions
+		var layerOps storage.LayerOptions
+		diffLayer, _ := b.Store.Diff(imageLayer, containerLayer, &diffOps)
+		defer diffLayer.Close()
+		destLayer, num, _ := b.Store.PutLayer("", imageLayer, []string{}, "", false, &layerOps, diffLayer)
+		if num != -1 {
+			logrus.Infof("apply diff %s successfully", containerLayer)
+		}
+		var nname []string
+		nwImage, _ := b.Store.CreateImage("", nname, destLayer.ID, "", nil)
+		logrus.Infof("create new image %s successful", nwImage.ID)
+		return nil
+	}
 	_, err = cpier.Image(ctx, policyContext, exportRef, importRef, ops)
 	if err != nil {
 		return err
