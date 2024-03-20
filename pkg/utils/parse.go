@@ -14,6 +14,7 @@ package utils
 import (
 	"encoding/json"
 	"fmt"
+	"gitee.com/openeuler/ktib/pkg/imagemanager"
 	"os"
 	"time"
 
@@ -21,7 +22,6 @@ import (
 
 	"gitee.com/openeuler/ktib/pkg/builder"
 	ktype "gitee.com/openeuler/ktib/pkg/types"
-	libimage "github.com/containers/common/libimage"
 	"github.com/containers/common/pkg/report"
 	"github.com/containers/image/v5/types"
 	container "github.com/containers/storage"
@@ -64,23 +64,20 @@ func humanSize(s int64) string {
 	}
 }
 
-func sortImages(imgs []*libimage.Image) ([]imageReport, error) {
+func sortImages(imgs []imagemanager.Image) ([]imageReport, error) {
 	var imgReport []imageReport
 	for _, img := range imgs {
-		size, err := img.Size()
-		if err != nil {
-			return nil, err
-		}
-		createdAgo := units.HumanDuration(time.Since(img.Created())) + " ago"
-		topLayer := img.TopLayer()[0:10]
-		imgID := img.ID()[:10]
+		size := img.Size
+		createdAgo := units.HumanDuration(time.Since(img.OriImage.Created)) + " ago"
+		topLayer := img.OriImage.TopLayer[0:10]
+		imgID := img.OriImage.ID[:10]
 
-		if len(img.Names()) > 0 {
-			for _, name := range append(img.Names(), unknownState)[:len(img.Names())] {
+		if len(img.OriImage.Names) > 0 {
+			for _, name := range append(img.OriImage.Names, unknownState)[:len(img.OriImage.Names)] {
 				imgReport = append(imgReport, imageReport{
 					Name:     name,
 					ID:       imgID,
-					Digest:   img.Digest(),
+					Digest:   img.OriImage.Digest,
 					TopLayer: topLayer,
 					Created:  createdAgo,
 					Size:     humanSize(size),
@@ -90,7 +87,7 @@ func sortImages(imgs []*libimage.Image) ([]imageReport, error) {
 			imgReport = append(imgReport, imageReport{
 				Name:     unknownState,
 				ID:       imgID,
-				Digest:   img.Digest(),
+				Digest:   img.OriImage.Digest,
 				TopLayer: topLayer,
 				Created:  createdAgo,
 				Size:     humanSize(size),
@@ -114,7 +111,7 @@ func sortContainers(containers []container.Container) ([]containerReport, error)
 	return containerReports, nil
 }
 
-func FormatImages(images []*libimage.Image, ops options.ImagesOption) error {
+func FormatImages(images []imagemanager.Image, ops options.ImagesOption) error {
 	//TODO 参考docker以image table format 输出
 	defaultImageTableFormat := "table {{.Name}} {{.ID}}  {{.Digest}} {{.Size}} {{.TopLayer}}   {{.Created}}"
 	// defaultImageTableFormatWithDigest = "table {{.Repository}}\t{{.Tag}}\t{{.Digest}}\t{{.ID}}\t{{.CreatedSince}}\t{{.Size}}"
@@ -152,22 +149,17 @@ func SystemContextFromFlagSet(c *cobra.Command) (types.SystemContext, error) {
 	return types.SystemContext{}, nil
 }
 
-func JsonFormatImages(images []*libimage.Image, ops options.ImagesOption) error {
+func JsonFormatImages(images []imagemanager.Image, ops options.ImagesOption) error {
 	var jsonImages []ktype.JsonImage
 
 	for _, image := range images {
-		size, err := image.Size()
-		if err != nil {
-			return err
-		}
-		created := image.Created()
 		jsonImages = append(jsonImages,
 			ktype.JsonImage{
-				Name:    image.Names(),
-				Digest:  image.Digest().String(),
-				ImageID: image.ID(),
-				Created: created,
-				Size:    size,
+				Name:    image.OriImage.Names,
+				Digest:  image.OriImage.Digest,
+				ImageID: image.OriImage.ID,
+				Created: image.OriImage.Created,
+				Size:    image.Size,
 			})
 	}
 	data, err := json.MarshalIndent(jsonImages, "", "    ")
