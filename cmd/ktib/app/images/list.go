@@ -33,11 +33,11 @@ func imageList(cmd *cobra.Command, args []string, ops options.ImagesOption) erro
 	if err != nil {
 		return err
 	}
-	images, err := imageManager.ListImage(args)
+	images, err := imageManager.ListImage(args,store)
 	if ops.Json {
-		return utils2.JsonFormatImages(images.KtibImage, ops)
+		return utils2.JsonFormatImages(images, ops)
 	}
-	return utils2.FormatImages(images.KtibImage, ops)
+	return utils2.FormatImages(images, ops)
 }
 
 func ImageListCmd() *cobra.Command {
