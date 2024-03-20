@@ -11,11 +11,14 @@
 
 package types
 
-import "time"
+import (
+	"github.com/opencontainers/go-digest"
+	"time"
+)
 
 type JsonImage struct {
 	Name    []string  `json:"name"`
-	Digest  string    `json:"digest"`
+	Digest  digest.Digest    `json:"digest"`
 	ImageID string    `json:"images ID"`
 	Created time.Time `json:"created"`
 	Size    int64     `json:"size"`
