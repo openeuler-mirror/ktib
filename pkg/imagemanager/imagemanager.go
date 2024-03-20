@@ -23,7 +23,7 @@ type ImageManager struct {
 }
 
 type Image struct {
-	KtibImage []*libimage.Image
+	KtibImage []storage.Image
 }
 
 func NewImageManager(store storage.Store) (*ImageManager, error) {
@@ -38,11 +38,8 @@ func NewImageManager(store storage.Store) (*ImageManager, error) {
 	return imageManager, nil
 }
 
-func (im *ImageManager) ListImage(args []string) (*Image, error) {
-	ctx := context.Background()
-	opts := &libimage.ListImagesOptions{}
-	manager := im.Manager
-	image, err := manager.ListImages(ctx, args, opts)
+func (im *ImageManager) ListImage(args []string,store storage.Store) (*Image, error) {
+	image, err := store.Images()
 	if err != nil {
 		return nil, err
 	}
