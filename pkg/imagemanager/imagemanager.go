@@ -23,7 +23,8 @@ type ImageManager struct {
 }
 
 type Image struct {
-	KtibImage []storage.Image
+	OriImage storage.Image
+	Size int64
 }
 
 func NewImageManager(store storage.Store) (*ImageManager, error) {
@@ -38,15 +39,23 @@ func NewImageManager(store storage.Store) (*ImageManager, error) {
 	return imageManager, nil
 }
 
-func (im *ImageManager) ListImage(args []string,store storage.Store) (*Image, error) {
+func (im *ImageManager) ListImage(args []string,store storage.Store) ([]Image, error) {
+	var imageList []Image
 	image, err := store.Images()
 	if err != nil {
 		return nil, err
 	}
-	images := &Image{
-		KtibImage: image,
+	for _, img := range image {
+		size,err:= store.ImageSize(img.ID)
+		if err != nil {
+			return nil,err
+		}
+		imageList = append(imageList,Image{
+			OriImage: img,
+			Size: size,
+		})
 	}
-	return images, nil
+	return imageList, nil
 }
 
 // TODO: 以下函数需要重构到这里
