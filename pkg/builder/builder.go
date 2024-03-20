@@ -293,16 +293,12 @@ func (b Builder) Commit(exportTo string, option *options.CommitOption) error {
 		}
 	}
 	if len(changes) > 0 {
-		var diffOps storage.DiffOptions
-		var layerOps storage.LayerOptions
-		diffLayer, _ := b.Store.Diff(imageLayer, containerLayer, &diffOps)
-		defer diffLayer.Close()
-		destLayer, num, _ := b.Store.PutLayer("", imageLayer, []string{}, "", false, &layerOps, diffLayer)
-		if num != -1 {
-			logrus.Infof("apply diff %s successfully", containerLayer)
-		}
 		var nname []string
-		nwImage, _ := b.Store.CreateImage("", nname, destLayer.ID, "", nil)
+		nname = append(nname, exportTo)
+		nwImage, err := b.Store.CreateImage("", nname, containerLayer, "", nil)
+		if err != nil {
+			return err
+		}
 		logrus.Infof("create new image %s successful", nwImage.ID)
 		return nil
 	}
