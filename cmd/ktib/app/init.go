@@ -13,6 +13,7 @@ package app
 
 import (
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"os/exec"
 	"strings"
 
@@ -24,11 +25,12 @@ type InitOption struct {
 	BuildType string
 }
 
-var PackagesToCheck = []string{"containers-common", "another-packages"}
+var PackagesToCheck = []string{"containers-common"}
 
 func runInit(c *cobra.Command, args []string, option InitOption) error {
 	// TODO 解析参数 构建app, dir = args[0], imageName = args[1]
 	if len(args) < 2 {
+		logrus.Println("The number of parameters passed in is incorrect")
 		return c.Help()
 	}
 	boot := project.NewBootstrap(args[0], args[1])
@@ -45,6 +47,13 @@ func newCmdInit() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Run this command in order to create an empty project",
+		Long: `Init command helps you create an empty project with specified options. 
+It creates the necessary directory structure and files to kickstart your project.`,
+		Example: `  # Create a project with default options
+  ktib init /path/to/project my-image
+  # Create a project with source build type
+  ktib init --buildType source /path/to/project my-image`,
+
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runInit(cmd, args, option)
 		},
@@ -53,7 +62,7 @@ func newCmdInit() *cobra.Command {
 			for _, packageName := range PackagesToCheck {
 				err := checkRpmPackageInstalled(packageName)
 				if err != nil {
-					return err
+					return fmt.Errorf("check rpm failed")
 				}
 			}
 			return nil
@@ -62,7 +71,7 @@ func newCmdInit() *cobra.Command {
 			// TODO init 后检查函数（可选）
 			return nil
 		},
-		Args: cobra.NoArgs,
+		Args: cobra.ExactArgs(2),
 	}
 	flags := cmd.Flags()
 	flags.StringVar(&option.BuildType, "buildType", "rpm", "")
@@ -75,7 +84,7 @@ func checkRpmPackageInstalled(packageName string) error {
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		// 运行命令时出错
-		return err
+		return fmt.Errorf("running cmd failed")
 	}
 	// 检查包是否已安装
 	if !strings.Contains(string(output), packageName) {

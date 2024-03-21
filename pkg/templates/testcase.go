@@ -1,3 +1,4 @@
 package templates
 
-const Testcase = ``
+const Testcase = `# Please edit your testcase here.
+`
