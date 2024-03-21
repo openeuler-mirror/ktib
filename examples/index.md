@@ -8,7 +8,7 @@ KTIB 是一个为 KCR 提供可信访问控制的工具。
 1. 初始化阶段:
 
 初始化一个空项目:
-    
+
     builder-machine# git pull http://gitlab.com/test/test.git
     builder-machine# cd test
     builder-machine# ktib init --buildType=source
