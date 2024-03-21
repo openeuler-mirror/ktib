@@ -13,21 +13,26 @@ package app
 
 import (
 	"fmt"
-	"gitee.com/openeuler/ktib/pkg/project"
-	"github.com/spf13/cobra"
 	"os/exec"
 	"strings"
+
+	"gitee.com/openeuler/ktib/pkg/project"
+	"github.com/spf13/cobra"
 )
+
+type InitOption struct {
+	BuildType string
+}
 
 var PackagesToCheck = []string{"containers-common", "another-packages"}
 
-func runInit(c *cobra.Command, args []string, option project.InitOption) error {
+func runInit(c *cobra.Command, args []string, option InitOption) error {
 	// TODO 解析参数 构建app, dir = args[0], imageName = args[1]
 	if len(args) < 2 {
 		return c.Help()
 	}
 	boot := project.NewBootstrap(args[0], args[1])
-	boot.InitWorkDir(option)
+	boot.InitWorkDir(option.BuildType)
 	boot.AddDockerfile()
 	boot.AddScript()
 	boot.AddTestcase()
@@ -36,7 +41,7 @@ func runInit(c *cobra.Command, args []string, option project.InitOption) error {
 }
 
 func newCmdInit() *cobra.Command {
-	var option project.InitOption
+	var option InitOption
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Run this command in order to create an empty project",
@@ -60,7 +65,7 @@ func newCmdInit() *cobra.Command {
 		Args: cobra.NoArgs,
 	}
 	flags := cmd.Flags()
-	flags.StringVar(&option.BuildType, "buildType", "RPM", "")
+	flags.StringVar(&option.BuildType, "buildType", "rpm", "")
 	return cmd
 }
 

@@ -13,6 +13,7 @@ package images
 
 import (
 	"fmt"
+
 	"gitee.com/openeuler/ktib/pkg/imagemanager"
 	"gitee.com/openeuler/ktib/pkg/options"
 	"gitee.com/openeuler/ktib/pkg/utils"
@@ -28,11 +29,8 @@ func removeImages(cmd *cobra.Command, imageName []string, op options.RemoveOptio
 	if err != nil {
 		return err
 	}
-	errors := imageManager.Remove(imageName, op)
-	for _, rmErr := range errors {
-		if rmErr != nil {
-			return err
-		}
+	if err := imageManager.Remove(store, imageName, op); err != nil {
+		return err
 	}
 	return nil
 }

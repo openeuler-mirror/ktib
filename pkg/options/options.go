@@ -12,10 +12,11 @@
 package options
 
 import (
+	"io"
+
 	"github.com/aquasecurity/trivy/pkg/commands/artifact"
 	"github.com/containers/buildah"
 	"github.com/containers/podman/v4/pkg/domain/entities"
-	"io"
 )
 
 type Option struct {
@@ -54,7 +55,14 @@ type PushOption struct {
 }
 
 type RemoveOption struct {
-	entities.RmOptions
+	Filters map[string][]string
+	All     bool
+	Depend  bool
+	Force   bool
+	Ignore  bool
+	Latest  bool
+	Timeout *uint
+	Volumes bool
 }
 
 type BuildersOption struct {

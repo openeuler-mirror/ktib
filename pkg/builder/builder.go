@@ -16,19 +16,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"gitee.com/openeuler/ktib/pkg/options"
-	"github.com/containers/buildah/copier"
-	"github.com/containers/image/v5/transports/alltransports"
-	"github.com/containers/podman/v4/cmd/podman/registry"
-	"github.com/containers/podman/v4/pkg/copy"
-	"github.com/containers/podman/v4/pkg/domain/entities"
-	"github.com/containers/podman/v4/pkg/domain/infra"
-	"github.com/containers/podman/v4/pkg/errorhandling"
-	"github.com/containers/storage"
-	"github.com/containers/storage/pkg/idtools"
-	"github.com/containers/storage/pkg/ioutils"
-	v1 "github.com/opencontainers/image-spec/specs-go/v1"
-	"github.com/sirupsen/logrus"
 	"io"
 	"io/ioutil"
 	"os"
@@ -36,10 +23,28 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"gitee.com/openeuler/ktib/pkg/options"
+	"github.com/containers/buildah/copier"
+	cpier "github.com/containers/image/v5/copy"
+	"github.com/containers/image/v5/signature"
+	"github.com/containers/image/v5/transports/alltransports"
+	"github.com/containers/image/v5/types"
+	"github.com/containers/podman/v4/cmd/podman/registry"
+	"github.com/containers/podman/v4/pkg/copy"
+	"github.com/containers/podman/v4/pkg/domain/entities"
+	"github.com/containers/podman/v4/pkg/errorhandling"
+	"github.com/containers/storage"
+	"github.com/containers/storage/pkg/archive"
+	"github.com/containers/storage/pkg/idtools"
+	"github.com/containers/storage/pkg/ioutils"
+	v1 "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/sirupsen/logrus"
 )
 
 const (
-	stateFile = "ktib.json"
+	stateFile        = "ktib.json"
+	defaultTransport = "containers-storage:"
 )
 
 var (
@@ -61,7 +66,7 @@ type Builder struct {
 	Env         []string
 	Message     string
 	OCIv1       v1.Image
-	Engine      entities.ContainerEngine
+	Workdir     string
 }
 
 type BuilderOptions struct {
@@ -81,7 +86,7 @@ func newBuidler(store storage.Store, options BuilderOptions) (*Builder, error) {
 	}
 	option := BuilderOptions{}
 	option.BOptions = *registry.PodmanConfig()
-	engine, err := infra.NewContainerEngine(&option.BOptions)
+	iMage, err := store.Image(image)
 	if err != nil {
 		return nil, err
 	}
@@ -90,10 +95,9 @@ func newBuidler(store storage.Store, options BuilderOptions) (*Builder, error) {
 		ID:          container.ID,
 		Store:       store,
 		FromImage:   image,
-		FromImageID: "",
+		FromImageID: iMage.ID,
 		Container:   name,
 		ContainerID: container.ID,
-		Engine:      engine,
 	}
 	if err := builder.Save(); err != nil {
 		return nil, err
@@ -119,12 +123,13 @@ func FindBuilder(store storage.Store, name string) (*Builder, error) {
 	if err != nil && os.IsNotExist(err) {
 		return nil, err
 	}
-	b := &Builder{}
+	b := &Builder{
+		Store: store,
+	}
 	err = json.Unmarshal(buildstate, &b)
 	if err != nil {
 		return nil, err
 	}
-	b.Store = store
 	return b, nil
 }
 
@@ -143,7 +148,9 @@ func FindAllBuilders(store storage.Store) ([]*Builder, error) {
 		if err != nil && os.IsNotExist(err) {
 			return nil, err
 		}
-		b := &Builder{}
+		b := &Builder{
+			Store: store,
+		}
 		err = json.Unmarshal(buildstate, &b)
 		if err != nil {
 			return nil, err
@@ -154,23 +161,10 @@ func FindAllBuilders(store storage.Store) ([]*Builder, error) {
 	return bl, nil
 }
 
-// sourceContainerStr: 如果从容器拷贝到本地，sourceContainerStr是容器id；反之为空。
-// sourcePath: 要拷贝的文件路径。
-// destContainerStr： 如果从本地拷贝到容器，destContainerStr是容器id；反之为空。
-// destPath: 文件要被拷贝到的本地目录或容器目录。
 func (b *Builder) Copy(args []string) error {
-	engine := b.Engine
-	sourceContainerStr, sourcePath, destContainerStr, destPath, err := copy.ParseSourceAndDestination(args[0], args[1])
-	if err != nil {
-		return err
-	}
-	if len(destContainerStr) > 0 && len(sourceContainerStr) > 0 {
-		return copyFromContainerToContainer(sourceContainerStr, sourcePath, destContainerStr, destPath, engine)
-	} else if len(destContainerStr) > 0 && len(sourceContainerStr) == 0 {
-		return copyToContainer(destContainerStr, destPath, sourcePath, engine)
-	}
-	return copyToHost(sourceContainerStr, sourcePath, destPath, engine)
+	return nil
 }
+
 func (b *Builder) Label(args []string) error {
 	return nil
 }
@@ -220,6 +214,10 @@ func (b *Builder) SetMessage(args string) {
 }
 
 func (b *Builder) Remove() error {
+	if err := b.Store.DeleteContainer(b.ContainerID); err != nil {
+		logrus.Error(fmt.Sprintf("delete builder failed: %s", err))
+		return err
+	}
 	return nil
 }
 
@@ -239,14 +237,134 @@ func (b *Builder) Save() error {
 	return ioutils.AtomicWriteFile(filepath.Join(cdir, stateFile), buildstate, 0600)
 }
 
-func (b Builder) Commit(containerid string, option *options.CommitOption) error {
-	engine := b.Engine
-	res, err := engine.ContainerCommit(context.Background(), containerid, option.CommitOptions)
+func (b Builder) Commit(exportTo string, option *options.CommitOption) error {
+	ctx := context.Background()
+	systemContext := types.SystemContext{}
+	policy, err := signature.DefaultPolicy(&systemContext)
 	if err != nil {
-		fmt.Println(option.CommitOptions.Format)
 		return err
 	}
-	fmt.Println(res.Id)
+	policyContext, err := signature.NewPolicyContext(policy)
+	importFrom := b.FromImage
+	var imageLayer string
+	var containerLayer string
+	if !b.Store.Exists(importFrom) {
+		iMage, err := b.Store.Image(b.FromImageID)
+		if err != nil {
+			return err
+		}
+		importFrom = iMage.Names[0]
+	}
+	// set transport to oci
+	importFrom = defaultTransport + importFrom
+	importRef, err := alltransports.ParseImageName(importFrom)
+	if err != nil {
+		return err
+	}
+	if b.Store.Exists(exportTo) {
+		return errors.New(fmt.Sprintf("The image %s is exists.", exportTo))
+	}
+	// set transport to oci
+	exportTo = defaultTransport + exportTo
+	exportRef, err := alltransports.ParseImageName(exportTo)
+	if err != nil {
+		return err
+	}
+	ops := &cpier.Options{}
+
+	// First need to determine whether there are changes in the builder's layers, if there are changes you need to
+	// merge the layers, no changes only need to copy the image.
+	iM, _ := b.Store.Image(b.FromImageID)
+	imageLayer = iM.TopLayer
+	ctr, _ := b.Store.Container(b.ContainerID)
+	containerLayer = ctr.LayerID
+	changes, err := b.Store.Changes(imageLayer, containerLayer)
+	if err != nil {
+		return err
+	}
+	for _, change := range changes {
+		switch change.Kind {
+		case archive.ChangeModify:
+			logrus.Infof("modify %s", change.Path)
+		case archive.ChangeAdd:
+			logrus.Infof("add %s", change.Path)
+		case archive.ChangeDelete:
+			logrus.Infof("delete %s", change.Path)
+		}
+	}
+	if len(changes) > 0 {
+		var nname []string
+		nname = append(nname, exportTo)
+		nwImage, err := b.Store.CreateImage("", nname, containerLayer, "", nil)
+		if err != nil {
+			return err
+		}
+		logrus.Infof("create new image %s successful", nwImage.ID)
+		return nil
+	}
+	_, err = cpier.Image(ctx, policyContext, exportRef, importRef, ops)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (b *Builder) SetWorkdir(args string) {
+	b.Workdir = args
+}
+
+func (b *Builder) Add(dest string, source []string, extract bool) error {
+	if err := b.Mount(""); err != nil {
+		return err
+	}
+	mountPoint := b.MountPoint
+	if filepath.IsAbs(dest) {
+		dest = filepath.Join(mountPoint, dest)
+	} else {
+		dest = filepath.Join(mountPoint, b.Workdir, dest)
+	}
+	def, err := os.Stat(dest)
+	if err != nil {
+		return err
+	}
+	archiver := archive.NewDefaultArchiver()
+	for _, src := range source {
+		srf, err := os.Stat(src)
+		if err != nil {
+			return err
+		}
+		if srf.IsDir() {
+			d := dest
+			if err := os.MkdirAll(d, 0755); err != nil {
+				return fmt.Errorf("error ensuring directory %q exists", d)
+			}
+			logrus.Debugf("copying %q to %q", src+string(os.PathSeparator)+"*", d+string(os.PathSeparator)+"*")
+			// CopyWithTar creates a tar archive of filesystem path `src`, and unpacks it at filesystem path `dst`
+			if err := archiver.CopyWithTar(src, d); err != nil {
+				return fmt.Errorf("error copying %q to %q", src, d)
+			}
+			continue
+		}
+		// IsArchivePath checks if the (possibly compressed) file at the given path starts with a tar file header.
+		if !extract || !archive.IsArchivePath(src) {
+			d := dest
+			if def != nil && def.IsDir() {
+				d = filepath.Join(dest, filepath.Base(src))
+			}
+			logrus.Debugf("copying %q to %q", src, d)
+			// CopyFileWithTar emulates the behavior of the 'cp' command-line for a single file. It copies a regular
+			// file from path `src` to path `dst`, and preserves all its metadata.
+			if err := archiver.CopyFileWithTar(src, d); err != nil {
+				return fmt.Errorf("error copying %q to %q", src, d)
+			}
+			continue
+		}
+		logrus.Debugf("extracting contents of %q into %q", src, dest)
+		// UntarPath untar a file from path to a destination, src is the source tar file path.
+		if err := archiver.UntarPath(src, dest); err != nil {
+			return fmt.Errorf("error extracting %q into %q", src, dest)
+		}
+	}
 	return nil
 }
 

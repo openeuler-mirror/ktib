@@ -4,14 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"strings"
+
 	"gitee.com/openeuler/ktib/pkg/options"
 	"github.com/containers/common/libimage"
 	"github.com/containers/common/pkg/auth"
 	"github.com/containers/common/pkg/config"
+	"github.com/containers/image/v5/docker/reference"
 	"github.com/containers/image/v5/types"
 	"github.com/containers/storage"
 	"github.com/sirupsen/logrus"
-	"os"
 )
 
 type ImageManager struct {
@@ -20,7 +23,8 @@ type ImageManager struct {
 }
 
 type Image struct {
-	KtibImage []*libimage.Image
+	OriImage storage.Image
+	Size int64
 }
 
 func NewImageManager(store storage.Store) (*ImageManager, error) {
@@ -35,18 +39,23 @@ func NewImageManager(store storage.Store) (*ImageManager, error) {
 	return imageManager, nil
 }
 
-func (im *ImageManager) ListImage(args []string) (*Image, error) {
-	ctx := context.Background()
-	opts := &libimage.ListImagesOptions{}
-	manager := im.Manager
-	image, err := manager.ListImages(ctx, args, opts)
+func (im *ImageManager) ListImage(args []string,store storage.Store) ([]Image, error) {
+	var imageList []Image
+	image, err := store.Images()
 	if err != nil {
 		return nil, err
 	}
-	images := &Image{
-		KtibImage: image,
+	for _, img := range image {
+		size,err:= store.ImageSize(img.ID)
+		if err != nil {
+			return nil,err
+		}
+		imageList = append(imageList,Image{
+			OriImage: img,
+			Size: size,
+		})
 	}
-	return images, nil
+	return imageList, nil
 }
 
 // TODO: 以下函数需要重构到这里
@@ -114,19 +123,32 @@ func (im *ImageManager) Push(args []string) error {
 	return nil
 }
 
-func (im *ImageManager) Remove(image []string, op options.RemoveOption) []error {
-	runtime := im.Manager
-	rmOptions := &libimage.RemoveImagesOptions{}
-	rmOptions.Force = op.Force
+func (im *ImageManager) Remove(store storage.Store, images []string, op options.RemoveOption) error {
 	var allErrors []error
-	_, errs := runtime.RemoveImages(context.Background(), image, rmOptions)
-	for n, err := range errs {
+	for i, img := range images {
+		// If more than one tag exists for the image, the Untag operation is performed
+		names, err := store.Names(img)
 		if err != nil {
-			logrus.Errorf("An error occurrd when delete image: %v, err: %v", image[n], err)
+			logrus.Errorf("No such image: %s", img)
+			continue
+		}
+		if len(names) > 1 {
+			if err := store.RemoveNames(img, images[i:i+1]); err != nil {
+				logrus.Errorf("Untaged %s failed.", img)
+			}
+			logrus.Infof("Untagged: %s", img)
+			continue
+		}
+		_, err = store.DeleteImage(img, op.Force)
+		if err != nil {
 			allErrors = append(allErrors, err)
+			logrus.Error(fmt.Sprintf("unable to remove repository reference '%s': %s", img, err))
 		}
 	}
-	return allErrors
+	if len(allErrors) > 0 {
+		return errors.New("The remove operation failed.")
+	}
+	return nil
 }
 
 func (im *ImageManager) Tag(store storage.Store, args []string) error {
@@ -135,6 +157,23 @@ func (im *ImageManager) Tag(store storage.Store, args []string) error {
 		err := errors.New("image not exist")
 		return err
 	}
+	for i, arg := range args[1:] {
+		if strings.HasSuffix(arg, ":") {
+			return errors.New(fmt.Sprintf("Error parsing reference: %s is not a valid repository/tag: invalid reference format", arg))
+		}
+		if !strings.Contains(arg, ":") {
+			args[1:][i] += ":latest"
+		}
+	}
+
+	for i, s := range args[1:] {
+		noralName, err := reference.ParseNormalizedNamed(s)
+		if err != nil {
+			return err
+		}
+		args[i+1] = noralName.String()
+	}
+
 	err := store.AddNames(name, args[1:])
 	if err != nil {
 		return err

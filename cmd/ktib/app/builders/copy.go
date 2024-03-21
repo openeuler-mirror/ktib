@@ -12,6 +12,9 @@
 package builders
 
 import (
+	"errors"
+	"fmt"
+
 	"gitee.com/openeuler/ktib/pkg/builder"
 	"gitee.com/openeuler/ktib/pkg/utils"
 	"github.com/spf13/cobra"
@@ -23,26 +26,28 @@ func COPYCmd() *cobra.Command {
 		Short: "Copy files from the local filesystem to container",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return Cp(cmd, args)
+			if len(args) < 3 {
+				return errors.New("requires exactly 3 arguments")
+			}
+			name := args[0]
+			args = tail(args)
+			source := args[:len(args)-1]
+			destination := args[len(args)-1]
+			return Cp(cmd, name, destination, source)
 		},
 	}
 
 	return cmd
 }
 
-func Cp(cmd *cobra.Command, args []string) error {
+func Cp(cmd *cobra.Command, name, destination string, source []string) error {
 	store, err := utils.GetStore(cmd)
-	store.GraphRoot()
 	if err != nil {
 		return err
 	}
-	option := builder.BuilderOptions{
-		FromImage: args[0],
-		//TODO copy的参数赋值需要定义
-	}
-	cpBuilder, err := builder.NewBuilder(store, option)
+	builderobj, err := builder.FindBuilder(store, name)
 	if err != nil {
-		return err
+		return errors.New(fmt.Sprintf("Not found the %s builder", name))
 	}
-	return cpBuilder.Copy(args)
+	return builderobj.Add(destination, source, false)
 }

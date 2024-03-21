@@ -12,37 +12,33 @@
 package builders
 
 import (
+	"os"
+
 	"gitee.com/openeuler/ktib/pkg/builder"
 	"gitee.com/openeuler/ktib/pkg/options"
 	"gitee.com/openeuler/ktib/pkg/utils"
 	"github.com/containers/podman/v4/cmd/podman/common"
 	"github.com/spf13/cobra"
-	"os"
-	"strings"
 )
 
 func commit(cmd *cobra.Command, args []string, option *options.CommitOption) error {
-	containerid := strings.TrimPrefix(args[0], "/")
+	exportTo := ""
 	if len(args) == 2 {
-		option.ImageName = args[1]
+		exportTo = args[1]
 	}
 	if !option.Quiet {
 		option.Writer = os.Stderr
 	}
 	store, err := utils.GetStore(cmd)
-	store.GraphRoot()
 	if err != nil {
 		return err
 	}
-	op := builder.BuilderOptions{
-		FromImage: args[1],
-		Container: containerid,
-	}
-	cmBuilder, err := builder.NewBuilder(store, op)
+	cmBuilder, err := builder.FindBuilder(store, args[0])
 	if err != nil {
 		return err
 	}
-	return cmBuilder.Commit(containerid, option)
+
+	return cmBuilder.Commit(exportTo, option)
 }
 
 func COMMITCmd() *cobra.Command {
