@@ -12,7 +12,6 @@
 package project
 
 import (
-	"gitee.com/openeuler/ktib/cmd/ktib/app"
 	"gitee.com/openeuler/ktib/pkg/templates"
 	"github.com/sirupsen/logrus"
 	"os"
@@ -24,11 +23,15 @@ type Bootstrap struct {
 	ImageName      string
 }
 
+type InitOption struct {
+	BuildType string
+}
+
 func NewBootstrap(dir, imageName string) *Bootstrap {
 	return &Bootstrap{DestinationDir: dir, ImageName: imageName}
 }
 
-func (b *Bootstrap) InitWorkDir(initOption app.InitOption) {
+func (b *Bootstrap) InitWorkDir(initOption InitOption) {
 	switch initOption.BuildType {
 	case "source":
 		os.MkdirAll(b.DestinationDir+"/"+"init"+"/"+"source", 0700)

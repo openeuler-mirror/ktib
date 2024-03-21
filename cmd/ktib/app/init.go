@@ -19,13 +19,9 @@ import (
 	"strings"
 )
 
-type InitOption struct {
-	BuildType string
-}
-
 var PackagesToCheck = []string{"containers-common", "another-packages"}
 
-func runInit(c *cobra.Command, args []string, option InitOption) error {
+func runInit(c *cobra.Command, args []string, option project.InitOption) error {
 	// TODO 解析参数 构建app, dir = args[0], imageName = args[1]
 	if len(args) < 2 {
 		return c.Help()
@@ -40,7 +36,7 @@ func runInit(c *cobra.Command, args []string, option InitOption) error {
 }
 
 func newCmdInit() *cobra.Command {
-	var option InitOption
+	var option project.InitOption
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Run this command in order to create an empty project",
