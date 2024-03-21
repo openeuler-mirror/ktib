@@ -13,6 +13,7 @@ package images
 
 import (
 	"errors"
+
 	"gitee.com/openeuler/ktib/pkg/imagemanager"
 	"gitee.com/openeuler/ktib/pkg/options"
 	utils2 "gitee.com/openeuler/ktib/pkg/utils"
@@ -33,7 +34,10 @@ func imageList(cmd *cobra.Command, args []string, ops options.ImagesOption) erro
 	if err != nil {
 		return err
 	}
-	images, err := imageManager.ListImage(args,store)
+	images, err := imageManager.ListImage(args, store)
+	if err != nil {
+		return err
+	}
 	if ops.Json {
 		return utils2.JsonFormatImages(images, ops)
 	}
