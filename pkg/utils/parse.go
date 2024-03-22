@@ -113,8 +113,9 @@ func sortContainers(containers []container.Container) ([]containerReport, error)
 
 func FormatImages(images []imagemanager.Image, ops options.ImagesOption) error {
 	//TODO 参考docker以image table format 输出
-	defaultImageTableFormat := "table {{.Name}} {{.ID}}  {{.Digest}} {{.Size}} {{.TopLayer}}   {{.Created}}"
-	const defaultQuietFormat="table {{.ID}}"
+	defaultImageTableFormat := "table {{.Name}} {{.ID}}  {{.Size}} {{.TopLayer}}   {{.Created}}"
+	defaultImageTableFormatWithDigest := "table {{.Name}} {{.ID}} {{.Digest}} {{.Size}} {{.TopLayer}} {{.Created}}"
+	defaultQuietFormat := "table {{.ID}}"
 	// defaultImageTableFormatWithDigest = "table {{.Repository}}\t{{.Tag}}\t{{.Digest}}\t{{.ID}}\t{{.CreatedSince}}\t{{.Size}}"
 	// 构造所需的image结构=>sortImage
 	imagesReport, err := sortImages(images)
@@ -126,6 +127,8 @@ func FormatImages(images []imagemanager.Image, ops options.ImagesOption) error {
 	})
 	if ops.Quiet{
 		defaultImageTableFormat = defaultQuietFormat
+	}else if ops.Digests {
+		defaultImageTableFormat = defaultImageTableFormatWithDigest
 	}
 	formater, err := report.New(os.Stdout, "format").Parse(report.OriginPodman, defaultImageTableFormat)
 	if err != nil {
@@ -137,7 +140,7 @@ func FormatImages(images []imagemanager.Image, ops options.ImagesOption) error {
 			logrus.Error(err)
 		}
 	}()
-	if !ops.Quiet{
+	if !ops.Quiet {
 		err = formater.Execute(headers)
 		if err != nil {
 			return err
