@@ -165,13 +165,17 @@ func (im *ImageManager) Tag(store storage.Store, args []string) error {
 			args[1:][i] += ":latest"
 		}
 	}
-
 	for i, s := range args[1:] {
 		noralName, err := reference.ParseNormalizedNamed(s)
 		if err != nil {
 			return err
 		}
-		args[i+1] = noralName.String()
+		ref := reference.TagNameOnly(noralName)
+		imageName:=reference.FamiliarName(ref)
+		if tagged, ok := ref.(reference.Tagged); ok {
+			s=imageName+":"+tagged.Tag()
+		}
+		args[i+1]=s
 	}
 
 	err := store.AddNames(name, args[1:])
