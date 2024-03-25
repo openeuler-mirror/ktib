@@ -292,10 +292,32 @@ func (b Builder) Commit(exportTo string, option *options.CommitOption) error {
 			logrus.Infof("delete %s", change.Path)
 		}
 	}
+
 	if len(changes) > 0 {
+		var layerOps storage.LayerOptions
+		var diffOps storage.DiffOptions
+		diffrdcloser, err := b.Store.Diff(imageLayer, containerLayer, &diffOps)
+
+		tar, err := os.CreateTemp("", "layer-diff-tar-")
+		if err != nil {
+			return err
+		}
+		defer os.Remove(tar.Name())
+		defer tar.Close()
+
+		_, err = io.Copy(tar, diffrdcloser)
+		if err != nil {
+			return fmt.Errorf("storing blob to file %q: %w", tar, err)
+		}
+
+		diffrdcloser.Close()
+
+		destLayer, num, _ := b.Store.PutLayer("", imageLayer, []string{}, "", true, &layerOps, tar)
+		if num != -1 {
+			logrus.Infof("apply diff %s successfully", containerLayer)
+		}
 		var nname []string
-		nname = append(nname, exportTo)
-		nwImage, err := b.Store.CreateImage("", nname, containerLayer, "", nil)
+		nwImage, _ := b.Store.CreateImage("", nname, destLayer.ID, "", nil)
 		if err != nil {
 			return err
 		}
