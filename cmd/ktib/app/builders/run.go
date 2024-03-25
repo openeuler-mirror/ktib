@@ -12,23 +12,15 @@
 package builders
 
 import (
-	"errors"
-	"fmt"
-	"gitee.com/openeuler/ktib/cmd/ktib/app/images"
+	"gitee.com/openeuler/ktib/pkg/builder"
 	"gitee.com/openeuler/ktib/pkg/options"
-	"github.com/containers/common/pkg/auth"
+	"gitee.com/openeuler/ktib/pkg/utils"
 	"github.com/containers/podman/v4/cmd/podman/common"
-	"github.com/containers/podman/v4/cmd/podman/containers"
 	"github.com/containers/podman/v4/cmd/podman/registry"
 	podUtils "github.com/containers/podman/v4/cmd/podman/utils"
 	"github.com/containers/podman/v4/pkg/domain/entities"
-	"github.com/containers/podman/v4/pkg/specgen"
-	"github.com/containers/podman/v4/pkg/specgenutil"
-	"github.com/containers/storage/types"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"golang.org/x/term"
-	"os"
 )
 
 var (
@@ -38,92 +30,23 @@ var (
 )
 
 func RUN(cmd *cobra.Command, args []string) error {
-	if runRmi {
-		if cmd.Flags().Changed("rm") && !createOption.Rm {
-			return errors.New("the --rmi option does not work without --rm")
-		}
-		createOption.Rm = true
-	}
-	if createOption.TTY && createOption.Interactive && !term.IsTerminal(int(os.Stdin.Fd())) {
-		logrus.Warnf("The input device is not a TTY. The --tty and --interactive flags might not work properly")
-	}
-	if cmd.Flags().Changed("authfile") {
-		if err := auth.CheckAuthFile(createOption.Authfile); err != nil {
-			return err
-		}
-	}
-	runOption.CIDFile = createOption.CIDFile
-	runOption.Rm = createOption.Rm
-	containerCreateOptions, err := containers.CreateInit(cmd, createOption.ContainerCreateOptions, false)
+	store, err := utils.GetStore(cmd)
 	if err != nil {
 		return err
 	}
-	imgName := args[0]
-	var poolop options.PullOption
-	if !containerCreateOptions.RootFS {
-		err := images.Pull(cmd, imgName, poolop)
-		if err != nil {
-			return err
-		}
-	}
-	runOption.OutputStream = os.Stdout
-	runOption.InputStream = os.Stdin
-	runOption.ErrorStream = os.Stderr
-
-	if !containerCreateOptions.Interactive {
-		runOption.InputStream = nil
-	}
-
-	containerCreateOptions.PreserveFDs = runOption.PreserveFDs
-	specGenerator := specgen.NewSpecGenerator(imgName, containerCreateOptions.RootFS)
-	if err := specgenutil.FillOutSpecGen(specGenerator, &containerCreateOptions, args); err != nil {
-		return err
-	}
-	ctx := registry.GetContext()
-	specGenerator.RawImageName = imgName
-	specGenerator.ImageOS = containerCreateOptions.OS
-	specGenerator.ImageArch = containerCreateOptions.Arch
-	specGenerator.ImageVariant = containerCreateOptions.Variant
-	specGenerator.Passwd = &runOption.Passwd
-	runOption.Spec = specGenerator
+	runBuilder, err := builder.FindBuilder(store, args[0])
 	if err != nil {
+		logrus.Errorf("not found the builder: %s", args[0])
 		return err
 	}
-
-	containerEngine, err := registry.NewContainerEngine(cmd, args)
-	if err != nil {
-		return err
-	}
-	report, err := containerEngine.ContainerRun(ctx, runOption.ContainerRunOptions)
-	// report.ExitCode is set by ContainerRun even it returns an error
-	if report != nil {
-		registry.SetExitCode(report.ExitCode)
-	}
-	if err != nil {
-		return err
-	}
-	if runOption.Detach {
-		fmt.Println(report.Id)
-		return nil
-	}
-	if runRmi {
-		_, rmErrors := registry.ImageEngine().Remove(registry.GetContext(), []string{imgName}, entities.ImageRemoveOptions{})
-		for _, err := range rmErrors {
-			// ImageUnknown would be a super-unlikely race
-			if !errors.Is(err, types.ErrImageUnknown) {
-				// Typical case: ErrImageUsedByContainer
-				logrus.Warn(err)
-			}
-		}
-	}
-	return nil
+	return runBuilder.Run(args[1:], runOption)
 }
 
 func RUNCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "run",
 		Aliases: []string{"run-builder"},
-		Args:    cobra.MinimumNArgs(1),
+		Args:    cobra.MinimumNArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return RUN(cmd, args)
 		},
@@ -147,5 +70,7 @@ func initFlags(cmd *cobra.Command) {
 		_ = flags.MarkHidden("conmon-pidfile")
 		_ = flags.MarkHidden("pidfile")
 	}
-	flags.IntVar(&runOption.Runtime, "runtime", 1, "set runtime (1:runc, 2:crun, 3:youki)")
+	//flags.BoolVar(&runOption.Detach, "detach", false, "set to run builder in background ")
+	flags.StringVar(&runOption.Runtime, "runtime", "runc", "set runtime (runc, crun, youki)")
+	flags.StringVar(&runOption.Workdir, "work-dir", "/", "set builder work-directory")
 }

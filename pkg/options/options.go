@@ -92,7 +92,8 @@ type RUNOption struct {
 	Interactive bool
 	TTY         bool
 	Workdir     string
-	Runtime     int
+	Runtime     string
+	Detach      bool
 	entities.ContainerRunOptions
 }
 

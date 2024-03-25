@@ -19,6 +19,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"os/user"
 	"path/filepath"
 	"strconv"
@@ -39,12 +40,15 @@ import (
 	"github.com/containers/storage/pkg/idtools"
 	"github.com/containers/storage/pkg/ioutils"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/opencontainers/runtime-tools/generate"
 	"github.com/sirupsen/logrus"
 )
 
 const (
 	stateFile        = "ktib.json"
+	specFile         = "config.json"
 	defaultTransport = "containers-storage:"
+	defaultruntime   = "runc"
 )
 
 var (
@@ -388,6 +392,54 @@ func (b *Builder) Add(dest string, source []string, extract bool) error {
 		}
 	}
 	return nil
+}
+
+func (b *Builder) Run(rargs []string, ops options.RUNOption) error {
+	g, err := generate.New("linux")
+	if err != nil {
+		return err
+	}
+
+	if err := b.Mount(""); err != nil {
+		return err
+	}
+	mountPoint := b.MountPoint
+	g.SetRootPath(mountPoint)
+
+	g.SetProcessArgs([]string{"bash"})
+	if rargs != nil {
+		g.SetProcessArgs(rargs)
+	}
+
+	g.SetProcessCwd("/")
+	if ops.Workdir != "" {
+		g.SetProcessCwd(ops.Workdir)
+	}
+
+	cdir, err := b.Store.ContainerDirectory(b.ContainerID)
+	if err != nil {
+		return err
+	}
+
+	var exportOps generate.ExportOptions
+	specPath := filepath.Join(cdir, specFile)
+	if err := g.SaveToFile(specPath, exportOps); err != nil {
+		return err
+	}
+
+	ctrid := "runtime" + "-" + b.ContainerID
+	var args []string
+	args = append(args, "run", "-b", cdir, ctrid)
+	cmd := exec.Command(defaultruntime, args...)
+	cmd.Dir = mountPoint
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	err = cmd.Run()
+	if err != nil {
+		logrus.Errorf("runtime exec failed: %s", err)
+	}
+	return err
 }
 
 func checkTransport(imageref string) string {
