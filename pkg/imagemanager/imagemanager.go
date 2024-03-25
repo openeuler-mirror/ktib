@@ -24,7 +24,7 @@ type ImageManager struct {
 
 type Image struct {
 	OriImage storage.Image
-	Size int64
+	Size     int64
 }
 
 func NewImageManager(store storage.Store) (*ImageManager, error) {
@@ -39,20 +39,20 @@ func NewImageManager(store storage.Store) (*ImageManager, error) {
 	return imageManager, nil
 }
 
-func (im *ImageManager) ListImage(args []string,store storage.Store) ([]Image, error) {
+func (im *ImageManager) ListImage(args []string, store storage.Store) ([]Image, error) {
 	var imageList []Image
 	image, err := store.Images()
 	if err != nil {
 		return nil, err
 	}
 	for _, img := range image {
-		size,err:= store.ImageSize(img.ID)
+		size, err := store.ImageSize(img.ID)
 		if err != nil {
-			return nil,err
+			return nil, err
 		}
-		imageList = append(imageList,Image{
+		imageList = append(imageList, Image{
 			OriImage: img,
-			Size: size,
+			Size:     size,
 		})
 	}
 	return imageList, nil
@@ -128,6 +128,7 @@ func (im *ImageManager) Remove(store storage.Store, images []string, op options.
 	for i, img := range images {
 		// If more than one tag exists for the image, the Untag operation is performed
 		names, err := store.Names(img)
+		im, err := store.Image(img)
 		if err != nil {
 			logrus.Errorf("No such image: %s", img)
 			continue
@@ -139,7 +140,7 @@ func (im *ImageManager) Remove(store storage.Store, images []string, op options.
 			logrus.Infof("Untagged: %s", img)
 			continue
 		}
-		_, err = store.DeleteImage(img, op.Force)
+		_, err = store.DeleteImage(im.ID, true)
 		if err != nil {
 			allErrors = append(allErrors, err)
 			logrus.Error(fmt.Sprintf("unable to remove repository reference '%s': %s", img, err))
