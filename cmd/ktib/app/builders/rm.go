@@ -46,21 +46,35 @@ func RMCmd() *cobra.Command {
 }
 
 func rm(cmd *cobra.Command, args []string, op options.RemoveOption) error {
-	name := args[0]
+	if len(args) == 0 {
+		return errors.New(fmt.Sprintf("No container names provided for remove-builder"))
+	}
+
 	store, err := utils.GetStore(cmd)
 	if err != nil {
 		return err
 	}
-	builderobj, err := builder.FindBuilder(store, name)
-	if err != nil {
-		return errors.New(fmt.Sprintf("Not found the %s builder: %s", name, err))
+
+	var errorMsgs []string
+	for _, name := range args {
+		builderobj, err := builder.FindBuilder(store, name)
+		if err != nil {
+			errorMsgs = append(errorMsgs, fmt.Sprintf("Not found the %s builder: %s", name, err))
+			continue
+		}
+		err = builderobj.Remove()
+		if err != nil {
+			errorMsgs = append(errorMsgs, fmt.Sprintf("failed to remove the builder of %s: %s", name, err))
+		}
 	}
-	err = builderobj.Remove()
-	if err != nil {
-		return errors.New(fmt.Sprintf("failed to  remove the builder of %s: %s", name, err))
+
+	if len(errorMsgs) > 0 {
+		return errors.New(strings.Join(errorMsgs, "\n"))
 	}
+
 	return nil
 }
+
 
 func setExitCode(err error) {
 	// If error is set to no such container, do not reset
