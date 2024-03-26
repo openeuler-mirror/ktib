@@ -14,9 +14,10 @@ package utils
 import (
 	"encoding/json"
 	"fmt"
-	"gitee.com/openeuler/ktib/pkg/imagemanager"
 	"os"
 	"time"
+
+	"gitee.com/openeuler/ktib/pkg/imagemanager"
 
 	"gitee.com/openeuler/ktib/pkg/options"
 
@@ -104,7 +105,7 @@ func sortContainers(containers []container.Container) ([]containerReport, error)
 			ID:      c.ID[:10],
 			Names:   c.Names[0],
 			LayerID: c.LayerID,
-			ImageID: c.ImageID,
+			ImageID: c.ImageID[:10],
 			Created: units.HumanDuration(time.Since(c.Created)) + " ago",
 		})
 	}
