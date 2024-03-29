@@ -171,12 +171,7 @@ func (im *ImageManager) Tag(store storage.Store, args []string) error {
 		if err != nil {
 			return err
 		}
-		ref := reference.TagNameOnly(noralName)
-		imageName:=reference.FamiliarName(ref)
-		if tagged, ok := ref.(reference.Tagged); ok {
-			s=imageName+":"+tagged.Tag()
-		}
-		args[i+1]=s
+		args[i+1] = noralName.String()
 	}
 
 	err := store.AddNames(name, args[1:])
