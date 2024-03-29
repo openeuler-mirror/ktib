@@ -320,7 +320,7 @@ func (b Builder) Commit(exportTo string, option *options.CommitOption) error {
 		if num != -1 {
 			logrus.Infof("apply diff %s successfully", containerLayer)
 		}
-		var nname []string
+		nname := []string{exportRef.DockerReference().String()}
 		nwImage, _ := b.Store.CreateImage("", nname, destLayer.ID, "", nil)
 		if err != nil {
 			return err
