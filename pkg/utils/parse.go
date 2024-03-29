@@ -126,10 +126,12 @@ func FormatImages(images []imagemanager.Image, ops options.ImagesOption) error {
 	headers := report.Headers(imageReport{}, map[string]string{
 		"Name": "Name",
 	})
-	if ops.Quiet{
+	if ops.Quiet {
 		defaultImageTableFormat = defaultQuietFormat
-	}else if ops.Digests {
+	} else if ops.Digests {
 		defaultImageTableFormat = defaultImageTableFormatWithDigest
+	} else if ops.Format != "" {
+		defaultImageTableFormat = "table " + ops.Format
 	}
 	formater, err := report.New(os.Stdout, "format").Parse(report.OriginPodman, defaultImageTableFormat)
 	if err != nil {

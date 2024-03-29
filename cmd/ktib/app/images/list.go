@@ -61,5 +61,6 @@ ktib images images --format '{{.ID}} {{.Name}} {{.Size}}'`,
 	flag.BoolVar(&op.Digests, "digests", false, "show info include digests")
 	flag.BoolVar(&op.Truncate, "no-trunc", false, "show info include images IDs")
 	flag.BoolVar(&op.Json, "json", false, "output in JSON format")
+	flag.StringVar(&op.Format, "format", "", "output according to the provided format")
 	return cmd
 }

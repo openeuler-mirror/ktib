@@ -30,7 +30,7 @@ type ImagesOption struct {
 	Truncate bool
 	Json     bool
 	// TODO
-	//Format string
+	Format string
 	//Filter map[string]string
 }
 
