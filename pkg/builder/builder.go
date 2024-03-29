@@ -265,15 +265,19 @@ func (b Builder) Commit(exportTo string, option *options.CommitOption) error {
 	if err != nil {
 		return err
 	}
-	if b.Store.Exists(exportTo) {
-		return errors.New(fmt.Sprintf("The image %s is exists.", exportTo))
-	}
-	// set transport to oci
+
+	// set transport to containers-storage:
 	exportTo = defaultTransport + exportTo
 	exportRef, err := alltransports.ParseImageName(exportTo)
 	if err != nil {
 		return err
 	}
+
+	exportName := exportRef.DockerReference().String()
+	if b.Store.Exists(exportName) {
+		return errors.New(fmt.Sprintf("The image %s is exists.", exportName))
+	}
+
 	ops := &cpier.Options{}
 
 	// First need to determine whether there are changes in the builder's layers, if there are changes you need to
@@ -320,7 +324,7 @@ func (b Builder) Commit(exportTo string, option *options.CommitOption) error {
 		if num != -1 {
 			logrus.Infof("apply diff %s successfully", containerLayer)
 		}
-		nname := []string{exportRef.DockerReference().String()}
+		nname := []string{exportName}
 		nwImage, _ := b.Store.CreateImage("", nname, destLayer.ID, "", nil)
 		if err != nil {
 			return err
