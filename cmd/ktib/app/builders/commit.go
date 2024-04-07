@@ -45,6 +45,7 @@ func COMMITCmd() *cobra.Command {
 	var op options.CommitOption
 	cmd := &cobra.Command{
 		Use:  "commit",
+		Short: "Create a new image from a container's changes",
 		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return commit(cmd, args, &op)
