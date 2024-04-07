@@ -25,6 +25,7 @@ var (
 func RMCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "rm",
+		Short: "Remove one or more containers",
 		Aliases: []string{"remove-builder"},
 		Args: func(cmd *cobra.Command, args []string) error {
 			return validate.CheckAllLatestAndIDFile(cmd, args, false, "cidfile")

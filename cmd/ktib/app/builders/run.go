@@ -45,6 +45,7 @@ func RUN(cmd *cobra.Command, args []string) error {
 func RUNCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "run",
+		Short: "Run a command in a new container",
 		Aliases: []string{"run-builder"},
 		Args:    cobra.MinimumNArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
