@@ -77,7 +77,6 @@ type BuilderOptions struct {
 	FromImage  string
 	Container  string
 	PullPolicy bool
-	BOptions   entities.PodmanConfig
 }
 
 func newBuidler(store storage.Store, options BuilderOptions) (*Builder, error) {
@@ -88,8 +87,7 @@ func newBuidler(store storage.Store, options BuilderOptions) (*Builder, error) {
 	if err != nil {
 		return nil, err
 	}
-	option := BuilderOptions{}
-	option.BOptions = *registry.PodmanConfig()
+
 	iMage, err := store.Image(image)
 	if err != nil {
 		return nil, err
