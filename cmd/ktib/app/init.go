@@ -13,9 +13,10 @@ package app
 
 import (
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"os/exec"
 	"strings"
+
+	"github.com/sirupsen/logrus"
 
 	"gitee.com/openeuler/ktib/pkg/project"
 	"github.com/spf13/cobra"
@@ -29,12 +30,13 @@ var PackagesToCheck = []string{"containers-common"}
 
 func runInit(c *cobra.Command, args []string, option InitOption) error {
 	// TODO 解析参数 构建app, dir = args[0], imageName = args[1]
+	imageName := args[1]
 	if len(args) < 2 {
 		logrus.Println("The number of parameters passed in is incorrect")
 		return c.Help()
 	}
 	boot := project.NewBootstrap(args[0], args[1])
-	boot.InitWorkDir(option.BuildType)
+	boot.InitWorkDir(option.BuildType, imageName)
 	boot.AddDockerfile()
 	boot.AddScript()
 	boot.AddTestcase()
@@ -49,10 +51,12 @@ func newCmdInit() *cobra.Command {
 		Short: "Run this command in order to create an empty project",
 		Long: `Init command helps you create an empty project with specified options. 
 It creates the necessary directory structure and files to kickstart your project.`,
-		Example: `  # Create a project with default options
+		Example: ` # Create a project with default options
   ktib init /path/to/project my-image
-  # Create a project with source build type
-  ktib init --buildType source /path/to/project my-image`,
+  # Create a project with baseImage build type
+  ktib init --buildType appImage /path/to/project my-image
+  # Create a project with basImage build type
+  ktib init --buildType  baseimage  /path/to/project my-image`,
 
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runInit(cmd, args, option)
@@ -74,7 +78,7 @@ It creates the necessary directory structure and files to kickstart your project
 		Args: cobra.ExactArgs(2),
 	}
 	flags := cmd.Flags()
-	flags.StringVar(&option.BuildType, "buildType", "rpm", "")
+	flags.StringVar(&option.BuildType, "buildType", "baseimage", "")
 	return cmd
 }
 
