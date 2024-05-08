@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path/filepath"
 )
 
@@ -71,10 +72,20 @@ func ConfigureRootfs(target string) error {
 	if err != nil {
 		return fmt.Errorf("error writing machine-id file: %v", err)
 	}
+
+	//Delete unnecessary configurations is to reduce the volume of the base image
+	if err := removeUnnecessaryFiles(target); err != nil {
+		return fmt.Errorf("Error remove unnecessary file :%v\n", err)
+	}
+
+	// cp bash && local settings and time zone to chroot_script.sh and run the script.sh
+	if err := addCommandToScriptAndRun(target); err != nil {
+		return fmt.Errorf("Error add command to script and run: %v\n", err)
+	}
 	return nil
 }
 
-func RemoveUnnecessaryFiles(target string) error {
+func removeUnnecessaryFiles(target string) error {
 	if err := removeAllFiles(target, unnecessaryFiles); err != nil {
 		return err
 	}
@@ -95,5 +106,50 @@ func removeAllFiles(target string, files []string) error {
 			return err
 		}
 	}
+	return nil
+}
+
+func addCommandToScriptAndRun(target string) error {
+	//cp bash
+	cmd := exec.Command("sh", "-c", "cp /etc/skel/.bash* "+target+"/root/")
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("error copying bash files: %v", err)
+	}
+
+	// Create an empty .bash_history file
+	cmd = exec.Command("sh", "-c", "echo \"\" > "+target+"/root/.bash_history")
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("error creating .bash_history file: %v", err)
+	}
+
+	cmd = exec.Command("sh", "-c", "echo \"\" > "+target+"/chroot_script.sh")
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("error creating chroot_script.sh file: %v", err)
+	}
+
+	// add executable permissions to chroot_script.sh
+	cmd = exec.Command("chmod", "+x", target+"/chroot_script.sh")
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("error adding executable permission to chroot_script.sh: %v", err)
+	}
+
+	//edit time zone
+	cmd = exec.Command("sh", "-c", "echo \"ln -snf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime\" > "+target+"/chroot_script.sh")
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("error edit time zone to chroot_script.sh: %v", err)
+	}
+
+	//run chroot_script
+	cmd = exec.Command("chroot", target, "/chroot_script.sh")
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("error chroot chroot_script.sh file: %v", err)
+	}
+
+	//rm rf chroot_script
+	cmd = exec.Command("rm", "-rf", target+"/chroot_script.sh")
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("error rm rf chroot_script.sh: %v", err)
+	}
+
 	return nil
 }
