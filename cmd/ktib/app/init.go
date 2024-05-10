@@ -52,11 +52,9 @@ func newCmdInit() *cobra.Command {
 		Long: `Init command helps you create an empty project with specified options. 
 It creates the necessary directory structure and files to kickstart your project.`,
 		Example: ` # Create a project with default options
-  ktib init /path/to/project my-image
+  ktib init /path/to/project my-image(default is appImage)
   # Create a project with baseImage build type
-  ktib init --buildType appImage /path/to/project my-image
-  # Create a project with basImage build type
-  ktib init --buildType  baseimage  /path/to/project my-image`,
+  ktib init --buildType baseImage /path/to/project my-image`,
 
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runInit(cmd, args, option)
@@ -78,7 +76,7 @@ It creates the necessary directory structure and files to kickstart your project
 		Args: cobra.ExactArgs(2),
 	}
 	flags := cmd.Flags()
-	flags.StringVar(&option.BuildType, "buildType", "baseimage", "")
+	flags.StringVar(&option.BuildType, "buildType", "appimage", "")
 	return cmd
 }
 
