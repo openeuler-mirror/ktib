@@ -60,23 +60,15 @@ func (b *Bootstrap) InitWorkDir(types, imageName string) {
 		}
 
 		//Install different installation packages base to image type
-		yumInstaller := YumPackageInstaller{}
-		if strings.Contains(imageName, "micro") {
-			err := yumInstaller.installPackages("micro", yumConfig, target, "bash", "coreutils-single")
-			if err != nil {
-				fmt.Printf("Error Install micro rpm :%v\n", err)
-			}
-		} else if strings.Contains(imageName, "minimal") {
-			err := yumInstaller.installPackages("minimal", yumConfig, target, "microdnf", "vim-minimal", "iproute")
-			if err != nil {
-				fmt.Printf("Error Install minimal rpm :%v\n", err)
-			}
-		} else {
-			err := yumInstaller.installPackages("default", yumConfig, target, "yum", "iproute", "vim-minimal", "procps-ng", "passwd")
-			if err != nil {
-				fmt.Printf("Error Install default rpm :%v\n", err)
+		packages := imageTypePackages[imageType]
+		for key, pkgs := range imageTypePackages {
+			if key != "default" && strings.Contains(imageName, key) {
+				imageType = key
+				packages = pkgs
+				break
 			}
 		}
+		InstallPackages(imageType, yumConfig, target, packages...)
 
 		//Configure network settings、dnf variable、en_US.UTF-8 locale files、machine-id、delete unnecessary configurations、cp bash and time zone
 		if err := ConfigureRootfs(target); err != nil {
