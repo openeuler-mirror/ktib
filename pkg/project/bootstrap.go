@@ -13,13 +13,15 @@ package project
 
 import (
 	"fmt"
+
+	"io/ioutil"
 	"os"
 	"path/filepath"
-	"strings"
 	"text/template"
 
 	"gitee.com/openeuler/ktib/pkg/templates"
 	"github.com/sirupsen/logrus"
+	"gopkg.in/yaml.v2"
 )
 
 var yumConfig = "/etc/yum.conf"
@@ -29,17 +31,25 @@ type Bootstrap struct {
 	ImageName      string
 }
 
-func NewBootstrap(dir, imageName string) *Bootstrap {
-	return &Bootstrap{DestinationDir: dir, ImageName: imageName}
+type Config struct {
+	Packages struct {
+		InstallPkgs []string `yaml:"install_pkgs"`
+	} `yaml:"packages"`
+	Locale   string `yaml:"locale"`
+	Timezone string `yaml:"timezone"`
 }
 
-func (b *Bootstrap) InitWorkDir(types, imageName string) {
+func NewBootstrap(dir string) *Bootstrap {
+	return &Bootstrap{DestinationDir: dir}
+}
+
+func (b *Bootstrap) InitWorkDir(types, config string) {
 	switch types {
 	case "baseimage":
 		target, _ := filepath.Abs(b.DestinationDir + "/" + "init" + "/" + "baseimage")
 		//Check if dnf is available and create new dev directory
 		if err := CheckDnfAndCreateDev(target); err != nil {
-			fmt.Printf("Failed to checkDnfAndCreateDev: %v", err)
+			fmt.Printf("Failed to checkDnfAndCreateDev: %v\n", err)
 			return
 		}
 
@@ -55,20 +65,21 @@ func (b *Bootstrap) InitWorkDir(types, imageName string) {
 
 		//Check if the/etc/yum/vars directory exists
 		if err := CheckVarsFile(target); err != nil {
-			fmt.Printf("Failed to checkVarsFile: %v", err)
+			fmt.Printf("Failed to checkVarsFile: %v\n", err)
 			return
 		}
 
-		//Install different installation packages base to image type
-		packages := imageTypePackages[imageType]
-		for key, pkgs := range imageTypePackages {
-			if key != "default" && strings.Contains(imageName, key) {
-				imageType = key
-				packages = pkgs
-				break
-			}
+		//Install different installation packages base to config.yml
+		data, err := ioutil.ReadFile(config)
+		if err != nil {
+			fmt.Printf("Failed to read config file: %v\n", err)
 		}
-		InstallPackages(imageType, yumConfig, target, packages...)
+		var config Config
+		if err := yaml.Unmarshal(data, &config); err != nil {
+			fmt.Printf("Failed to parse config file: %v\n", err)
+		}
+		packages := config.Packages.InstallPkgs
+		InstallPackages(yumConfig, target, packages...)
 
 		//Configure network settings、dnf variable、en_US.UTF-8 locale files、machine-id、delete unnecessary configurations、cp bash and time zone
 		if err := ConfigureRootfs(target); err != nil {

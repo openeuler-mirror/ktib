@@ -75,7 +75,7 @@ func NewCommand() *cobra.Command {
 	// TODO init or load config
 	// TODO register all commands
 	cmds.AddCommand(
-		newCmdInit(),
+		newCmdProject(),
 		newCmdScan(),
 		newCmdImage(),
 		newCmdBuilder(),
