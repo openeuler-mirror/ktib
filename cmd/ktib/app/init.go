@@ -13,14 +13,15 @@ package app
 
 import (
 	"fmt"
-	"gitee.com/openeuler/ktib/pkg/project"
-	"github.com/sirupsen/logrus"
-	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"strings"
+
+	"gitee.com/openeuler/ktib/pkg/project"
+	"github.com/sirupsen/logrus"
+	"github.com/spf13/cobra"
+	//"gopkg.in/yaml.v2"
 )
 
 type InitOption struct {
@@ -91,7 +92,7 @@ It creates the necessary directory structure and files to kickstart your project
   ktib project init --buildType baseImage --config config.yml /path/to/project `,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if option.BuildType == "baseimage" && option.configFile == "" {
-				return fmt.Errorf("when building baseimage rootfs,you need to specify the --config ")
+				return fmt.Errorf("when building baseimage rootfs,you need to specify the --config")
 			}
 			return runInit(cmd, args, option)
 		},
@@ -126,22 +127,20 @@ func newSubCmdDefaultConfig() *cobra.Command {
 }
 
 func runDefaultConfig(outputFileName string) error {
-	config := map[string]interface{}{
-		"packages": map[string]interface{}{
-			"install_pkgs": []string{
-				"yum",
-				"iproute",
-				"vim-minimal",
-				"procps-ng",
-				"passwd",
-			},
-		},
-	}
-	data, err := yaml.Marshal(config)
-	if err != nil {
-		fmt.Printf("Failed to marshal config %v\n", config)
-	}
-	err = ioutil.WriteFile(outputFileName, data, 0644)
+	yamlContent := `packages:
+  install_pkgs:
+    - yum
+    - iproute
+    - vim-minimal
+    - procps-ng
+    - passwd
+network: "NETWORKING=yes\nHOSTNAME=localhost.localdomain\n"
+infra: "container"
+locale: "%_install_langs en_US.UTF-8"
+machine-id: ""
+`
+	data := []byte(yamlContent)
+	err := ioutil.WriteFile(outputFileName, data, 0644)
 	if err != nil {
 		fmt.Printf("failed to write file %v\n", err)
 	}
