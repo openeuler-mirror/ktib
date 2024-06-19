@@ -35,8 +35,10 @@ type Config struct {
 	Packages struct {
 		InstallPkgs []string `yaml:"install_pkgs"`
 	} `yaml:"packages"`
-	Locale   string `yaml:"locale"`
-	Timezone string `yaml:"timezone"`
+	Network   string `yaml:"network"`
+	Infra     string `yaml:"infra"`
+	Locale    string `yaml:"locale"`
+	MachineID string `yaml:"machine-id"`
 }
 
 func NewBootstrap(dir string) *Bootstrap {
@@ -82,7 +84,7 @@ func (b *Bootstrap) InitWorkDir(types, config string) {
 		InstallPackages(yumConfig, target, packages...)
 
 		//Configure network settings、dnf variable、en_US.UTF-8 locale files、machine-id、delete unnecessary configurations、cp bash and time zone
-		if err := ConfigureRootfs(target); err != nil {
+		if err := ConfigureRootfs(target, config); err != nil {
 			fmt.Printf("Error configuring system:%v", err)
 			return
 		}
