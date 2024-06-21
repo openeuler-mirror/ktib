@@ -15,21 +15,13 @@ import (
 	"gitee.com/openeuler/ktib/pkg/builder"
 	"gitee.com/openeuler/ktib/pkg/options"
 	"gitee.com/openeuler/ktib/pkg/utils"
-	"github.com/containers/podman/v4/cmd/podman/common"
-	"github.com/containers/podman/v4/cmd/podman/registry"
-	podUtils "github.com/containers/podman/v4/cmd/podman/utils"
-	"github.com/containers/podman/v4/pkg/domain/entities"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
-var (
-	runRmi       bool
-	runOption    options.RUNOption
-	createOption options.CreateOption
-)
+var runOption options.RUNOption
 
-func RUN(cmd *cobra.Command, args []string) error {
+func RUN(cmd *cobra.Command, args []string, option options.RUNOption) error {
 	store, err := utils.GetStore(cmd)
 	if err != nil {
 		return err
@@ -39,17 +31,17 @@ func RUN(cmd *cobra.Command, args []string) error {
 		logrus.Errorf("not found the builder: %s", args[0])
 		return err
 	}
-	return runBuilder.Run(args[1:], runOption)
+	return runBuilder.Run(args, option)
 }
 
 func RUNCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "run",
-		Short: "Run a command in a new container",
+		Short:   "Run a command in a new container",
 		Aliases: []string{"run-builder"},
 		Args:    cobra.MinimumNArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return RUN(cmd, args)
+			return RUN(cmd, args, runOption)
 		},
 	}
 	initFlags(cmd)
@@ -58,20 +50,10 @@ func RUNCmd() *cobra.Command {
 
 func initFlags(cmd *cobra.Command) {
 	flags := cmd.Flags()
-	flags.SetInterspersed(false)
-	common.DefineCreateDefaults(&createOption.ContainerCreateOptions)
-	common.DefineCreateFlags(cmd, &createOption.ContainerCreateOptions, entities.CreateMode)
-	common.DefineNetFlags(cmd)
-	flags.SetNormalizeFunc(podUtils.AliasFlags)
-	flags.BoolVar(&runRmi, "rmi", false, "Remove image unless used by other containers, implies --rm")
-	flags.BoolVarP(&runOption.ContainerRunOptions.Detach, "detach", "d", false, "Run container in background and print container ID")
-	flags.BoolVar(&runOption.ContainerRunOptions.Passwd, "passwd", true, "add entries to /etc/passwd and /etc/group")
-	if registry.IsRemote() {
-		_ = flags.MarkHidden("preserve-fds")
-		_ = flags.MarkHidden("conmon-pidfile")
-		_ = flags.MarkHidden("pidfile")
-	}
-	//flags.BoolVar(&runOption.Detach, "detach", false, "set to run builder in background ")
-	flags.StringVar(&runOption.Runtime, "runtime", "runc", "set runtime (runc, crun, youki)")
-	flags.StringVar(&runOption.Workdir, "work-dir", "/", "set builder work-directory")
+	flags.BoolVar(&runOption.Rm, "rm", false, "Remove image unless used by other containers, implies --rm")
+	flags.BoolVarP(&runOption.Detach, "detach", "d", false, "Run container in background and print container ID")
+	flags.BoolVarP(&runOption.TTY, "tty", "t", false, "Allocate a pseudo-TTY")
+	flags.StringVar(&runOption.Runtime, "runtime", "runc", "Runtime to use for this container")
+	flags.StringVar(&runOption.Workdir, "workdir", "/", "Working directory inside the builder")
+	flags.BoolVarP(&runOption.Interactive, "interactive", "i", false, "Keep STDIN open even if not attached")
 }

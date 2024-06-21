@@ -88,13 +88,12 @@ type FromOption struct {
 }
 
 type RUNOption struct {
-	//Detach      bool
 	Interactive bool
 	TTY         bool
 	Workdir     string
 	Runtime     string
 	Detach      bool
-	entities.ContainerRunOptions
+	Rm          bool
 }
 
 type CreateOption struct {
