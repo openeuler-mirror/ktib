@@ -125,3 +125,15 @@ type ExistOption struct {
 type IFIOptions struct {
 	buildah.ImportFromImageOptions
 }
+
+type Arguments struct {
+	PolicyFile     string
+	Dockerfile     string
+	ParseOnly      bool
+	GenerateJSON   bool
+	GenerateReport bool
+	JSONOutfile    string
+	ReportName     string
+	ReportTemplate string
+	Verbose        bool
+}

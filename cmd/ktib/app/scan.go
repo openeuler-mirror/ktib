@@ -13,6 +13,7 @@ package app
 
 import (
 	"context"
+	"log"
 	o "gitee.com/openeuler/ktib/pkg/options"
 	"gitee.com/openeuler/ktib/pkg/types"
 	"github.com/aquasecurity/trivy/pkg/commands/artifact"
@@ -23,6 +24,14 @@ import (
 )
 
 var option o.Option
+var args o.Arguments
+var logger *log.Logger
+
+const PolicyYaml = "/etc/ktib/policy.yaml"
+
+func init() {
+	logger = log.New(os.Stderr, "", log.LstdFlags)
+}
 
 func runScan(c *cobra.Command, args []string, opt o.Option) error {
 	scanOption, err := o.InitScanOption(args, opt)
@@ -92,14 +101,13 @@ func newSubCmdSource() *cobra.Command {
 
 func newSubCmdDokcerfile() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "Dockerfile",
-		Short: "Run this command in order to scan dockerfile ...",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runScan(cmd, args, option)
+		Use:   "dockerfile-audit",
+		Short: "dockerfile-audit uses its own grammar to parse valid Dockerfiles and deconstruct all directives.",
+		Run: func(cmd *cobra.Command, arg []string) {
+			GetArgumentsCmd(args)
 		},
-		Args: cobra.MinimumNArgs(1),
 	}
-	initFlags(cmd)
+	initScanDockerfileFlags(cmd)
 	return cmd
 }
 
@@ -119,6 +127,19 @@ func initFlags(cmd *cobra.Command) {
 	flag.StringVar(&option.Format, "format", "table", "report format table")
 }
 
+func initScanDockerfileFlags(cmd *cobra.Command) {
+	flag := cmd.Flags()
+	flag.StringVar(&args.PolicyFile, "policy", PolicyYaml, "The dockerfile policy to use for the audit.")
+	flag.StringVar(&args.Dockerfile, "dockerfile", "", "The DockerfileMsg to audit. Can be both a file or a directory.")
+	flag.BoolVar(&args.ParseOnly, "parse-only", false, "Simply Parse the DockerfileMsg(s) and return the content, without applying any policy. Only JSON report is supported for this.")
+	flag.BoolVar(&args.GenerateJSON, "json", false, "Generate a JSON file with the findings.")
+	flag.BoolVar(&args.GenerateReport, "report", false, "Generate a PDF report about the findings.")
+	flag.StringVar(&args.JSONOutfile, "outfile", "dockerfile-audit.json", "Name of the JSON file.")
+	flag.StringVar(&args.ReportName, "name", "report.pdf", "The name of the PDF report.")
+	flag.StringVar(&args.ReportTemplate, "template", "templates/report-template.tex", "The template for the report to use.")
+	flag.BoolVar(&args.Verbose, "verbose", false, "Enables debug output.")
+}
+
 func configRun(runner artifact.Runner, ctx context.Context, sop artifact.Option) (tt.Report, error) {
 	sop.DisabledAnalyzers = append(analyzer.TypeOSes, analyzer.TypeLanguages...)
 	sop.VulnType = nil
@@ -136,4 +157,8 @@ func sourceRun(runner artifact.Runner, ctx context.Context, sop artifact.Option)
 	//TODO: DB PANIC
 	report, err := runner.ScanFilesystem(ctx, sop)
 	return report, err
+}
+
+func GetArgumentsCmd(args o.Arguments) {
+	//TODO: 实现扫描和报告输出
 }
