@@ -13,14 +13,17 @@ package app
 
 import (
 	"context"
-	"log"
+	"encoding/json"
 	o "gitee.com/openeuler/ktib/pkg/options"
+	"gitee.com/openeuler/ktib/pkg/report"
+	"gitee.com/openeuler/ktib/pkg/scanner/dockerfile"
 	"gitee.com/openeuler/ktib/pkg/types"
 	"github.com/aquasecurity/trivy/pkg/commands/artifact"
-	"github.com/aquasecurity/trivy/pkg/fanal/analyzer"
 	tt "github.com/aquasecurity/trivy/pkg/types"
 	"github.com/aquasecurity/trivy/pkg/utils"
 	"github.com/spf13/cobra"
+	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
 )
@@ -164,7 +167,59 @@ func sourceRun(runner artifact.Runner, ctx context.Context, sop artifact.Option)
 func GetArgumentsCmd(args o.Arguments) {
 	// 获取传入的所有dockerfile路径
 	filesToProcess := GetFilesToProcess(args.Dockerfile)
-	//TODO: 实现扫描和报告输出
+	if args.ParseOnly {
+		// 传入等待解析的dockerfile文件集合 []string，返回每个dockerfile的解析结果 []options.parseResult
+		parsedFiles := Parse(filesToProcess)
+		if len(parsedFiles) == 0 {
+			log.Println("No files were processed, reports will be skipped.")
+		} else {
+			if args.GenerateJSON {
+				jsonData, err := json.MarshalIndent(parsedFiles, "", "  ")
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				err = ioutil.WriteFile(args.JSONOutfile, jsonData, 0644)
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				log.Printf("JSON report generated: %s\n", args.JSONOutfile)
+			}
+		}
+	} else {
+		policy, err := GetPolicy(args.PolicyFile)
+		if err != nil {
+			logger.Fatalln("failed to get policy")
+		}
+		results := Audit(filesToProcess, policy)
+		if len(results) == 0 {
+			log.Println("No files were processed, reports will be skipped.")
+		} else {
+			if args.GenerateJSON {
+				jsonData, err := json.MarshalIndent(results, "", "  ")
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				err = ioutil.WriteFile(args.JSONOutfile, jsonData, 0644)
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				log.Printf("JSON report generated: %s\n", args.JSONOutfile)
+			}
+
+			if args.GenerateReport {
+				log.Println("Preparing to generate PDF report.")
+				err := report.GenerateLatexReport(*policy, results, args.ReportTemplate, args.ReportName)
+				if err != nil {
+					return
+				}
+				log.Printf("PDF report generated: %s\n", args.ReportName)
+			}
+		}
+	}
 }
 
 func GetFilesToProcess(argsDockerfile string) []string {
@@ -193,3 +248,16 @@ func GetFilesToProcess(argsDockerfile string) []string {
 
 	return filesToProcess
 }
+
+func GetPolicy(policyFile string) (*dockerfile.Policy, error) {
+	//TODO: 根据传入的policy.yaml解析出审核策略
+}
+
+func Parse(filesToProcess []string) []dockerfile.ParseResult {
+	// TODO: 解析dockerfile文件，获取内容
+}
+
+func Audit(filesToProcess []string, policy *dockerfile.Policy) []dockerfile.PolicyResult {
+	// TODO: 根据策略审核dockerfile内容，获取dockerfile审核结果
+}
+
