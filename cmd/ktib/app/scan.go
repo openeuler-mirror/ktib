@@ -21,6 +21,8 @@ import (
 	tt "github.com/aquasecurity/trivy/pkg/types"
 	"github.com/aquasecurity/trivy/pkg/utils"
 	"github.com/spf13/cobra"
+	"os"
+	"path/filepath"
 )
 
 var option o.Option
@@ -160,5 +162,34 @@ func sourceRun(runner artifact.Runner, ctx context.Context, sop artifact.Option)
 }
 
 func GetArgumentsCmd(args o.Arguments) {
+	// 获取传入的所有dockerfile路径
+	filesToProcess := GetFilesToProcess(args.Dockerfile)
 	//TODO: 实现扫描和报告输出
+}
+
+func GetFilesToProcess(argsDockerfile string) []string {
+	filesToProcess := make([]string, 0)
+
+	fileInfo, err := os.Stat(argsDockerfile)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if fileInfo.IsDir() {
+		err := filepath.Walk(argsDockerfile, func(path string, info os.FileInfo, err error) error {
+			if !info.IsDir() {
+				filesToProcess = append(filesToProcess, path)
+			}
+			return nil
+		})
+		if err != nil {
+			return nil
+		}
+	} else {
+		filesToProcess = append(filesToProcess, argsDockerfile)
+	}
+
+	log.Printf("Scanning %d files in %s\n", len(filesToProcess), argsDockerfile)
+
+	return filesToProcess
 }
