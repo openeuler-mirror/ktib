@@ -9,10 +9,6 @@ import (
 	"gitee.com/openeuler/ktib/pkg/options"
 	"gitee.com/openeuler/ktib/pkg/utils"
 	"github.com/containers/common/pkg/completion"
-	"github.com/containers/podman/v4/cmd/podman/common"
-	"github.com/containers/podman/v4/cmd/podman/registry"
-	"github.com/containers/podman/v4/cmd/podman/validate"
-	"github.com/containers/podman/v4/libpod/define"
 	"github.com/spf13/cobra"
 )
 
@@ -27,9 +23,7 @@ func RMCmd() *cobra.Command {
 		Use:     "rm",
 		Short: "Remove one or more containers",
 		Aliases: []string{"remove-builder"},
-		Args: func(cmd *cobra.Command, args []string) error {
-			return validate.CheckAllLatestAndIDFile(cmd, args, false, "cidfile")
-		},
+		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return rm(cmd, args, op)
 		},
@@ -42,7 +36,6 @@ func RMCmd() *cobra.Command {
 
 	filterFlagName := "filter"
 	flags.StringArrayVar(&filters, filterFlagName, []string{}, "Filter output based on conditions given")
-	_ = cmd.RegisterFlagCompletionFunc(filterFlagName, common.AutocompletePsFilters)
 	return cmd
 }
 
@@ -74,17 +67,4 @@ func rm(cmd *cobra.Command, args []string, op options.RemoveOption) error {
 	}
 
 	return nil
-}
-
-
-func setExitCode(err error) {
-	// If error is set to no such container, do not reset
-	if registry.GetExitCode() == 1 {
-		return
-	}
-	if errors.Is(err, define.ErrNoSuchCtr) || strings.Contains(err.Error(), define.ErrNoSuchCtr.Error()) {
-		registry.SetExitCode(1)
-	} else if errors.Is(err, define.ErrCtrStateInvalid) || strings.Contains(err.Error(), define.ErrCtrStateInvalid.Error()) {
-		registry.SetExitCode(2)
-	}
 }
