@@ -259,7 +259,17 @@ func GetPolicy(policyFile string) (*dockerfile.Policy, error) {
 }
 
 func Parse(filesToProcess []string) []dockerfile.ParseResult {
-	// TODO: 解析dockerfile文件，获取内容
+	parsedFiles := make([]dockerfile.ParseResult, 0)
+	auditor := dockerfile.NewDockerfileAuditor(dockerfile.Policy{})
+
+	for _, file := range filesToProcess {
+		content, err := auditor.ParseOnly(file)
+		if err == nil {
+			parsedFiles = append(parsedFiles, content)
+		}
+	}
+
+	return parsedFiles
 }
 
 func Audit(filesToProcess []string, policy *dockerfile.Policy) []dockerfile.PolicyResult {
