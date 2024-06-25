@@ -273,6 +273,15 @@ func Parse(filesToProcess []string) []dockerfile.ParseResult {
 }
 
 func Audit(filesToProcess []string, policy *dockerfile.Policy) []dockerfile.PolicyResult {
-	// TODO: 根据策略审核dockerfile内容，获取dockerfile审核结果
+	auditor := dockerfile.NewDockerfileAuditor(*policy)
+	results := make([]dockerfile.PolicyResult, 0)
+	for _, file := range filesToProcess {
+		result, err := auditor.Audit(file)
+		if err == nil {
+			results = append(results, result)
+			log.Printf("Scanning file: %s\n", file)
+		}
+	}
+	return results
 }
 
