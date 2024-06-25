@@ -56,11 +56,6 @@ func runScan(c *cobra.Command, args []string, opt o.Option) error {
 	case "RPMs":
 		// TODO  report = runner.ScanRPMs()
 		return nil
-	case "Dockerfile":
-		re, err = configRun(runner, context.Background(), scanOption)
-		if err != nil {
-			return err
-		}
 	}
 	re, err = runner.Filter(context.Background(), scanOption, re)
 	if err != nil {
@@ -143,14 +138,6 @@ func initScanDockerfileFlags(cmd *cobra.Command) {
 	flag.StringVar(&args.ReportName, "name", "report.pdf", "The name of the PDF report.")
 	flag.StringVar(&args.ReportTemplate, "template", "templates/report-template.tex", "The template for the report to use.")
 	flag.BoolVar(&args.Verbose, "verbose", false, "Enables debug output.")
-}
-
-func configRun(runner artifact.Runner, ctx context.Context, sop artifact.Option) (tt.Report, error) {
-	sop.DisabledAnalyzers = append(analyzer.TypeOSes, analyzer.TypeLanguages...)
-	sop.VulnType = nil
-	sop.SecurityChecks = []string{tt.SecurityCheckConfig}
-	report, err := runner.ScanFilesystem(ctx, sop)
-	return report, err
 }
 
 func sourceRun(runner artifact.Runner, ctx context.Context, sop artifact.Option) (tt.Report, error) {
