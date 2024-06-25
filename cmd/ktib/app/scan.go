@@ -250,7 +250,12 @@ func GetFilesToProcess(argsDockerfile string) []string {
 }
 
 func GetPolicy(policyFile string) (*dockerfile.Policy, error) {
-	//TODO: 根据传入的policy.yaml解析出审核策略
+	policy, err := dockerfile.NewDockerfilePolicy(policyFile)
+	if err != nil {
+		logger.Println(err)
+		os.Exit(1)
+	}
+	return policy, nil
 }
 
 func Parse(filesToProcess []string) []dockerfile.ParseResult {
