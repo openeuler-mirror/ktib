@@ -88,12 +88,8 @@ type FromOption struct {
 }
 
 type RUNOption struct {
-	Interactive bool
-	TTY         bool
 	Workdir     string
 	Runtime     string
-	Detach      bool
-	Rm          bool
 }
 
 type CreateOption struct {
@@ -104,23 +100,26 @@ type MountOption struct {
 	Json bool
 }
 
-type CommitOption struct {
-	Maintainer string
-	Message    string
-	Remove     bool
-	EntryPoint string
-	CMD        []string
-	Env        []string
-	entities.CommitOptions
-}
+// 暂时不提供commit option，先注释掉
+//type CommitOption struct {
+//	Maintainer string
+//	Message    string
+//	Remove     bool
+//	EntryPoint string
+//	CMD        []string
+//	Env        []string
+//	entities.CommitOptions
+//}
 
-type CopyOption struct {
-	entities.ContainerCpOptions
-}
+// 暂时不提供copy option，先注释掉
+//type CopyOption struct {
+//	entities.ContainerCpOptions
+//}
 
-type ExistOption struct {
-	entities.ContainerExistsOptions
-}
+//type ExistOption struct {
+//	entities.ContainerExistsOptions
+//}
+
 type IFIOptions struct {
 	buildah.ImportFromImageOptions
 }
