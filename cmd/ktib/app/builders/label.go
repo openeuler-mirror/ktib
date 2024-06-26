@@ -10,23 +10,28 @@
 */
 
 package builders
-
 import (
+	"errors"
 	"fmt"
+	"gitee.com/openeuler/ktib/pkg/builder"
 	"gitee.com/openeuler/ktib/pkg/options"
 	"gitee.com/openeuler/ktib/pkg/utils"
-	"github.com/containers/buildah"
 	"github.com/spf13/cobra"
-	"golang.org/x/net/context"
 	"strings"
 )
 
 func LABELCmd() *cobra.Command {
 	var op options.IFIOptions
 	cmd := &cobra.Command{
-		Use:   "label",
+		Use:   "ktib builders label [builderID/builderName] [labelKey=labelValue]",
 		Args:  cobra.MinimumNArgs(2),
-		Short: "Executes a command as described by a container image label.",
+		Short: "根据容器映像标签执行命令",
+		Long: `'label'命令在构建器上设置标签。第一个参数是构建器ID或名称,
+第二个参数是一个逗号分隔的键值对列表,表示要设置的标签。
+
+示例:
+  # 在构建器上设置单个标签
+  ktib builders label builderID/builderName app=myapp`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return label(cmd, args, op)
 		},
@@ -35,28 +40,37 @@ func LABELCmd() *cobra.Command {
 }
 
 func label(cmd *cobra.Command, args []string, op options.IFIOptions) error {
-	op.ImportFromImageOptions.Image = args[0]
-	var labels = []string{}
-	makeLabels := make(map[string]string)
 	store, err := utils.GetStore(cmd)
 	if err != nil {
 		return err
 	}
-	var ctx context.Context
-	builder, err := buildah.ImportBuilderFromImage(ctx, store, op.ImportFromImageOptions)
+	builderobj, err := builder.FindBuilder(store, args[0])
+	if err != nil {
+		return errors.New(fmt.Sprintf("Not found the %s builder", args[0]))
+	}
+	containerId := args[0]
+	// 将 args[1] 解析为 map[string]string
+	labels, err := parseLabels(args[1])
 	if err != nil {
 		return err
 	}
-	for i := 1; i < len(args); i++ {
-		keyValue := strings.SplitN(args[i], "=", 2)
-		makeLabels[keyValue[0]] = ""
-		if len(keyValue) > 1 {
-			makeLabels[keyValue[0]] = keyValue[1]
-		}
-	}
-	for k, v := range makeLabels {
-		labels = append(labels, fmt.Sprintf(" %q=%q", k, v))
-		builder.SetLabel(k, v)
-	}
-	return nil
+
+	op.Labels = labels
+	return builderobj.SetLabel(containerId, op.Labels)
 }
+
+func parseLabels(input string) (map[string]string, error) {
+	labels := make(map[string]string)
+
+	pairs := strings.Split(input, ",")
+	for _, pair := range pairs {
+		kv := strings.SplitN(pair, "=", 2)
+		if len(kv) != 2 {
+			return nil, fmt.Errorf("invalid label format: %s", pair)
+		}
+		labels[kv[0]] = kv[1]
+	}
+
+	return labels, nil
+}
+
