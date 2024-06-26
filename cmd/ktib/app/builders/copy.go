@@ -22,12 +22,21 @@ import (
 
 func COPYCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "copy",
-		Short: "Copy files from the local filesystem to container",
-		Args:  cobra.ExactArgs(2),
+		Use:   "copy [builderID/builderName] [source files...] [destination]",
+		Short: "从本地文件系统复制文件到容器",
+		Long: `'copy'命令将指定的本地文件复制到构建器中的目标位置。
+第一个参数是构建器ID或名称,接下来的参数是需要复制的源文件或目录,最后一个参数是目标位置。
+
+例子:
+  # 将本地文件复制到构建器的某个目录
+  ktib builders copy builderID/builderName ./local/file.txt /container/dir
+
+  # 将本地目录递归复制到构建器的某个位置
+  ktib builders copy builderID/builderName ./local/dir /container/dir`,
+		Args: cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) < 3 {
-				return errors.New("requires exactly 3 arguments")
+				return errors.New("需要3个参数")
 			}
 			name := args[0]
 			args = tail(args)
