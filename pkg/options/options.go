@@ -121,7 +121,7 @@ type MountOption struct {
 //}
 
 type IFIOptions struct {
-	buildah.ImportFromImageOptions
+	Labels map[string]string `json:"labels"`
 }
 
 type Arguments struct {

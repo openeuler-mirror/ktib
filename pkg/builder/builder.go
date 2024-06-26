@@ -428,3 +428,45 @@ func (b *Builder) Run(args []string, ops options.RUNOption) error {
 	}
 	return err
 }
+func (b *Builder) SetLabel(containerID string, labels map[string]string) error {
+	// 找到容器的配置文件路径
+	configDir, err := b.Store.ContainerDirectory(containerID)
+	if err != nil {
+		return err
+	}
+	configPath := filepath.Join(configDir, "ktib.json")
+
+	// 读取配置文件
+	data, err := ioutil.ReadFile(configPath)
+	if err != nil {
+		return err
+	}
+
+	// 解析当前配置
+	var config map[string]interface{}
+	if err := json.Unmarshal(data, &config); err != nil {
+		return err
+	}
+
+	// 更新标签
+	if config["Labels"] == nil {
+		config["Labels"] = make(map[string]string)
+	}
+	labelsMap := config["Labels"].(map[string]string)
+	for key, value := range labels {
+		labelsMap[key] = value
+	}
+	config["Labels"] = labelsMap
+
+	// 更新配置文件
+	newData, err := json.Marshal(config)
+	if err != nil {
+		return err
+	}
+	if err := ioutil.WriteFile(configPath, newData, 0644); err != nil {
+		return err
+	}
+
+	fmt.Printf("成功为容器 %s 设置标签: %v\n", containerID, labels)
+	return nil
+}
