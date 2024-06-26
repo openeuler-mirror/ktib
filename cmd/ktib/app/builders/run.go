@@ -12,6 +12,7 @@
 package builders
 
 import (
+	"fmt"
 	"gitee.com/openeuler/ktib/pkg/builder"
 	"gitee.com/openeuler/ktib/pkg/options"
 	"gitee.com/openeuler/ktib/pkg/utils"
@@ -26,20 +27,42 @@ func RUN(cmd *cobra.Command, args []string, option options.RUNOption) error {
 	if err != nil {
 		return err
 	}
-	runBuilder, err := builder.FindBuilder(store, args[0])
+	if len(args) < 2 {
+		return fmt.Errorf("at least 2 arguments are required for the run command")
+	}
+	builderName := args[0]
+	runArgs := args[1:]
+
+	runBuilder, err := builder.FindBuilder(store, builderName)
 	if err != nil {
-		logrus.Errorf("not found the builder: %s", args[0])
+		logrus.Errorf("not found the builder: %s", builderName)
 		return err
 	}
-	return runBuilder.Run(args, option)
+
+	return runBuilder.Run(runArgs, option)
 }
 
 func RUNCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "run",
-		Short:   "Run a command in a new container",
+		Use:     "run [builderID/builderName] [命令] [参数...]",
+		Short:   "在新容器中运行命令",
 		Aliases: []string{"run-builder"},
 		Args:    cobra.MinimumNArgs(2),
+		Long: `'run'命令根据指定的构建器在新容器中运行命令。第一个参数是构建器ID或名称,剩余参数是要在容器中执行的命令和参数。
+
+选项:
+  --runtime string   使用的容器运行时(默认为"runc")
+  --workdir string   容器内的工作目录(默认为"/")  
+
+示例:
+  # 根据指定的构建器在容器中运行命令
+  ktib builders run builderID/builderName echo "Hello, World!"
+
+  # 使用特定运行时运行命令
+  ktib builders run --runtime crun builderID/builderName echo "Hello, World!"
+
+  # 使用特定工作目录运行命令
+  ktib builders run --workdir /app builderID/builderName ./app-entrypoint.sh`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return RUN(cmd, args, runOption)
 		},
@@ -50,10 +73,6 @@ func RUNCmd() *cobra.Command {
 
 func initFlags(cmd *cobra.Command) {
 	flags := cmd.Flags()
-	flags.BoolVar(&runOption.Rm, "rm", false, "Remove image unless used by other containers, implies --rm")
-	flags.BoolVarP(&runOption.Detach, "detach", "d", false, "Run container in background and print container ID")
-	flags.BoolVarP(&runOption.TTY, "tty", "t", false, "Allocate a pseudo-TTY")
 	flags.StringVar(&runOption.Runtime, "runtime", "runc", "Runtime to use for this container")
 	flags.StringVar(&runOption.Workdir, "workdir", "/", "Working directory inside the builder")
-	flags.BoolVarP(&runOption.Interactive, "interactive", "i", false, "Keep STDIN open even if not attached")
 }
