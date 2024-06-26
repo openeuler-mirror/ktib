@@ -386,28 +386,26 @@ func (b *Builder) Run(args []string, ops options.RUNOption) error {
 	if err != nil {
 		return err
 	}
-
 	if err := b.Mount(""); err != nil {
 		return err
 	}
 	mountPoint := b.MountPoint
 	g.SetRootPath(mountPoint)
 
-	g.SetProcessArgs([]string{"bash"})
 	if args != nil {
 		g.SetProcessArgs(args)
+	} else {
+		g.SetProcessArgs([]string{"bash"})
 	}
 
 	g.SetProcessCwd("/")
 	if ops.Workdir != "" {
 		g.SetProcessCwd(ops.Workdir)
 	}
-
 	cdir, err := b.Store.ContainerDirectory(b.ContainerID)
 	if err != nil {
 		return err
 	}
-
 	var exportOps generate.ExportOptions
 	specPath := filepath.Join(cdir, specFile)
 	if err := g.SaveToFile(specPath, exportOps); err != nil {
@@ -417,7 +415,11 @@ func (b *Builder) Run(args []string, ops options.RUNOption) error {
 	ctrid := "runtime" + "-" + b.ContainerID
 	var allArgs []string
 	allArgs = append(allArgs, "run", "-b", cdir, ctrid)
-	cmd := exec.Command(defaultruntime, args...)
+
+	cmd := exec.Command(defaultruntime, allArgs...)
+	if ops.Runtime != "" {
+		cmd = exec.Command(ops.Runtime, allArgs...)
+	}
 	cmd.Dir = mountPoint
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
@@ -428,6 +430,7 @@ func (b *Builder) Run(args []string, ops options.RUNOption) error {
 	}
 	return err
 }
+
 func (b *Builder) SetLabel(containerID string, labels map[string]string) error {
 	// 找到容器的配置文件路径
 	configDir, err := b.Store.ContainerDirectory(containerID)
