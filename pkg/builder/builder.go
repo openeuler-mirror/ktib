@@ -224,7 +224,7 @@ func (b *Builder) Save() error {
 	return ioutils.AtomicWriteFile(filepath.Join(cdir, stateFile), buildstate, 0600)
 }
 
-func (b Builder) Commit(exportTo string, option *options.CommitOption) error {
+func (b Builder) Commit(exportTo string) error {
 	ctx := context.Background()
 	systemContext := types.SystemContext{}
 	policy, err := signature.DefaultPolicy(&systemContext)

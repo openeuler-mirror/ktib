@@ -10,24 +10,16 @@
 */
 
 package builders
-
 import (
-	"os"
-
 	"gitee.com/openeuler/ktib/pkg/builder"
-	"gitee.com/openeuler/ktib/pkg/options"
 	"gitee.com/openeuler/ktib/pkg/utils"
-	"github.com/containers/podman/v4/cmd/podman/common"
 	"github.com/spf13/cobra"
 )
 
-func commit(cmd *cobra.Command, args []string, option *options.CommitOption) error {
+func commit(cmd *cobra.Command, args []string) error {
 	exportTo := ""
 	if len(args) == 2 {
 		exportTo = args[1]
-	}
-	if !option.Quiet {
-		option.Writer = os.Stderr
 	}
 	store, err := utils.GetStore(cmd)
 	if err != nil {
@@ -38,28 +30,23 @@ func commit(cmd *cobra.Command, args []string, option *options.CommitOption) err
 		return err
 	}
 
-	return cmBuilder.Commit(exportTo, option)
+	return cmBuilder.Commit(exportTo)
 }
 
 func COMMITCmd() *cobra.Command {
-	var op options.CommitOption
 	cmd := &cobra.Command{
-		Use:  "commit",
-		Short: "Create a new image from a container's changes",
-		Args: cobra.RangeArgs(1, 2),
+		Use:   "commit [builderID/builderName] [newImageName]",
+		Short: "从容器的更改创建新映像",
+		Args:  cobra.RangeArgs(1, 2),
+		Long: `'commit'命令从builder的更改创建新镜像。它需要一个builderID或builderName作为第一个参数，
+还可以选择提供一个新的镜像名称作为第二个参数。
+
+示例:
+  # 从构建器的更改创建新映像
+  ktib builders commit builderID/builderName newImageName`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return commit(cmd, args, &op)
+			return commit(cmd, args)
 		},
 	}
-	flags := cmd.Flags()
-	flags.StringVar(&op.Maintainer, "maintianer", "", "")
-	flags.StringVar(&op.Message, "message", "", "")
-	flags.BoolVar(&op.Remove, "rm", false, "")
-	flags.StringVar(&op.EntryPoint, "entrypoint", "", "")
-	flags.StringArrayVar(&op.CMD, "CMD", []string{}, "")
-	flags.StringArrayVar(&op.Env, "env", []string{}, "")
-	formatFlagName := "format"
-	flags.StringVarP(&op.Format, formatFlagName, "f", "oci", "`Format` of the image manifest and metadata")
-	_ = cmd.RegisterFlagCompletionFunc(formatFlagName, common.AutocompleteImageFormat)
 	return cmd
 }
