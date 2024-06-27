@@ -13,64 +13,51 @@ package builders
 
 import (
 	"errors"
+	"path/filepath"
+
 	"gitee.com/openeuler/ktib/pkg/options"
-	"github.com/containers/buildah/pkg/cli"
-	"github.com/containers/podman/v4/cmd/podman/registry"
-	"github.com/containers/podman/v4/cmd/podman/utils"
 	"github.com/spf13/cobra"
-	"os"
-	"os/exec"
 )
 
 func BUILDCmd() *cobra.Command {
-	var op options.BuildersOption
+	var op options.BuildOptions
 	cmd := &cobra.Command{
 		Use:   "build",
 		Short: "build an image",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return build(cmd, args, op)
+			return build(cmd, args, &op)
 		},
 	}
-	//TODO: 需要补全buildFlags
+	flags := cmd.Flags()
+	flags.StringArrayVarP(&op.File, "file", "f", []string{""}, "Name of the Dockerfile (Default is 'PATH/Dockerfile')")
+	flags.StringVarP(&op.Tags, "tag", "t", "string", "tagged name to apply to the built image")
+	flags.BoolVar(&op.NoCache, "no-cache", false, "Do not use cache when building the image")
+	flags.BoolVar(&op.Rm, "rm", true, "Remove intermediate containers after a successful build")
+	flags.BoolVar(&op.ForceRm, "force-rm", false, "Always remove intermediate containers")
 	return cmd
 }
 
-// TODO: 需要完善，暂时build不了
-func build(cmd *cobra.Command, args []string, op options.BuildersOption) error {
-	var containerFiles []string
-	imageEngine, err := registry.NewImageEngine(cmd, args)
-	if err != nil {
-		return err
-	}
-	// TODO: 需要Parse buildOptions
-	buildOptions := op.BuildOptions
-	report, err := imageEngine.Build(registry.GetContext(), containerFiles, buildOptions)
-	if err != nil {
-		exitCode := cli.ExecErrorCodeGeneric
-		if registry.IsRemote() {
-			remoteExitCode, parseErr := utils.ExitCodeFromBuildError(err.Error())
-			if parseErr == nil {
-				exitCode = remoteExitCode
-			}
-		}
-		exitError := &exec.ExitError{}
-		if errors.As(err, &exitError) {
-			exitCode = exitError.ExitCode()
-		}
-
-		registry.SetExitCode(exitCode)
-		return err
-	}
-	//TODO: buildFlagsWrapperToOptions
-	if cmd.Flag("iidfile").Changed {
-		f, err := os.Create(cli.BudResults{}.Iidfile)
+func build(cmd *cobra.Command, args []string, op *options.BuildOptions) error {
+	var dockerfiles []string
+	dockerfiles = op.File
+	contextDir := ""
+	if len(args) > 0 {
+		absDir, err := filepath.Abs(args[0])
 		if err != nil {
-			return err
+			return errors.New("error determining path to directory")
 		}
-		if _, err := f.WriteString("sha256:" + report.ID); err != nil {
-			return err
-		}
+		contextDir = absDir
+	} else {
+		return errors.New("no context directory specified")
+	}
+
+	if contextDir == "" {
+		return errors.New("no context directory specified, and no dockerfile specified")
+	}
+
+	if len(dockerfiles) == 0 {
+		dockerfiles = append(dockerfiles, filepath.Join(contextDir, "Dockerfile"))
 	}
 	return nil
 }
