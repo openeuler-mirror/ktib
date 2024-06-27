@@ -13,14 +13,9 @@ package options
 
 import (
 	"io"
-
-	"github.com/aquasecurity/trivy/pkg/commands/artifact"
-	"github.com/containers/buildah"
-	"github.com/containers/podman/v4/pkg/domain/entities"
 )
 
 type Option struct {
-	artifact.Option
 	Driver string
 }
 
@@ -29,9 +24,7 @@ type ImagesOption struct {
 	Digests  bool
 	Truncate bool
 	Json     bool
-	// TODO
-	Format string
-	//Filter map[string]string
+	Format   string
 }
 
 type LoginOption struct {
@@ -67,8 +60,6 @@ type RemoveOption struct {
 
 type BuildersOption struct {
 	Json bool
-	entities.BuildOptions
-	//common.BuildFlagsWrapper
 }
 
 type FromOption struct {
@@ -88,37 +79,13 @@ type FromOption struct {
 }
 
 type RUNOption struct {
-	Workdir     string
-	Runtime     string
-}
-
-type CreateOption struct {
-	entities.ContainerCreateOptions
+	Workdir string
+	Runtime string
 }
 
 type MountOption struct {
 	Json bool
 }
-
-// 暂时不提供commit option，先注释掉
-//type CommitOption struct {
-//	Maintainer string
-//	Message    string
-//	Remove     bool
-//	EntryPoint string
-//	CMD        []string
-//	Env        []string
-//	entities.CommitOptions
-//}
-
-// 暂时不提供copy option，先注释掉
-//type CopyOption struct {
-//	entities.ContainerCpOptions
-//}
-
-//type ExistOption struct {
-//	entities.ContainerExistsOptions
-//}
 
 type IFIOptions struct {
 	Labels map[string]string `json:"labels"`
@@ -134,4 +101,14 @@ type Arguments struct {
 	ReportName     string
 	ReportTemplate string
 	Verbose        bool
+}
+
+type SummaryStats struct {
+	TotalTests        int
+	SuccessTests      int
+	FailedTests       int
+	SuccessPercentage string
+	FailedPercentage  string
+	ComplianceLevel   string
+	ComplianceColor   string
 }
