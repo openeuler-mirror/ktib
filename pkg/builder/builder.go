@@ -12,6 +12,7 @@
 package builder
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -24,6 +25,7 @@ import (
 	"github.com/containers/storage"
 	"github.com/containers/storage/pkg/archive"
 	"github.com/containers/storage/pkg/ioutils"
+	"github.com/opencontainers/go-digest"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/opencontainers/runtime-tools/generate"
 	"github.com/sirupsen/logrus"
@@ -32,6 +34,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 const (
@@ -327,6 +330,7 @@ func (b Builder) Commit(exportTo string) error {
 		logrus.Infof("create new image %s successful", nwImage.ID)
 		return nil
 	}
+
 	_, err = cpier.Image(ctx, policyContext, exportRef, importRef, ops)
 	if err != nil {
 		return err
@@ -405,7 +409,7 @@ func (b *Builder) Run(args []string, ops options.RUNOption) error {
 	g.SetRootPath(mountPoint)
 
 	if args != nil {
-		g.SetProcessArgs(args)
+		g.SetProcessArgs([]string{"/bin/sh", "-c", strings.Join(args, " ")})
 	} else {
 		g.SetProcessArgs([]string{"bash"})
 	}
