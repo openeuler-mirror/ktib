@@ -10,6 +10,7 @@
 */
 
 package builders
+
 import (
 	"errors"
 	"fmt"
@@ -23,7 +24,7 @@ import (
 func LABELCmd() *cobra.Command {
 	var op options.IFIOptions
 	cmd := &cobra.Command{
-		Use:   "ktib builders label [builderID/builderName] [labelKey=labelValue]",
+		Use:   "label",
 		Args:  cobra.MinimumNArgs(2),
 		Short: "根据容器映像标签执行命令",
 		Long: `'label'命令在构建器上设置标签。第一个参数是构建器ID或名称,
@@ -73,4 +74,3 @@ func parseLabels(input string) (map[string]string, error) {
 
 	return labels, nil
 }
-

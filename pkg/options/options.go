@@ -112,3 +112,11 @@ type SummaryStats struct {
 	ComplianceLevel   string
 	ComplianceColor   string
 }
+
+type BuildOptions struct {
+	File    []string
+	Tags    string
+	NoCache bool
+	Rm      bool
+	ForceRm bool
+}

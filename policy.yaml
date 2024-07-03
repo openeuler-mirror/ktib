@@ -1,0 +1,38 @@
+policy:
+  enforce_authorized_registries:
+    enabled: True
+    registries:
+      - Docker Hub
+      - https://test.example.com:5000
+  forbid_floating_tags:
+    enabled: True
+    forbidden_tags:
+      - latest
+      - stable
+      - prod
+      - stage
+  forbid_insecure_registries:
+    enabled: True
+  forbid_root:
+    enabled: True
+  forbid_privileged_ports:
+    enabled: True
+  forbid_packages:
+    enabled: True
+    forbidden_packages:
+      - sudo
+      - vim
+      - netcat
+      - nc
+      - curl
+      - wget
+  forbid_secrets:
+    enabled: True
+    secrets_patterns:
+      - id_rsa
+      - private_key
+      - password
+      - key
+      - secret
+    allowed_patterns:
+      - id_rsa.pub
