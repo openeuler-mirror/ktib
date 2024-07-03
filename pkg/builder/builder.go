@@ -303,7 +303,10 @@ func (b Builder) Commit(exportTo string) error {
 
 		diffrdcloser.Close()
 
-		destLayer, num, _ := b.Store.PutLayer("", imageLayer, []string{}, "", true, &layerOps, tar)
+		destLayer, num, err := b.Store.PutLayer("", imageLayer, []string{}, "", true, &layerOps, tar)
+		if err != nil {
+			return err
+		}
 		if num != -1 {
 			logrus.Infof("apply diff %s successfully", containerLayer)
 		}

@@ -28,9 +28,6 @@ func newCmdBuilder() *cobra.Command {
 		Args: cobra.NoArgs,
 	}
 	cmd.AddCommand(
-		//TODO：未完成： add ，build， label
-		//TODO: 未重构： run, rm
-		//TODO: 重构未测试： copy， commit
 		builders.ADDCmd(),
 		builders.BUILDCmd(),
 		builders.COPYCmd(),

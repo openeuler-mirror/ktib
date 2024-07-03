@@ -10,6 +10,7 @@
 */
 
 package builders
+
 import (
 	"gitee.com/openeuler/ktib/pkg/builder"
 	"gitee.com/openeuler/ktib/pkg/utils"
@@ -18,14 +19,16 @@ import (
 
 func commit(cmd *cobra.Command, args []string) error {
 	exportTo := ""
+	container := ""
 	if len(args) == 2 {
+		container = args[0]
 		exportTo = args[1]
 	}
 	store, err := utils.GetStore(cmd)
 	if err != nil {
 		return err
 	}
-	cmBuilder, err := builder.FindBuilder(store, args[0])
+	cmBuilder, err := builder.FindBuilder(store, container)
 	if err != nil {
 		return err
 	}
