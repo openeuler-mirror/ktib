@@ -290,28 +290,37 @@ func (b Builder) Commit(exportTo string) error {
 		diffrdcloser, err := b.Store.Diff(imageLayer, containerLayer, &diffOps)
 
 		tar, err := os.CreateTemp("", "layer-diff-tar-")
+		wt := bufio.NewWriter(tar)
 		if err != nil {
 			return err
 		}
 		defer os.Remove(tar.Name())
 		defer tar.Close()
 
-		_, err = io.Copy(tar, diffrdcloser)
+		_, err = io.Copy(wt, diffrdcloser)
 		if err != nil {
 			return fmt.Errorf("storing blob to file %q: %w", tar, err)
 		}
-
+		if err := wt.Flush(); err != nil {
+			return fmt.Errorf("Can not flush bufio: %w", err)
+		}
 		diffrdcloser.Close()
 
-		destLayer, num, err := b.Store.PutLayer("", imageLayer, []string{}, "", true, &layerOps, tar)
+		f, err := os.Open(tar.Name())
 		if err != nil {
-			return err
+			return fmt.Errorf("Can not open the file of: %q: %w", tar.Name(), err)
 		}
+		defer f.Close()
+
+		destLayer, num, _ := b.Store.PutLayer("", imageLayer, []string{}, "", true, &layerOps, f)
 		if num != -1 {
 			logrus.Infof("apply diff %s successfully", containerLayer)
 		}
 		nname := []string{exportName}
-		nwImage, _ := b.Store.CreateImage("", nname, destLayer.ID, "", nil)
+		imageOptions := &storage.ImageOptions{
+			Digest: digest.Digest(""),
+		}
+		nwImage, err := b.Store.CreateImage("", nname, destLayer.ID, "", imageOptions)
 		if err != nil {
 			return err
 		}
