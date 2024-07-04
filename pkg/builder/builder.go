@@ -22,8 +22,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"regexp"
+	"strings"
+
 	"gitee.com/openeuler/ktib/pkg/options"
 	cpier "github.com/containers/image/v5/copy"
 	"github.com/containers/image/v5/docker/reference"
@@ -639,8 +640,13 @@ func (b *Executor) BuildStep( name, expression string) error {
 		}
 	case "CMD":
 		b.builders.SetCmd(arguments)
+	default:
+		if b.builders != nil {
+			err := b.builders.Remove()
+			b.builders = nil
+			return fmt.Errorf("Unsupported Dockerfile directive: %s, %v\n", instruction, err)
+		}
 	}
-
 	return nil
 }
 
