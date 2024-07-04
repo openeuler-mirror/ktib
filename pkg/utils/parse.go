@@ -101,9 +101,15 @@ func sortImages(imgs []imagemanager.Image) ([]imageReport, error) {
 func sortContainers(containers []container.Container) ([]containerReport, error) {
 	var containerReports []containerReport
 	for _, c := range containers {
+		var containerName string
+		if len(c.Names) > 0 {
+			containerName = c.Names[0]
+		} else {
+			containerName = ""
+		}
 		containerReports = append(containerReports, containerReport{
 			ID:      c.ID[:10],
-			Names:   c.Names[0],
+			Names:   containerName,
 			LayerID: c.LayerID,
 			ImageID: c.ImageID[:10],
 			Created: units.HumanDuration(time.Since(c.Created)) + " ago",

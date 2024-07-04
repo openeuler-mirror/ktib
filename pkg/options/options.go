@@ -62,6 +62,21 @@ type BuildersOption struct {
 	Json bool
 }
 
+type BuildOptions struct {
+	File             []string
+	Tags             string
+	NoCache          bool
+	Rm               bool
+	ForceRm          bool
+	ContextDirectory string
+	Args             map[string]string
+	Log func(format string, args ...interface{})
+	In               io.Reader
+	Out              io.Writer
+	Err              io.Writer
+	OutputFormat     string
+}
+
 type FromOption struct {
 	Names      string
 	ID         string
@@ -111,12 +126,4 @@ type SummaryStats struct {
 	FailedPercentage  string
 	ComplianceLevel   string
 	ComplianceColor   string
-}
-
-type BuildOptions struct {
-	File    []string
-	Tags    string
-	NoCache bool
-	Rm      bool
-	ForceRm bool
 }

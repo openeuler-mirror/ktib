@@ -17,8 +17,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"io/ioutil"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"regexp"
 	"gitee.com/openeuler/ktib/pkg/options"
 	cpier "github.com/containers/image/v5/copy"
+	"github.com/containers/image/v5/docker/reference"
 	"github.com/containers/image/v5/signature"
 	"github.com/containers/image/v5/transports/alltransports"
 	"github.com/containers/image/v5/types"
@@ -29,12 +37,6 @@ import (
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/opencontainers/runtime-tools/generate"
 	"github.com/sirupsen/logrus"
-	"io"
-	"io/ioutil"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"strings"
 )
 
 const (
@@ -55,10 +57,12 @@ type Builder struct {
 	MountPoint  string
 	Maintainer  string
 	EntryPoint  string
+	Cmd         string
 	Env         []string
 	Message     string
 	OCIv1       v1.Image
 	Workdir     string
+	out         io.Writer
 }
 
 type BuilderOptions struct {
@@ -67,11 +71,27 @@ type BuilderOptions struct {
 	PullPolicy bool
 }
 
+type Executor struct {
+	store        storage.Store
+	contextDir   string
+	builders     *Builder
+	out          io.Writer
+	err          io.Writer
+}
+
 func newBuidler(store storage.Store, options BuilderOptions) (*Builder, error) {
 	image := options.FromImage
 	name := options.Container
 	coptions := storage.ContainerOptions{}
-	container, err := store.CreateContainer("", []string{name}, image, "", "", &coptions)
+	var err error
+	var container *storage.Container
+	var optionNames []string
+	if name != "" {
+		optionNames = []string{name}
+	}
+
+	container, err = store.CreateContainer("", optionNames, image, "", "", &coptions)
+
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +101,7 @@ func newBuidler(store storage.Store, options BuilderOptions) (*Builder, error) {
 		return nil, err
 	}
 	builder := &Builder{
-		Name:        container.Names[0],
+		Name:        name,
 		ID:          container.ID,
 		Store:       store,
 		FromImage:   image,
@@ -109,7 +129,9 @@ func FindBuilder(store storage.Store, name string) (*Builder, error) {
 	if err != nil {
 		return nil, err
 	}
-	buildstate, err := ioutil.ReadFile(filepath.Join(cdir, stateFile))
+	statefile := filepath.Join(cdir, stateFile)
+
+	buildstate, err := ioutil.ReadFile(statefile)
 	if err != nil && os.IsNotExist(err) {
 		return nil, err
 	}
@@ -193,6 +215,10 @@ func (b *Builder) SetMaintainer(args string) {
 
 func (b *Builder) SetEntryPoint(args string) {
 	b.EntryPoint = args
+}
+
+func (b *Builder) SetCmd(args string) {
+	b.Cmd = args
 }
 
 func (b *Builder) SetEnv(args []string) {
@@ -407,7 +433,6 @@ func (b *Builder) Run(args []string, ops options.RUNOption) error {
 	}
 	mountPoint := b.MountPoint
 	g.SetRootPath(mountPoint)
-
 	if args != nil {
 		g.SetProcessArgs([]string{"/bin/sh", "-c", strings.Join(args, " ")})
 	} else {
@@ -487,5 +512,158 @@ func (b *Builder) SetLabel(containerID string, labels map[string]string) error {
 	}
 
 	fmt.Printf("成功为容器 %s 设置标签: %v\n", containerID, labels)
+	return nil
+}
+func BuildDockerfiles(store storage.Store, op *options.BuildOptions, dockerfile ...string) error {
+	var lineContinuation = regexp.MustCompile(`\\\s*\n`)
+	if len(dockerfile) == 0 {
+		fmt.Printf("error building: no dockerfiles specified\n")
+	}
+	exec, err := NewExecutor(store, op)
+	if err != nil {
+		fmt.Printf("error creating build executor:%v\n", err)
+	}
+
+	for _, value := range dockerfile {
+		fileBytes, err := ioutil.ReadFile(value)
+		if err != nil {
+			return err
+		}
+		if len(fileBytes) == 0 {
+			fmt.Printf("Dockerfile cannot be empty")
+		}
+		var (
+			dockerfileContent = lineContinuation.ReplaceAllString(stripComments(fileBytes), "")
+			stepN             = 1
+		)
+		//Split into lines based on line breaks
+		for _, line := range strings.Split(dockerfileContent, "\n") {
+			//Remove spaces, tabs, and line breaks at the beginning and end of a line
+			line = strings.Trim(strings.Replace(line, "\t", " ", -1), " \t\r\n")
+			if len(line) == 0 {
+				continue
+			}
+			//Execute each step of construction
+			if err := exec.BuildStep( fmt.Sprintf("%d", stepN), line); err != nil {
+				return err
+			}
+			stepN += 1
+		}
+
+		if err := exec.BuildCommit(op); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func NewExecutor(store storage.Store, options *options.BuildOptions) (*Executor, error) {
+	exec := Executor{
+		store:        store,
+		contextDir:   options.ContextDirectory,
+		out:          options.Out,
+		err:          options.Err,
+	}
+	if exec.err == nil {
+		exec.err = os.Stderr
+	}
+	if exec.out == nil {
+		exec.out = os.Stdout
+	}
+	return &exec, nil
+}
+
+func stripComments(raw []byte) string {
+	var (
+		out   []string
+		lines = strings.Split(string(raw), "\n")
+	)
+	for _, l := range lines {
+		if len(l) == 0 || l[0] == '#' {
+			continue
+		}
+		out = append(out, l)
+	}
+	return strings.Join(out, "\n")
+}
+
+func (b *Executor) BuildStep( name, expression string) error {
+	fmt.Fprintf(b.out, "Step %s : %s\n", name, expression)
+	tmp := strings.SplitN(expression, " ", 2)
+	if len(tmp) != 2 {
+		fmt.Printf("Invalid Dockerfile format")
+	}
+	instruction := strings.Trim(tmp[0], " ")
+	arguments := strings.Trim(tmp[1], " ")
+	switch instruction {
+	case "FROM":
+		option := BuilderOptions{
+			FromImage: arguments,
+		}
+		builders, err := NewBuilder(b.store, option)
+		if err != nil {
+			return errors.New(fmt.Sprintf("error creating build container: %s\n", err))
+		}
+		fmt.Printf("%s\n", builders.ContainerID)
+		if err := builders.Save(); err != nil {
+			return err
+		}
+		b.builders = builders
+	case "ADD":
+		tmp := strings.SplitN(arguments, " ", 2)
+		if len(tmp) != 2 {
+			return fmt.Errorf("Invalid %s format", arguments)
+		}
+		source := strings.Split(tmp[0], " ")
+		dest := strings.Trim(tmp[1], " \t")
+		err := b.builders.Add(dest, source, true)
+		if err != nil {
+			return errors.New(fmt.Sprintf("error adding or copying content to builder: %s", err))
+		}
+	case "COPY":
+		tmp := strings.SplitN(arguments, " ", 2)
+		if len(tmp) != 2 {
+			return fmt.Errorf("Invalid %s format", arguments)
+		}
+		source := strings.Split(tmp[0], " ")
+		dest := strings.Trim(tmp[1], " \t")
+		err := b.builders.Add(dest, source, false)
+		if err != nil {
+			return errors.New(fmt.Sprintf("error adding or copying content to builder: %s", err))
+		}
+	case "RUN":
+		args := strings.Split(arguments, " ")
+		var ops options.RUNOption
+		if err := b.builders.Run(args, ops); err != nil {
+			return err
+		}
+	case "CMD":
+		b.builders.SetCmd(arguments)
+	}
+
+	return nil
+}
+
+func (b *Executor) BuildCommit(op *options.BuildOptions) error {
+	imageNameref, err := reference.ParseNormalizedNamed(op.Tags)
+	if err != nil {
+		return err
+	}
+	if b.builders.Store.Exists(imageNameref.String()) {
+		im, _ := b.builders.Store.Image(imageNameref.String())
+		_, err := b.builders.Store.DeleteImage(im.ID, true)
+		if err != nil {
+			return err
+		}
+	}
+
+	err = b.builders.Commit(op.Tags)
+	if err != nil {
+		return errors.New(fmt.Sprintf("error commit container to images: %s", err))
+	}
+	if b.builders != nil {
+		err = b.builders.Remove()
+		b.builders = nil
+	}
 	return nil
 }

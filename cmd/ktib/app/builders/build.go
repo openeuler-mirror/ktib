@@ -13,9 +13,12 @@ package builders
 
 import (
 	"errors"
+	"fmt"
 	"path/filepath"
 
+	"gitee.com/openeuler/ktib/pkg/builder"
 	"gitee.com/openeuler/ktib/pkg/options"
+	"gitee.com/openeuler/ktib/pkg/utils"
 	"github.com/spf13/cobra"
 )
 
@@ -32,9 +35,6 @@ func BUILDCmd() *cobra.Command {
 	flags := cmd.Flags()
 	flags.StringArrayVarP(&op.File, "file", "f", []string{""}, "Name of the Dockerfile (Default is 'PATH/Dockerfile')")
 	flags.StringVarP(&op.Tags, "tag", "t", "string", "tagged name to apply to the built image")
-	flags.BoolVar(&op.NoCache, "no-cache", false, "Do not use cache when building the image")
-	flags.BoolVar(&op.Rm, "rm", true, "Remove intermediate containers after a successful build")
-	flags.BoolVar(&op.ForceRm, "force-rm", false, "Always remove intermediate containers")
 	return cmd
 }
 
@@ -58,6 +58,14 @@ func build(cmd *cobra.Command, args []string, op *options.BuildOptions) error {
 
 	if len(dockerfiles) == 0 {
 		dockerfiles = append(dockerfiles, filepath.Join(contextDir, "Dockerfile"))
+	}
+
+	store, err := utils.GetStore(cmd)
+	if err != nil {
+		return err
+	}
+	if err := builder.BuildDockerfiles(store, op, dockerfiles...); err != nil {
+		fmt.Printf("error build dockerfiles %v\n", err)
 	}
 	return nil
 }
