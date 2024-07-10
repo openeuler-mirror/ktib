@@ -69,7 +69,7 @@ func TestCreateFifoDevice(t *testing.T) {
 	}
 }
 
-func Test_mknod(t *testing.T) {
+func TestMknod(t *testing.T) {
 	type args struct {
 		path     string
 		nodeType string

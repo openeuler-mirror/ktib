@@ -73,11 +73,11 @@ type BuilderOptions struct {
 }
 
 type Executor struct {
-	store        storage.Store
-	contextDir   string
-	builders     *Builder
-	out          io.Writer
-	err          io.Writer
+	store      storage.Store
+	contextDir string
+	builders   *Builder
+	out        io.Writer
+	err        io.Writer
 }
 
 func newBuidler(store storage.Store, options BuilderOptions) (*Builder, error) {
@@ -329,7 +329,7 @@ func (b Builder) Commit(exportTo string) error {
 
 		_, err = io.Copy(wt, diffrdcloser)
 		if err != nil {
-			return fmt.Errorf("storing blob to file %q: %w", tar, err)
+			return fmt.Errorf("storing blob to file %v: %w", tar, err)
 		}
 		if err := wt.Flush(); err != nil {
 			return fmt.Errorf("Can not flush bufio: %w", err)
@@ -518,11 +518,11 @@ func (b *Builder) SetLabel(containerID string, labels map[string]string) error {
 func BuildDockerfiles(store storage.Store, op *options.BuildOptions, dockerfile ...string) error {
 	var lineContinuation = regexp.MustCompile(`\\\s*\n`)
 	if len(dockerfile) == 0 {
-		fmt.Printf("error building: no dockerfiles specified\n")
+		return errors.New("error building: no dockerfiles specified\n")
 	}
 	exec, err := NewExecutor(store, op)
 	if err != nil {
-		fmt.Printf("error creating build executor:%v\n", err)
+		return fmt.Errorf("error creating build executor: %w", err)
 	}
 
 	for _, value := range dockerfile {
@@ -531,7 +531,7 @@ func BuildDockerfiles(store storage.Store, op *options.BuildOptions, dockerfile 
 			return err
 		}
 		if len(fileBytes) == 0 {
-			fmt.Printf("Dockerfile cannot be empty")
+			return errors.New("Dockerfile cannot be empty")
 		}
 		var (
 			dockerfileContent = lineContinuation.ReplaceAllString(stripComments(fileBytes), "")
@@ -545,7 +545,7 @@ func BuildDockerfiles(store storage.Store, op *options.BuildOptions, dockerfile 
 				continue
 			}
 			//Execute each step of construction
-			if err := exec.BuildStep( fmt.Sprintf("%d", stepN), line); err != nil {
+			if err := exec.BuildStep(fmt.Sprintf("%d", stepN), line); err != nil {
 				return err
 			}
 			stepN += 1
@@ -560,10 +560,10 @@ func BuildDockerfiles(store storage.Store, op *options.BuildOptions, dockerfile 
 
 func NewExecutor(store storage.Store, options *options.BuildOptions) (*Executor, error) {
 	exec := Executor{
-		store:        store,
-		contextDir:   options.ContextDirectory,
-		out:          options.Out,
-		err:          options.Err,
+		store:      store,
+		contextDir: options.ContextDirectory,
+		out:        options.Out,
+		err:        options.Err,
 	}
 	if exec.err == nil {
 		exec.err = os.Stderr
@@ -574,12 +574,14 @@ func NewExecutor(store storage.Store, options *options.BuildOptions) (*Executor,
 	return &exec, nil
 }
 
+// Remove all lines starting with '#' or empty spaces from the []byte
 func stripComments(raw []byte) string {
 	var (
 		out   []string
 		lines = strings.Split(string(raw), "\n")
 	)
 	for _, l := range lines {
+		//Filter out lines that start with "#" or are empty
 		if len(l) == 0 || l[0] == '#' {
 			continue
 		}
@@ -588,11 +590,11 @@ func stripComments(raw []byte) string {
 	return strings.Join(out, "\n")
 }
 
-func (b *Executor) BuildStep( name, expression string) error {
+func (b *Executor) BuildStep(name, expression string) error {
 	fmt.Fprintf(b.out, "Step %s : %s\n", name, expression)
 	tmp := strings.SplitN(expression, " ", 2)
 	if len(tmp) != 2 {
-		fmt.Printf("Invalid Dockerfile format")
+		return fmt.Errorf("Invalid Dockerfile format")
 	}
 	instruction := strings.Trim(tmp[0], " ")
 	arguments := strings.Trim(tmp[1], " ")
@@ -610,25 +612,18 @@ func (b *Executor) BuildStep( name, expression string) error {
 			return err
 		}
 		b.builders = builders
-	case "ADD":
+	case "ADD", "COPY":
 		tmp := strings.SplitN(arguments, " ", 2)
 		if len(tmp) != 2 {
 			return fmt.Errorf("Invalid %s format", arguments)
 		}
 		source := strings.Split(tmp[0], " ")
 		dest := strings.Trim(tmp[1], " \t")
-		err := b.builders.Add(dest, source, true)
-		if err != nil {
-			return errors.New(fmt.Sprintf("error adding or copying content to builder: %s", err))
+		var isADD bool
+		if instruction == "ADD" {
+			isADD = true
 		}
-	case "COPY":
-		tmp := strings.SplitN(arguments, " ", 2)
-		if len(tmp) != 2 {
-			return fmt.Errorf("Invalid %s format", arguments)
-		}
-		source := strings.Split(tmp[0], " ")
-		dest := strings.Trim(tmp[1], " \t")
-		err := b.builders.Add(dest, source, false)
+		err := b.builders.Add(dest, source, isADD)
 		if err != nil {
 			return errors.New(fmt.Sprintf("error adding or copying content to builder: %s", err))
 		}
