@@ -163,6 +163,7 @@ func (d *LabelDirective) Get() map[string]interface{} {
 	return map[string]interface{}{
 		"type":        d.Type.String(),
 		"raw_content": d.Content,
+		"labels":      d.Labels,
 	}
 }
 
@@ -171,15 +172,12 @@ func (d *LabelDirective) GetType() DockerfileDirectiveType {
 }
 
 func NewLabelDirective(rawContent string) *LabelDirective {
-	var labels map[string]string
-	err := json.Unmarshal([]byte(rawContent), &labels)
-	if err != nil {
-		return &LabelDirective{
-			Type:    LABEL,
-			Content: rawContent,
-		}
-	}
-
+	labels := make(map[string]string)
+	parts := strings.Split(rawContent, "\"")
+	key := strings.TrimSpace(parts[0])
+	value := strings.TrimSpace(parts[2])
+	value = strings.ReplaceAll(value, "\\", "")
+	labels[key] = value
 	return &LabelDirective{
 		Type:    LABEL,
 		Content: rawContent,
