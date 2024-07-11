@@ -158,37 +158,19 @@ func (df *Dockerfile) GetRaw() []map[string]interface{} {
 }
 
 func (df *Dockerfile) GetMaintainers() string {
-	var maintainers []string
-
 	for _, directive := range df.Directives {
 		if directive.GetType() == LABEL {
-			var i interface{} = directive
-			labelsDirective, ok := i.(LabelDirective)
-			if ok {
-				labels := labelsDirective.Get()
-				for _, label := range labels {
-					keyValue := strings.SplitN(label.(string), "=", 2)
-					if len(keyValue) == 2 {
-						key := strings.TrimSpace(keyValue[0])
-						value := strings.TrimSpace(keyValue[1])
-						if key == "maintainer" || key == "MAINTAINER" {
-							return value
-						}
-					}
-				}
+			labels := directive.Get()["labels"]
+			for _, label := range labels.(map[string]string) {
+				return label
 			}
 		} else if directive.GetType() == MAINTAINER {
-			var i interface{} = directive
-			maintainersDirective, ok := i.(MaintainerDirective)
-			if ok {
-				maintainers = maintainersDirective.GetMaintainers()
-			}
-			if len(maintainers) > 0 {
-				return strings.Join(maintainers, ", ")
+			maintainers := directive.Get()["maintainers"]
+			if maintainers != nil {
+				return strings.Join(maintainers.([]string), ", ")
 			}
 		}
 	}
-
 	return ""
 }
 
@@ -197,4 +179,3 @@ func normalizeContent(content string) string {
 	dockerfilePreprocessor := parsingutils.NewDockerfilePreprocessor(content)
 	return dockerfilePreprocessor.GetNormalizedContent()
 }
-
