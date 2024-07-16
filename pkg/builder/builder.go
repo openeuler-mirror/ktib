@@ -81,23 +81,30 @@ type Executor struct {
 }
 
 func newBuidler(store storage.Store, options BuilderOptions) (*Builder, error) {
-	image := options.FromImage
-	name := options.Container
-	coptions := storage.ContainerOptions{}
 	var err error
 	var container *storage.Container
 	var optionNames []string
+	if options.FromImage == "scratch" {
+		options.FromImage = ""
+	}
+	image := options.FromImage
+	name := options.Container
+	coptions := storage.ContainerOptions{}
 	if name != "" {
 		optionNames = []string{name}
 	}
 
-	container, err = store.CreateContainer("", optionNames, image, "", "", &coptions)
-
-	if err != nil {
-		return nil, err
+	imageID := ""
+	if image != "" {
+		iMage, err := store.Image(image)
+		if err != nil {
+			return nil, err
+		}
+		imageID = iMage.ID
 	}
 
-	iMage, err := store.Image(image)
+	container, err = store.CreateContainer("", optionNames, imageID, "", "", &coptions)
+
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +113,7 @@ func newBuidler(store storage.Store, options BuilderOptions) (*Builder, error) {
 		ID:          container.ID,
 		Store:       store,
 		FromImage:   image,
-		FromImageID: iMage.ID,
+		FromImageID: imageID,
 		Container:   name,
 		ContainerID: container.ID,
 	}
@@ -254,7 +261,7 @@ func (b *Builder) Save() error {
 	return ioutils.AtomicWriteFile(filepath.Join(cdir, stateFile), buildstate, 0600)
 }
 
-func (b Builder) Commit(exportTo string) error {
+func (b *Builder) Commit(exportTo string) error {
 	ctx := context.Background()
 	systemContext := types.SystemContext{}
 	policy, err := signature.DefaultPolicy(&systemContext)
@@ -262,23 +269,18 @@ func (b Builder) Commit(exportTo string) error {
 		return err
 	}
 	policyContext, err := signature.NewPolicyContext(policy)
-	importFrom := b.FromImage
 	var imageLayer string
 	var containerLayer string
-	if !b.Store.Exists(importFrom) {
+	importFrom := b.FromImage
+	if !b.Store.Exists(importFrom) && b.FromImageID != "" {
 		iMage, err := b.Store.Image(b.FromImageID)
 		if err != nil {
 			return err
 		}
 		importFrom = iMage.Names[0]
+	} else {
+		importFrom = "scratch"
 	}
-	// set transport to oci
-	importFrom = defaultTransport + importFrom
-	importRef, err := alltransports.ParseImageName(importFrom)
-	if err != nil {
-		return err
-	}
-
 	// set transport to containers-storage:
 	exportTo = defaultTransport + exportTo
 	exportRef, err := alltransports.ParseImageName(exportTo)
@@ -295,8 +297,12 @@ func (b Builder) Commit(exportTo string) error {
 
 	// First need to determine whether there are changes in the builder's layers, if there are changes you need to
 	// merge the layers, no changes only need to copy the image.
-	iM, _ := b.Store.Image(b.FromImageID)
-	imageLayer = iM.TopLayer
+	if b.FromImageID != "" {
+		iM, _ := b.Store.Image(b.FromImageID)
+		imageLayer = iM.TopLayer
+	} else {
+		imageLayer = ""
+	}
 	ctr, _ := b.Store.Container(b.ContainerID)
 	containerLayer = ctr.LayerID
 	changes, err := b.Store.Changes(imageLayer, containerLayer)
@@ -314,7 +320,7 @@ func (b Builder) Commit(exportTo string) error {
 		}
 	}
 
-	if len(changes) > 0 {
+	if len(changes) > 0 || importFrom == "scratch" {
 		var layerOps storage.LayerOptions
 		var diffOps storage.DiffOptions
 		diffrdcloser, err := b.Store.Diff(imageLayer, containerLayer, &diffOps)
@@ -356,6 +362,13 @@ func (b Builder) Commit(exportTo string) error {
 		}
 		logrus.Infof("create new image %s successful", nwImage.ID)
 		return nil
+	}
+
+	// set transport to oci
+	importFrom = defaultTransport + importFrom
+	importRef, err := alltransports.ParseImageName(importFrom)
+	if err != nil {
+		return err
 	}
 
 	_, err = cpier.Image(ctx, policyContext, exportRef, importRef, ops)
