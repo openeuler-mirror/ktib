@@ -96,12 +96,14 @@ func (p *DockerfilePreprocessor) removesLeadingNewlines() {
 
 func (p *DockerfilePreprocessor) getEnvBasic() map[string]string {
 	envs := make(map[string]string)
-	assignment := regexp.MustCompile(`(env|ENV) (?P<key>["'\\S]+) (?P<value>[\'"\S]+)`)
+	assignment := regexp.MustCompile(`(?:ENV\s+)?(\w+)\s*=\s*(?:"([^"]+)"|'([^']+)'|([^"\s]+))`)
 	matches := assignment.FindAllStringSubmatch(p.content, -1)
 	for _, match := range matches {
-		key := match[2]
-		value := match[3]
-		envs[key] = strings.Trim(value, "\"'")
+		if len(match) >= 4 {
+			key := match[1]
+			value := strings.TrimSpace(match[2] + match[3] + match[4])
+			envs[key] = value
+		}
 	}
 	return envs
 }
