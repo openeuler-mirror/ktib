@@ -111,7 +111,7 @@ func sortContainers(containers []container.Container) ([]containerReport, error)
 			ID:      c.ID[:10],
 			Names:   containerName,
 			LayerID: c.LayerID,
-			ImageID: c.ImageID[:10],
+			ImageID: c.ImageID,
 			Created: units.HumanDuration(time.Since(c.Created)) + " ago",
 		})
 	}
