@@ -198,7 +198,7 @@ func (r *ForbidTags) Test(directives map[string][]DfDirective) *[]Rule {
 		if fromDirective, ok := fromDirectiveInterface.(*FromDirective); ok {
 			image := fromDirective.ImageName
 			if image == "scratch" {
-				continue
+				return nil
 			}
 			tag := fromDirective.ImageTag
 			if contains(r.ForbiddenTags, tag) {
@@ -206,6 +206,8 @@ func (r *ForbidTags) Test(directives map[string][]DfDirective) *[]Rule {
 					fmt.Sprintf("The FROM statements should be changed using an image with a fixed tag or without any of the following tags: %s",
 						strings.Join(r.ForbiddenTags, ", ")),
 					r.Type, fromDirective.Content)
+			} else {
+				return nil
 			}
 		}
 	}
@@ -491,12 +493,12 @@ func (fs *ForbidSecrets) Test(dockerfileStatements map[string][]DfDirective) *[]
 	addStatements := dockerfileStatements["add"]
 	copyStatements := dockerfileStatements["copy"]
 	for _, statement := range append(addStatements, copyStatements...) {
-		var statementInterface interface{} = statement
-		switch directive := statementInterface.(type) {
-		case AddDirective:
-			sources := directive.Source
-			isForbidden, pattern := fs.isForbiddenPattern(sources)
-			if isForbidden && !fs.isWhitelistedPattern(sources) {
+		switch statement.GetType() {
+		case ADD:
+			addDirective := statement.Get()
+			sources := addDirective["source"]
+			isForbidden, pattern := fs.isForbiddenPattern(sources.(string))
+			if isForbidden && !fs.isWhitelistedPattern(sources.(string)) {
 				fs.TestResult.AddResult(
 					fmt.Sprintf("Forbidden file matching pattern \"%s\" is added into the image.", pattern),
 					"The ADD statement should be changed or removed. Secrets should be provisioned using a safer and stateless way (Vault, Kubernetes secrets) instead.",
@@ -504,10 +506,11 @@ func (fs *ForbidSecrets) Test(dockerfileStatements map[string][]DfDirective) *[]
 					statement.Get()["raw_content"].(string),
 				)
 			}
-		case CopyDirective:
-			sources := directive.Source
-			isForbidden, pattern := fs.isForbiddenPattern(sources)
-			if isForbidden && !fs.isWhitelistedPattern(sources) {
+		case COPY:
+			copyDirective := statement.Get()
+			sources := copyDirective["source"]
+			isForbidden, pattern := fs.isForbiddenPattern(sources.(string))
+			if isForbidden && !fs.isWhitelistedPattern(sources.(string)) {
 				fs.TestResult.AddResult(
 					fmt.Sprintf("Forbidden file matching pattern \"%s\" is added into the image.", pattern),
 					"The COPY statement should be changed or removed. Secrets should be provisioned using a safer and stateless way (Vault, Kubernetes secrets) instead.",

@@ -319,7 +319,6 @@ func TestForbidRoot_Test(t *testing.T) {
 	}
 }
 
-// todo: 以下三个有test没写完
 func TestNewForbidPrivilegedPorts(t *testing.T) {
 	enabled := false
 	testForbidPrivilegedPorts := NewForbidPrivilegedPorts(enabled)
@@ -331,6 +330,55 @@ func TestNewForbidPrivilegedPorts(t *testing.T) {
 	}
 }
 
+func TestForbidPrivilegedPorts_Test(t *testing.T) {
+	testCases := []struct {
+		name        string
+		directives  map[string][]DfDirective
+		expectedRes *[]Rule
+	}{
+		{
+			name: "ForbidPrivilegedPorts 1024",
+			directives: map[string][]DfDirective{
+				"expose": {
+					&ExposeDirective{
+						Content: "1024",
+						Ports:   []string{"1024"},
+					},
+				},
+			},
+			expectedRes: &[]Rule{
+				{
+					Type:        FORBID_PRIVILEGED_PORTS,
+					Details:     "The container exposes a privileged port: 1024. Privileged ports require the application which uses it to run as root.",
+					Mitigations: "Change the configuration for the application to bind on a port greater than 1024, and change the Dockerfile to reflect this modification.",
+					Statement:   []string{"1024"},
+				},
+			},
+		},
+		{
+			name: "ForbidPrivilegedPorts 8080",
+			directives: map[string][]DfDirective{
+				"expose": {
+					&ExposeDirective{
+						Content: "8080",
+						Ports:   []string{"8080"},
+					},
+				},
+			},
+			expectedRes: nil,
+		},
+	}
+	fpr := NewForbidPrivilegedPorts(true)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			res := fpr.Test(tc.directives)
+			if !reflect.DeepEqual(res, tc.expectedRes) {
+				t.Errorf("Expected %v, got %v", tc.expectedRes, res)
+			}
+		})
+	}
+}
+
 func TestNewForbidPackages(t *testing.T) {
 	testPackages := []string{"make", "iputils"}
 	testNewForbidPackages := NewForbidPackages(testPackages)
@@ -339,6 +387,91 @@ func TestNewForbidPackages(t *testing.T) {
 	}
 	if !reflect.DeepEqual(testNewForbidPackages.ForbiddenPackages, testPackages) {
 		t.Errorf("Expected ForbidPackages to be %v, got %v", testPackages, testNewForbidPackages.ForbiddenPackages)
+	}
+}
+
+func TestNewForbidPackages_Test(t *testing.T) {
+	testCases := []struct {
+		name        string
+		directives  map[string][]DfDirective
+		expectedRes *[]Rule
+	}{
+		{
+			name: "Forbidden package found in RUN/CMD/ENTRYPOINT",
+			directives: map[string][]DfDirective{
+				"run": {
+					&RunDirective{
+						Type:    RUN,
+						Content: "RUN apt-get install -y forbidden_package",
+					},
+				},
+				"entrypoint": {
+					&EntrypointDirective{
+						Type:    ENTRYPOINT,
+						Content: "ENTRYPOINT [\"forbidden_package\"]",
+					},
+				},
+				"cmd": {
+					&CmdDirective{
+						Type:    CMD,
+						Content: "CMD [\"forbidden_package\"]",
+					},
+				},
+			},
+			expectedRes: &[]Rule{
+				{
+					Type:        FORBID_PACKAGES,
+					Details:     "Forbidden package \"forbidden_package\" is installed or used.",
+					Mitigations: "The RUN/CMD/ENTRYPOINT statement should be reviewed and package \"forbidden_package\" should be removed unless absolutely necessary.",
+					Statement:   []string{"ENTRYPOINT [\"forbidden_package\"]"},
+				},
+				{
+					Type:        FORBID_PACKAGES,
+					Details:     "Forbidden package \"forbidden_package\" is installed or used.",
+					Mitigations: "The RUN/CMD/ENTRYPOINT statement should be reviewed and package \"forbidden_package\" should be removed unless absolutely necessary.",
+					Statement:   []string{"RUN apt-get install -y forbidden_package"},
+				},
+				{
+					Type:        FORBID_PACKAGES,
+					Details:     "Forbidden package \"forbidden_package\" is installed or used.",
+					Mitigations: "The RUN/CMD/ENTRYPOINT statement should be reviewed and package \"forbidden_package\" should be removed unless absolutely necessary.",
+					Statement:   []string{"CMD [\"forbidden_package\"]"},
+				},
+			},
+		},
+		{
+			name: "Forbidden package not found in RUN/CMD/ENTRYPOINT",
+			directives: map[string][]DfDirective{
+				"run": {
+					&RunDirective{
+						Type:    RUN,
+						Content: "RUN apt-get install -y package",
+					},
+				},
+				"entrypoint": {
+					&EntrypointDirective{
+						Type:    ENTRYPOINT,
+						Content: "ENTRYPOINT [\"package\"]",
+					},
+				},
+				"cmd": {
+					&CmdDirective{
+						Type:    CMD,
+						Content: "CMD [\"package\"]",
+					},
+				},
+			},
+			expectedRes: nil,
+		},
+	}
+	fpt := NewForbidPackages([]string{"forbidden_package"})
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			res := fpt.Test(tc.directives)
+			if !reflect.DeepEqual(res, tc.expectedRes) {
+				t.Errorf("Expected %v, got %v", tc.expectedRes, res)
+			}
+		})
 	}
 }
 
@@ -354,5 +487,88 @@ func TestNewForbidSecrets(t *testing.T) {
 	}
 	if !reflect.DeepEqual(testNewForbidSecrets.allowedPatterns, allowedPatterns) {
 		t.Errorf("Expected allowedPatterns to be %v, got %v", allowedPatterns, testNewForbidSecrets.allowedPatterns)
+	}
+}
+
+func TestNewForbidSecrets_Test(t *testing.T) {
+	testCases := []struct {
+		name        string
+		directives  map[string][]DfDirective
+		expectedRes *[]Rule
+	}{
+		{
+			name: "Forbidden Secrets not found in ADD/COPY",
+			directives: map[string][]DfDirective{
+				"add": {
+					&AddDirective{
+						Type:        ADD,
+						Content:     "testsrc1 testdes1",
+						Source:      "testsrc1",
+						Destination: "testdes1",
+					},
+				},
+				"copy": {
+					&CopyDirective{
+						Type:        COPY,
+						Content:     "testsrc2 testdes2",
+						Source:      "testsrc2",
+						Destination: "testdes2",
+					},
+				},
+			},
+			expectedRes: nil,
+		},
+		{
+			name: "Forbidden Secrets found in ADD/COPY",
+			directives: map[string][]DfDirective{
+				"add": {
+					&AddDirective{
+						Type:        ADD,
+						Content:     "secret testdes1",
+						Source:      "secret",
+						Destination: "testdes1",
+					},
+				},
+				"copy": {
+					&CopyDirective{
+						Type:        COPY,
+						Content:     "secret testdes2",
+						Source:      "secret",
+						Destination: "testdes2",
+					},
+				},
+			},
+			expectedRes: &[]Rule{
+				{
+					Type:        FORBID_SECRETS,
+					Details:     "Forbidden file matching pattern \"secret\" is added into the image.",
+					Mitigations: "The ADD statement should be changed or removed. Secrets should be provisioned using a safer and stateless way (Vault, Kubernetes secrets) instead.",
+					Statement:   []string{"secret testdes1"},
+				},
+				{
+					Type:        FORBID_SECRETS,
+					Details:     "Forbidden file matching pattern \"secret\" is added into the image.",
+					Mitigations: "The COPY statement should be changed or removed. Secrets should be provisioned using a safer and stateless way (Vault, Kubernetes secrets) instead.",
+					Statement:   []string{"secret testdes2"},
+				},
+			},
+		},
+	}
+	fs := NewForbidSecrets([]string{"secret"}, []string{"allow"})
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			res := fs.Test(tc.directives)
+			if !reflect.DeepEqual(res, tc.expectedRes) {
+				t.Errorf("Expected %v, got %v", tc.expectedRes, res)
+			}
+		})
+	}
+}
+
+func TestNewForbidSecrets_Details(t *testing.T) {
+	testFsd := NewForbidSecrets([]string{"secret"}, []string{"allow"})
+	expected := "The following patterns are forbidden: secret.\nThe following patterns are whitelisted: allow"
+	if testFsd.Details() != expected {
+		t.Errorf("Expected %s, got %s", expected, testFsd.Details())
 	}
 }

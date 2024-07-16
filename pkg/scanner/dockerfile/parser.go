@@ -54,6 +54,7 @@ type ParseResult struct {
 	Directives  map[string][]DfDirective `json:"directives"`
 }
 
+
 type DockerfileVisitor struct {
 	Dockerfile *Dockerfile
 }
