@@ -134,10 +134,10 @@ func runDefaultConfig(outputFileName string) error {
     - vim-minimal
     - procps-ng
     - passwd
-network: "NETWORKING=yes\nHOSTNAME=localhost.localdomain\n"
-infra: "container"
+network: 
+    networking: yes
+    hostname: localhost.localdomain
 locale: "%_install_langs en_US.UTF-8"
-machine-id: ""
 `
 	data := []byte(yamlContent)
 	err := ioutil.WriteFile(outputFileName, data, 0644)
