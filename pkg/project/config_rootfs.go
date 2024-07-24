@@ -42,7 +42,9 @@ var unnecessaryFiles = []string{
 
 func ConfigureRootfs(target string, config Config) error {
 	//rootfs network configuration
-	networkConfig := config.Network
+	network := config.Network.NETWORKING
+	hostname := config.Network.HOSTNAME
+	networkConfig := fmt.Sprintf("NETWORKING=%s\nHOSTNAME=%s\n", network, hostname)
 	networkFilePath := filepath.Join(target, "/etc/sysconfig/network")
 	err := ioutil.WriteFile(networkFilePath, []byte(networkConfig), 0644)
 	if err != nil {
@@ -50,14 +52,14 @@ func ConfigureRootfs(target string, config Config) error {
 	}
 
 	// set DNF infra variable to container for compatibility with KylinOS
-	infraConfig := config.Infra
+	infraConfig := "container"
 	infraFilePath := filepath.Join(target, "/etc/dnf/vars/infra")
 	err = ioutil.WriteFile(infraFilePath, []byte(infraConfig), 0644)
 	if err != nil {
 		return fmt.Errorf("error writing infra configuration: %v", err)
 	}
 
-	// install only en_US.UTF-8 locale files, see
+	// Control which language environments are installed by default for RPM software packages during installation see
 	// https://fedoraproject.org/wiki/Changes/Glibc_locale_subpackaging for details
 	localeConfig := config.Locale
 	localeFilePath := filepath.Join(target, "/etc/rpm/macros.image-language-conf")
@@ -67,7 +69,7 @@ func ConfigureRootfs(target string, config Config) error {
 	}
 
 	// force each container to have a unique machine-id
-	machineId := config.MachineID
+	machineId := ""
 	machineIDFilePath := filepath.Join(target, "/etc/machine-id")
 	err = ioutil.WriteFile(machineIDFilePath, []byte(machineId), 0644)
 	if err != nil {

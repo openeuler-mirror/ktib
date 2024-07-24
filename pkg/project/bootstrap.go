@@ -13,8 +13,8 @@ package project
 
 import (
 	"fmt"
-
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
 	"text/template"
@@ -35,10 +35,11 @@ type Config struct {
 	Packages struct {
 		InstallPkgs []string `yaml:"install_pkgs"`
 	} `yaml:"packages"`
-	Network   string `yaml:"network"`
-	Infra     string `yaml:"infra"`
-	Locale    string `yaml:"locale"`
-	MachineID string `yaml:"machine-id"`
+	Network struct {
+		NETWORKING string `yaml:"networking"`
+		HOSTNAME   string `yaml:"hostname"`
+	} `yaml:"network"`
+	Locale string `yaml:"locale"`
 }
 
 func NewBootstrap(dir string) *Bootstrap {
@@ -74,11 +75,11 @@ func (b *Bootstrap) InitWorkDir(types, config string) {
 		//Install different installation packages base to config.yml
 		data, err := ioutil.ReadFile(config)
 		if err != nil {
-			fmt.Printf("Failed to read config file: %v\n", err)
+			log.Fatalf("Failed to read config file: %v", err)
 		}
 		var config Config
 		if err := yaml.Unmarshal(data, &config); err != nil {
-			fmt.Printf("Failed to parse config file: %v\n", err)
+			log.Fatalf("Failed to parsing YAML: %v", err)
 		}
 		packages := config.Packages.InstallPkgs
 		InstallPackages(yumConfig, target, packages...)
