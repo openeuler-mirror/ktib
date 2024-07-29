@@ -100,18 +100,18 @@ func NewFromDirective(rawContent string) *FromDirective {
 		Content: rawContent,
 	}
 	// 解析 rawContent 字符串,提取各个属性
-	parts := strings.Fields(rawContent)
-	if len(parts) >= 1 {
-		if strings.Contains(parts[0], "/") {
-			// 包含 registry 信息
-			registry, imageName := parts[0], parts[1]
-			directive.Registry = registry
-			directive.ImageName = imageName
-		} else {
-			// 没有 registry 信息
-			imageName := parts[0]
-			directive.ImageName = imageName
-		}
+	parts := strings.Split(rawContent, "/")
+	switch len(parts) {
+	case 3:
+		directive.Registry = parts[0]
+		directive.ImageName = parts[2]
+	case 2:
+		directive.Registry = parts[0]
+		directive.ImageName = parts[1]
+	case 1:
+		directive.ImageName = parts[0]
+	default:
+		fmt.Errorf("invalid format for from rawContent: %s", rawContent)
 	}
 
 	// 进一步解析 imageName 部分,提取 tag、platform 等信息
