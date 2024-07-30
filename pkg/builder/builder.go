@@ -27,7 +27,7 @@ import (
 
 	"gitee.com/openeuler/ktib/pkg/options"
 	cpier "github.com/containers/image/v5/copy"
-	"github.com/containers/image/v5/docker/reference"
+	//"github.com/containers/image/v5/docker/reference"
 	"github.com/containers/image/v5/signature"
 	"github.com/containers/image/v5/transports/alltransports"
 	"github.com/containers/image/v5/types"
@@ -41,10 +41,11 @@ import (
 )
 
 const (
-	stateFile        = "ktib.json"
-	specFile         = "config.json"
-	defaultTransport = "containers-storage:"
-	defaultruntime   = "runc"
+	stateFile            = "ktib.json"
+	specFile             = "config.json"
+	defaultTransport     = "containers-storage:"
+	defaultruntime       = "runc"
+	defaultNullImageName = "none"
 )
 
 type Builder struct {
@@ -238,6 +239,11 @@ func (b *Builder) SetMessage(args string) {
 }
 
 func (b *Builder) Remove() error {
+	// If the submitted image name exists, the container will be removed early
+	if !b.Store.Exists(b.ContainerID) {
+		return nil
+	}
+
 	if err := b.Store.DeleteContainer(b.ContainerID); err != nil {
 		logrus.Error(fmt.Sprintf("delete builder failed: %s", err))
 		return err
@@ -282,15 +288,10 @@ func (b *Builder) Commit(exportTo string) error {
 		importFrom = "scratch"
 	}
 	// set transport to containers-storage:
-	exportTo = defaultTransport + exportTo
-	exportRef, err := alltransports.ParseImageName(exportTo)
+	transportName := defaultTransport + exportTo
+	exportRef, err := alltransports.ParseImageName(transportName)
 	if err != nil {
 		return err
-	}
-
-	exportName := exportRef.DockerReference().String()
-	if b.Store.Exists(exportName) {
-		return errors.New(fmt.Sprintf("The image %s is exists.", exportName))
 	}
 
 	ops := &cpier.Options{}
@@ -352,13 +353,37 @@ func (b *Builder) Commit(exportTo string) error {
 		if num != -1 {
 			logrus.Infof("apply diff %s successfully", containerLayer)
 		}
-		nname := []string{exportName}
+
+		referceName := defaultNullImageName
+		removeOldImage := false
+		if exportTo != defaultNullImageName {
+			referceName = exportRef.DockerReference().String()
+		}
+		logrus.Infof("export name is %s", referceName)
+		if err, isRemove := b.verifyCommitTag(referceName); err != nil {
+			return err
+		} else {
+			removeOldImage = isRemove
+		}
+
+		nname := []string{referceName}
 		imageOptions := &storage.ImageOptions{
 			Digest: digest.Digest(""),
 		}
 		nwImage, err := b.Store.CreateImage("", nname, destLayer.ID, "", imageOptions)
 		if err != nil {
+			logrus.Errorf("fail to create new image at store: %w", err)
 			return err
+		}
+		if removeOldImage {
+			if err := b.Store.DeleteContainer(b.ContainerID); err != nil {
+				logrus.Errorf("fail to remove builder %s of %w", b.ContainerID, err)
+				return err
+			}
+			if _, err := b.Store.DeleteImage(b.FromImageID, true); err != nil {
+				logrus.Errorf("fail to remove rename image of %s", b.FromImageID)
+				return err
+			}
 		}
 		logrus.Infof("create new image %s successful", nwImage.ID)
 		return nil
@@ -378,6 +403,24 @@ func (b *Builder) Commit(exportTo string) error {
 	return nil
 }
 
+func (b *Builder) verifyCommitTag(name string) (error, bool) {
+	isRemove := false
+	if b.Store.Exists(name) {
+		epImg, err := b.Store.Image(name)
+		b.FromImageID = epImg.ID
+		if err != nil {
+			return err, isRemove
+		}
+		logrus.Infof("begin to delete reuse image tag: %s", epImg.ID)
+		if err := b.Store.RemoveNames(epImg.ID, []string{name}); err != nil {
+			logrus.Errorf("fail to remove reuse image tag: %w", err)
+			return err, isRemove
+		}
+		isRemove = true
+	}
+	return nil, isRemove
+}
+
 func (b *Builder) SetWorkdir(args string) {
 	b.Workdir = args
 }
@@ -392,10 +435,8 @@ func (b *Builder) Add(dest string, source []string, extract bool) error {
 	} else {
 		dest = filepath.Join(mountPoint, b.Workdir, dest)
 	}
-	def, err := os.Stat(dest)
-	if err != nil {
-		return err
-	}
+	def, _ := os.Stat(dest)
+
 	archiver := archive.NewDefaultArchiver()
 	for _, src := range source {
 		srf, err := os.Stat(src)
@@ -441,6 +482,10 @@ func (b *Builder) Run(args []string, ops options.RUNOption) error {
 	g, err := generate.New("linux")
 	if err != nil {
 		return err
+	}
+	// Currently, the cni component is not supported to create container networks, so the host network is still used.
+	if err = g.RemoveLinuxNamespace("network"); err != nil {
+		return fmt.Errorf("error removing network namespace for run", err)
 	}
 	if err := b.Mount(""); err != nil {
 		return err
@@ -528,6 +573,7 @@ func (b *Builder) SetLabel(containerID string, labels map[string]string) error {
 	fmt.Printf("成功为容器 %s 设置标签: %v\n", containerID, labels)
 	return nil
 }
+
 func BuildDockerfiles(store storage.Store, op *options.BuildOptions, dockerfile ...string) error {
 	var lineContinuation = regexp.MustCompile(`\\\s*\n`)
 	if len(dockerfile) == 0 {
@@ -626,12 +672,9 @@ func (b *Executor) BuildStep(name, expression string) error {
 		}
 		b.builders = builders
 	case "ADD", "COPY":
-		tmp := strings.SplitN(arguments, " ", 2)
-		if len(tmp) != 2 {
-			return fmt.Errorf("Invalid %s format", arguments)
-		}
-		source := strings.Split(tmp[0], " ")
-		dest := strings.Trim(tmp[1], " \t")
+		tmp := strings.Split(arguments, " ")
+		source := tmp[:len(tmp)-1]
+		dest := tmp[len(tmp)-1]
 		var isADD bool
 		if instruction == "ADD" {
 			isADD = true
@@ -659,19 +702,7 @@ func (b *Executor) BuildStep(name, expression string) error {
 }
 
 func (b *Executor) BuildCommit(op *options.BuildOptions) error {
-	imageNameref, err := reference.ParseNormalizedNamed(op.Tags)
-	if err != nil {
-		return err
-	}
-	if b.builders.Store.Exists(imageNameref.String()) {
-		im, _ := b.builders.Store.Image(imageNameref.String())
-		_, err := b.builders.Store.DeleteImage(im.ID, true)
-		if err != nil {
-			return err
-		}
-	}
-
-	err = b.builders.Commit(op.Tags)
+	err := b.builders.Commit(op.Tags)
 	if err != nil {
 		return errors.New(fmt.Sprintf("error commit container to images: %s", err))
 	}
