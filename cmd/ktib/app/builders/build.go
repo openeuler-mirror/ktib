@@ -34,7 +34,7 @@ func BUILDCmd() *cobra.Command {
 	}
 	flags := cmd.Flags()
 	flags.StringArrayVarP(&op.File, "file", "f", []string{""}, "Name of the Dockerfile (Default is 'PATH/Dockerfile')")
-	flags.StringVarP(&op.Tags, "tag", "t", "string", "tagged name to apply to the built image")
+	flags.StringVarP(&op.Tags, "tag", "t", "none", "tagged name to apply to the build image")
 	return cmd
 }
 
