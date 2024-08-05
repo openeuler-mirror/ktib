@@ -27,6 +27,7 @@ import (
 
 	"gitee.com/openeuler/ktib/pkg/options"
 	cpier "github.com/containers/image/v5/copy"
+	v5manifest "github.com/containers/image/v5/manifest"
 	//"github.com/containers/image/v5/docker/reference"
 	"github.com/containers/image/v5/signature"
 	"github.com/containers/image/v5/transports/alltransports"
@@ -62,7 +63,9 @@ type Builder struct {
 	Cmd         string
 	Env         []string
 	Message     string
+	Manifest    v1.Manifest
 	OCIv1       v1.Image
+	DockerV2    v5manifest.Schema2Image
 	Workdir     string
 	out         io.Writer
 }
@@ -375,6 +378,25 @@ func (b *Builder) Commit(exportTo string) error {
 			logrus.Errorf("fail to create new image at store: %w", err)
 			return err
 		}
+
+		// generate manifest info and setBigData to new images
+		items, err := b.generateManifests(nwImage.ID)
+
+		// the manifest and instance.json information from builderBigData, write it to the new image
+		for _, item := range items {
+			var data []byte
+			data, err = b.builderBigData(b.ContainerID, item)
+			if err != nil {
+				return fmt.Errorf("error copying data item %q: %w", item, err)
+			}
+			logrus.Infof("the id is %s , and the data is %s", item, data)
+			err := b.Store.SetImageBigData(nwImage.ID, item, data, v5manifest.Digest)
+			if err != nil {
+				return fmt.Errorf("error copying data item %q", item, err)
+			}
+			logrus.Debugf("copied data item %q to %q", item, nwImage.ID)
+		}
+
 		if removeOldImage {
 			if err := b.Store.DeleteContainer(b.ContainerID); err != nil {
 				logrus.Errorf("fail to remove builder %s of %w", b.ContainerID, err)
@@ -401,6 +423,67 @@ func (b *Builder) Commit(exportTo string) error {
 		return err
 	}
 	return nil
+}
+
+// generate the manifest message and write it to BigData of builder
+func (b *Builder) generateManifests(id string) ([]string, error) {
+	// keys include sha256:imageID、 manifest-sha256:imageDigestID、manifest.
+	// digest of manifest-sha256:imageDigestID and manifest is sha256:imageDigestID, and content is consistent with the image-spec
+	// digest of sha256:imageID is self, and content is Schema2Image
+	bigDatas := []storage.ContainerBigDataOption{}
+	bigDataName := []string{}
+	// about opencontainer image-spec manifest from builder
+	imageSpecManifestData, err := json.Marshal(b.Manifest)
+	if err != nil {
+		logrus.Errorf("")
+		return nil, err
+	}
+	// about docker image spec from builder
+	schema2ImageData, err := json.Marshal(b.DockerV2)
+	if err != nil {
+		logrus.Errorf("")
+		return nil, err
+	}
+	manifestDigest := digest.FromBytes(schema2ImageData)
+	// generate bigDataOption
+	bigDatas = append(bigDatas, storage.ContainerBigDataOption{
+		Key:  storage.ImageDigestManifestBigDataNamePrefix,
+		Data: imageSpecManifestData,
+	})
+	bigDatas = append(bigDatas, storage.ContainerBigDataOption{
+		Key:  storage.ImageDigestManifestBigDataNamePrefix + "-" + manifestDigest.String(),
+		Data: imageSpecManifestData,
+	})
+	bigDatas = append(bigDatas, storage.ContainerBigDataOption{
+		Key:  digest.NewDigestFromHex(digest.Canonical.String(), id).String(),
+		Data: schema2ImageData,
+	})
+	for _, data := range bigDatas {
+		b.setBuilderBigData(b.ID, data.Key, data.Data)
+		bigDataName = append(bigDataName, data.Key)
+	}
+
+	return bigDataName, nil
+}
+
+func (b Builder) setBuilderBigData(id, key string, data []byte) error {
+	err := b.Store.SetContainerBigData(id, key, data)
+	if err != nil {
+		logrus.Errorf("Failed to set BigData to builder: %w", err)
+		return err
+	}
+	return nil
+}
+
+// builderBigData retrieves a (possibly large) chunk of named data
+// associated with an container.
+func (b *Builder) builderBigData(id, key string) ([]byte, error) {
+	data, err := b.Store.ContainerBigData(id, key)
+	if err != nil {
+		logrus.Errorf("Failed to get BigData from builder: %w", err)
+		return nil, err
+	}
+	return data, nil
 }
 
 func (b *Builder) verifyCommitTag(name string) (error, bool) {
