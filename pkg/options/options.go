@@ -58,6 +58,10 @@ type RemoveOption struct {
 	Volumes bool
 }
 
+type SaveOption struct {
+	Output string
+}
+
 type BuildersOption struct {
 	Json bool
 }

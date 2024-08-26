@@ -26,7 +26,7 @@ func newCmdImage() *cobra.Command {
 		},
 		Args: cobra.NoArgs,
 	}
-	//TODO: 需要补充images inspect
+	//TODO: 需要补充images save load
 	cmd.AddCommand(
 		imagetool.ImageListCmd(),
 		imagetool.LoginCmd(),
@@ -34,6 +34,7 @@ func newCmdImage() *cobra.Command {
 		imagetool.PullCmd(),
 		imagetool.PushCmd(),
 		imagetool.RemoveImagesCmd(),
+		imagetool.SaveCmd(),
 		imagetool.TAGCmd())
 	return cmd
 }
