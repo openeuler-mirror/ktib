@@ -194,3 +194,51 @@ func setRegistriesConfPath(systemContext *types.SystemContext) {
 		return
 	}
 }
+
+func (im *ImageManager) SaveImage(args []string, store storage.Store, tarFileName string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("save failed, image name or ID cannot be empty")
+	}
+	if !store.Exists(args[0]) {
+		err := errors.New("image not exist")
+		return err
+	}
+	var output io.Writer
+	if tarFileName == "" {
+		// 如果没有指定文件名，使用标准输出
+		output = os.Stdout
+	} else {
+		// 否则，打开指定的文件
+		file, err := os.Create(filepath.Clean(tarFileName))
+		if err != nil {
+			return fmt.Errorf("创建文件失败: %w", err)
+		}
+		defer file.Close()
+		output = file
+	}
+
+	// 创建一个新的tar.Writer
+	tarWriter := tar.NewWriter(output)
+	defer tarWriter.Close()
+
+	// todo: 将镜像数据写入tar文件, imageData是镜像层layer.tar、manifest.json、repositories、imageID.json组成
+	imageData := getimageData(args[0])
+
+	header := &tar.Header{
+		Name:    tarFileName,
+		Size:    int64(len(imageData)),
+		Mode:    0600,
+		ModTime: time.Now(),
+	}
+	if err := tarWriter.WriteHeader(header); err != nil {
+		return fmt.Errorf("写入tar头失败: %w", err)
+	}
+	if _, err := tarWriter.Write(imageData); err != nil {
+		return fmt.Errorf("写入tar数据失败: %w", err)
+	}
+	return nil
+}
+
+func getimageData(s string) []byte {
+	return nil
+}
