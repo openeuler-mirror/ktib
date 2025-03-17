@@ -31,7 +31,6 @@ var unnecessaryFiles = []string{
 	//***************sln***************************
 	"/sbin/sln",
 	//*****************ldconfig********************
-	"/etc/ld.so.cache",
 	"/var/cache/ldconfig",
 	//**********other unnecessary files************8
 	"/var/lib/dnf",
