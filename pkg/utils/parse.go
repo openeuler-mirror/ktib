@@ -70,8 +70,16 @@ func sortImages(imgs []imagemanager.Image) ([]imageReport, error) {
 	for _, img := range imgs {
 		size := img.Size
 		createdAgo := units.HumanDuration(time.Since(img.OriImage.Created)) + " ago"
-		topLayer := img.OriImage.TopLayer[0:10]
-		imgID := img.OriImage.ID[:10]
+		// 确保不会超出切片的边界
+		topLayer := img.OriImage.TopLayer
+		if len(topLayer) > 10 {
+			topLayer = topLayer[:10]
+		}
+
+		imgID := img.OriImage.ID
+		if len(imgID) > 10 {
+			imgID = imgID[:10]
+		}
 
 		if len(img.OriImage.Names) > 0 {
 			for _, name := range append(img.OriImage.Names, unknownState)[:len(img.OriImage.Names)] {

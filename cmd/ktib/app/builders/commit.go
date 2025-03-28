@@ -39,13 +39,13 @@ func commit(cmd *cobra.Command, args []string) error {
 func COMMITCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "commit [builderID/builderName] [newImageName]",
-		Short: "从容器的更改创建新映像",
+		Short: "Create a new image from builder changes",
 		Args:  cobra.RangeArgs(1, 2),
-		Long: `'commit'命令从builder的更改创建新镜像。它需要一个builderID或builderName作为第一个参数，
-还可以选择提供一个新的镜像名称作为第二个参数。
+		Long: `The 'commit' command creates a new image from changes made to the builder. It requires a builderID or builderName as the first parameter,
+You can also choose to provide a new image name as the second parameter.
 
-示例:
-  # 从构建器的更改创建新映像
+Example:
+  #Create a new image from changes in the builder
   ktib builders commit builderID/builderName newImageName`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return commit(cmd, args)

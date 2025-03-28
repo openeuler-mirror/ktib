@@ -26,12 +26,12 @@ func LABELCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "label",
 		Args:  cobra.MinimumNArgs(2),
-		Short: "根据容器映像标签执行命令",
-		Long: `'label'命令在构建器上设置标签。第一个参数是构建器ID或名称,
-第二个参数是一个逗号分隔的键值对列表,表示要设置的标签。
+		Short: "Adding labels to builders",
+		Long: `The 'label' command sets labels on the builder. The first parameter is the builder ID or name,
+The second parameter is an equal sign separated list of key value pairs, representing the labels to be set.
 
-示例:
-  # 在构建器上设置单个标签
+Example:
+  #Set a single label on the builder
   ktib builders label builderID/builderName app=myapp`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return label(cmd, args, op)

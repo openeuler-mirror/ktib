@@ -44,24 +44,24 @@ func RUN(cmd *cobra.Command, args []string, option options.RUNOption) error {
 
 func RUNCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "run [builderID/builderName] [命令] [参数...]",
-		Short:   "在新容器中运行命令",
+		Use:     "run [flags...] [builderID/builderName] [cmds...]",
+		Short:   "Running commands in a new container",
 		Aliases: []string{"run-builder"},
 		Args:    cobra.MinimumNArgs(2),
-		Long: `'run'命令根据指定的构建器在新容器中运行命令。第一个参数是构建器ID或名称,剩余参数是要在容器中执行的命令和参数。
+		Long: `The 'run' command runs the command in a new container based on the specified builder. The first parameter is the builder ID or name, and the remaining parameters are the commands and parameters to be executed in the container.
 
-选项:
-  --runtime string   使用的容器运行时(默认为"runc")
-  --workdir string   容器内的工作目录(默认为"/")  
+flags:
+  --runtime string   The runtime of the container used (default to "runc")
+  --workdir string   The working directory inside the container (default to "/")
 
-示例:
-  # 根据指定的构建器在容器中运行命令
+  Example:
+  #Run commands in the container according to the specified builder
   ktib builders run builderID/builderName echo "Hello, World!"
 
-  # 使用特定运行时运行命令
+  #Run commands using specific runtime
   ktib builders run --runtime crun builderID/builderName echo "Hello, World!"
 
-  # 使用特定工作目录运行命令
+  #Run commands using a specific working directory
   ktib builders run --workdir /app builderID/builderName ./app-entrypoint.sh`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return RUN(cmd, args, runOption)
