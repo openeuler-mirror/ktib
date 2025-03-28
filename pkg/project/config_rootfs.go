@@ -152,7 +152,7 @@ func addCommandToScriptAndRun(target string) error {
 	}
 
 	//run chroot_script
-	cmd = exec.Command("sh", target, "/chroot_script.sh")
+	cmd = exec.Command("chroot", target, "/chroot_script.sh")
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("error chroot chroot_script.sh file: %v", err)
 	}
