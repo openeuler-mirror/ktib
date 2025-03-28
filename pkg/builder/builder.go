@@ -22,12 +22,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"gitee.com/openeuler/ktib/pkg/options"
 	cpier "github.com/containers/image/v5/copy"
-
+	v5manifest "github.com/containers/image/v5/manifest"
 	//"github.com/containers/image/v5/docker/reference"
 	"github.com/containers/image/v5/signature"
 	"github.com/containers/image/v5/transports/alltransports"
@@ -63,7 +62,9 @@ type Builder struct {
 	Cmd         string
 	Env         []string
 	Message     string
+	Manifest    v1.Manifest
 	OCIv1       v1.Image
+	DockerV2    v5manifest.Schema2Image
 	Workdir     string
 	out         io.Writer
 }
@@ -72,14 +73,6 @@ type BuilderOptions struct {
 	FromImage  string
 	Container  string
 	PullPolicy bool
-}
-
-type Executor struct {
-	store      storage.Store
-	contextDir string
-	builders   *Builder
-	out        io.Writer
-	err        io.Writer
 }
 
 func newBuidler(store storage.Store, options BuilderOptions) (*Builder, error) {
@@ -126,7 +119,6 @@ func newBuidler(store storage.Store, options BuilderOptions) (*Builder, error) {
 }
 
 func NewBuilder(store storage.Store, options BuilderOptions) (*Builder, error) {
-	// TODO 构造builder对象
 	return newBuidler(store, options)
 }
 
@@ -140,6 +132,7 @@ func FindBuilder(store storage.Store, name string) (*Builder, error) {
 		return nil, err
 	}
 	statefile := filepath.Join(cdir, stateFile)
+
 	buildstate, err := ioutil.ReadFile(statefile)
 	if err != nil && os.IsNotExist(err) {
 		return nil, err
@@ -180,14 +173,6 @@ func FindAllBuilders(store storage.Store) ([]*Builder, error) {
 		bl = append(bl, b)
 	}
 	return bl, nil
-}
-
-func (b *Builder) Copy(args []string) error {
-	return nil
-}
-
-func (b *Builder) Label(args []string) error {
-	return nil
 }
 
 func (b *Builder) Mount(label string) error {
@@ -238,12 +223,32 @@ func (b *Builder) SetMessage(args string) {
 	b.Message = args
 }
 
-func (b *Builder) Remove() error {
+func (b *Builder) Remove(op options.RemoveOption) error {
 	// If the submitted image name exists, the container will be removed early
 	if !b.Store.Exists(b.ContainerID) {
 		return nil
 	}
-
+	//b.Store.Unmount(b.ContainerID, op.Force)
+	if !op.Force {
+		timesMounted, err := b.Store.Mounted(b.ContainerID)
+		if err != nil {
+			if errors.Is(err, storage.ErrContainerUnknown) {
+				logrus.Infof("Storage for container %s already removed", b.ContainerID)
+				return nil
+			}
+			logrus.Warnf("Checking if container %q is mounted, attempting to delete: %v", b.ContainerID, err)
+		}
+		if timesMounted > 0 {
+			return fmt.Errorf("container %q is mounted and cannot be removed without using force: %w", b.ContainerID, err)
+		}
+	} else if _, err := b.Store.Unmount(b.ContainerID, true); err != nil {
+		if errors.Is(err, storage.ErrContainerUnknown) {
+			// Container again gone, no error
+			logrus.Infof("Storage for container %s already removed", b.Container)
+			return nil
+		}
+		logrus.Warnf("Unmounting container %q while attempting to delete storage: %v", b.ContainerID, err)
+	}
 	if err := b.Store.DeleteContainer(b.ContainerID); err != nil {
 		logrus.Error(fmt.Sprintf("delete builder failed: %s", err))
 		return err
@@ -293,7 +298,9 @@ func (b *Builder) Commit(exportTo string) error {
 	if err != nil {
 		return err
 	}
+
 	ops := &cpier.Options{}
+
 	// First need to determine whether there are changes in the builder's layers, if there are changes you need to
 	// merge the layers, no changes only need to copy the image.
 	if b.FromImageID != "" {
@@ -370,12 +377,31 @@ func (b *Builder) Commit(exportTo string) error {
 		}
 		nwImage, err := b.Store.CreateImage("", nname, destLayer.ID, "", imageOptions)
 		if err != nil {
-			logrus.Errorf("fail to create new image at store: %v", err)
+			logrus.Errorf("fail to create new image at store: %w", err)
 			return err
 		}
+
+		// generate manifest info and setBigData to new images
+		items, err := b.generateManifests(nwImage.ID)
+
+		// the manifest and instance.json information from builderBigData, write it to the new image
+		for _, item := range items {
+			var data []byte
+			data, err = b.builderBigData(b.ContainerID, item)
+			if err != nil {
+				return fmt.Errorf("error copying data item %q: %w", item, err)
+			}
+			logrus.Infof("the id is %s , and the data is %s", item, data)
+			err := b.Store.SetImageBigData(nwImage.ID, item, data, v5manifest.Digest)
+			if err != nil {
+				return fmt.Errorf("error copying data item %q", item, err)
+			}
+			logrus.Debugf("copied data item %q to %q", item, nwImage.ID)
+		}
+
 		if removeOldImage {
 			if err := b.Store.DeleteContainer(b.ContainerID); err != nil {
-				logrus.Errorf("fail to remove builder %s of %v", b.ContainerID, err)
+				logrus.Errorf("fail to remove builder %s of %w", b.ContainerID, err)
 				return err
 			}
 			if _, err := b.Store.DeleteImage(b.FromImageID, true); err != nil {
@@ -401,6 +427,68 @@ func (b *Builder) Commit(exportTo string) error {
 	return nil
 }
 
+// generate the manifest message and write it to BigData of builder
+func (b *Builder) generateManifests(id string) ([]string, error) {
+	// keys include sha256:imageID、 manifest-sha256:imageDigestID、manifest.
+	// digest of manifest-sha256:imageDigestID and manifest is sha256:imageDigestID, and content is consistent with the image-spec
+	// digest of sha256:imageID is self, and content is Schema2Image
+	bigDatas := []storage.ContainerBigDataOption{}
+	bigDataName := []string{}
+	// about opencontainer image-spec manifest from builder
+	imageSpecManifestData, err := json.Marshal(b.Manifest)
+	if err != nil {
+		logrus.Errorf("")
+		return nil, err
+	}
+	// about docker image spec from builder
+	schema2ImageData, err := json.Marshal(b.DockerV2)
+
+	if err != nil {
+		logrus.Errorf("")
+		return nil, err
+	}
+	manifestDigest := digest.FromBytes(schema2ImageData)
+	// generate bigDataOption
+	bigDatas = append(bigDatas, storage.ContainerBigDataOption{
+		Key:  storage.ImageDigestManifestBigDataNamePrefix,
+		Data: imageSpecManifestData,
+	})
+	bigDatas = append(bigDatas, storage.ContainerBigDataOption{
+		Key:  storage.ImageDigestManifestBigDataNamePrefix + "-" + manifestDigest.String(),
+		Data: imageSpecManifestData,
+	})
+	bigDatas = append(bigDatas, storage.ContainerBigDataOption{
+		Key:  digest.NewDigestFromHex(digest.Canonical.String(), id).String(),
+		Data: schema2ImageData,
+	})
+	for _, data := range bigDatas {
+		b.setBuilderBigData(b.ID, data.Key, data.Data)
+		bigDataName = append(bigDataName, data.Key)
+	}
+
+	return bigDataName, nil
+}
+
+func (b Builder) setBuilderBigData(id, key string, data []byte) error {
+	err := b.Store.SetContainerBigData(id, key, data)
+	if err != nil {
+		logrus.Errorf("Failed to set BigData to builder: %w", err)
+		return err
+	}
+	return nil
+}
+
+// builderBigData retrieves a (possibly large) chunk of named data
+// associated with an container.
+func (b *Builder) builderBigData(id, key string) ([]byte, error) {
+	data, err := b.Store.ContainerBigData(id, key)
+	if err != nil {
+		logrus.Errorf("Failed to get BigData from builder: %w", err)
+		return nil, err
+	}
+	return data, nil
+}
+
 func (b *Builder) verifyCommitTag(name string) (error, bool) {
 	isRemove := false
 	if b.Store.Exists(name) {
@@ -411,7 +499,7 @@ func (b *Builder) verifyCommitTag(name string) (error, bool) {
 		}
 		logrus.Infof("begin to delete reuse image tag: %s", epImg.ID)
 		if err := b.Store.RemoveNames(epImg.ID, []string{name}); err != nil {
-			logrus.Errorf("fail to remove reuse image tag: %v", err)
+			logrus.Errorf("fail to remove reuse image tag: %w", err)
 			return err, isRemove
 		}
 		isRemove = true
@@ -483,7 +571,7 @@ func (b *Builder) Run(args []string, ops options.RUNOption) error {
 	}
 	// Currently, the cni component is not supported to create container networks, so the host network is still used.
 	if err = g.RemoveLinuxNamespace("network"); err != nil {
-		return fmt.Errorf("error removing network namespace for run, %v", err)
+		return fmt.Errorf("error removing network namespace for run", err)
 	}
 	if err := b.Mount(""); err != nil {
 		return err
@@ -569,151 +657,5 @@ func (b *Builder) SetLabel(containerID string, labels map[string]string) error {
 	}
 
 	fmt.Printf("成功为容器 %s 设置标签: %v\n", containerID, labels)
-	return nil
-}
-
-func BuildDockerfiles(store storage.Store, op *options.BuildOptions, dockerfile ...string) error {
-	var lineContinuation = regexp.MustCompile(`\\\s*\n`)
-	if len(dockerfile) == 0 {
-		return errors.New("error building: no dockerfiles specified\n")
-	}
-	exec, err := NewExecutor(store, op)
-	if err != nil {
-		return fmt.Errorf("error creating build executor: %w", err)
-	}
-
-	for _, value := range dockerfile {
-		fileBytes, err := ioutil.ReadFile(value)
-		if err != nil {
-			return err
-		}
-		if len(fileBytes) == 0 {
-			return errors.New("Dockerfile cannot be empty")
-		}
-		var (
-			dockerfileContent = lineContinuation.ReplaceAllString(stripComments(fileBytes), "")
-			stepN             = 1
-		)
-		//Split into lines based on line breaks
-		for _, line := range strings.Split(dockerfileContent, "\n") {
-			//Remove spaces, tabs, and line breaks at the beginning and end of a line
-			line = strings.Trim(strings.Replace(line, "\t", " ", -1), " \t\r\n")
-			if len(line) == 0 {
-				continue
-			}
-			//Execute each step of construction
-			if err := exec.BuildStep(fmt.Sprintf("%d", stepN), line); err != nil {
-				if exec.builders != nil {
-					err := exec.builders.Remove()
-					if err != nil {
-						logrus.Errorf("failed to remove work-containers during the build images %v", err)
-					}
-					exec.builders = nil
-				}
-				return err
-			}
-			stepN += 1
-		}
-
-		if err := exec.BuildCommit(op); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func NewExecutor(store storage.Store, options *options.BuildOptions) (*Executor, error) {
-	exec := Executor{
-		store:      store,
-		contextDir: options.ContextDirectory,
-		out:        options.Out,
-		err:        options.Err,
-	}
-	if exec.err == nil {
-		exec.err = os.Stderr
-	}
-	if exec.out == nil {
-		exec.out = os.Stdout
-	}
-	return &exec, nil
-}
-
-// Remove all lines starting with '#' or empty spaces from the []byte
-func stripComments(raw []byte) string {
-	var (
-		out   []string
-		lines = strings.Split(string(raw), "\n")
-	)
-	for _, l := range lines {
-		//Filter out lines that start with "#" or are empty
-		if len(l) == 0 || l[0] == '#' {
-			continue
-		}
-		out = append(out, l)
-	}
-	return strings.Join(out, "\n")
-}
-
-func (b *Executor) BuildStep(name, expression string) error {
-	fmt.Fprintf(b.out, "Step %s : %s\n", name, expression)
-	tmp := strings.SplitN(expression, " ", 2)
-	if len(tmp) != 2 {
-		return fmt.Errorf("Invalid Dockerfile format")
-	}
-	instruction := strings.Trim(tmp[0], " ")
-	arguments := strings.Trim(tmp[1], " ")
-	switch instruction {
-	case "FROM":
-		option := BuilderOptions{
-			FromImage: arguments,
-		}
-		builders, err := NewBuilder(b.store, option)
-		if err != nil {
-			return errors.New(fmt.Sprintf("error creating build container: %s\n", err))
-		}
-		fmt.Printf("%s\n", builders.ContainerID)
-		if err := builders.Save(); err != nil {
-			return err
-		}
-		b.builders = builders
-	case "ADD", "COPY":
-		tmp := strings.Split(arguments, " ")
-		source := tmp[:len(tmp)-1]
-		dest := tmp[len(tmp)-1]
-		var isADD bool
-		if instruction == "ADD" {
-			isADD = true
-		}
-		err := b.builders.Add(dest, source, isADD)
-		if err != nil {
-			return errors.New(fmt.Sprintf("error adding or copying content to builder: %s", err))
-		}
-	case "RUN":
-		args := strings.Split(arguments, " ")
-		var ops options.RUNOption
-		if err := b.builders.Run(args, ops); err != nil {
-			return err
-		}
-	case "CMD":
-		b.builders.SetCmd(arguments)
-	default:
-		if b.builders != nil {
-			err := b.builders.Remove()
-			b.builders = nil
-			return fmt.Errorf("Unsupported Dockerfile directive: %s, %v\n", instruction, err)
-		}
-	}
-	return nil
-}
-
-func (b *Executor) BuildCommit(op *options.BuildOptions) error {
-	err := b.builders.Commit(op.Tags)
-	if err != nil {
-		return errors.New(fmt.Sprintf("error commit container to images: %s", err))
-	}
-	if b.builders != nil {
-		err = b.builders.Remove()
-		b.builders = nil
-	}
 	return nil
 }

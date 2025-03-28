@@ -12,6 +12,7 @@
 package options
 
 import (
+	"github.com/containers/image/v5/types"
 	"io"
 )
 
@@ -25,6 +26,7 @@ type ImagesOption struct {
 	Truncate bool
 	Json     bool
 	Format   string
+	Filter   []string
 }
 
 type LoginOption struct {
@@ -44,7 +46,15 @@ type PullOption struct {
 }
 
 type PushOption struct {
-	SignBy string
+	SignBy   string
+	Username string
+	Password string
+	Format   string
+	Insecure bool
+}
+
+type ImagePushReport struct {
+	ManifestDigest string
 }
 
 type RemoveOption struct {
@@ -58,23 +68,57 @@ type RemoveOption struct {
 	Volumes bool
 }
 
+type SaveOption struct {
+	Output            string
+	Format            string
+	MultiImageArchive bool
+}
+
+type LoadOption struct {
+	Input string
+}
+
+type ImageLoadReport struct {
+	Names []string
+}
+
+type ManifestCreateOptions struct {
+	All           bool
+	Amend         bool
+	SkipTLSVerify types.OptionalBool
+	Annotations   map[string]string
+}
+
+type ManifestAnnotateOptions struct {
+	Annotation  []string
+	Annotations map[string]string
+	Arch        string
+	Features    []string
+	OS          string
+	OSFeatures  []string
+	OSVersion   string
+}
+
+type ManifestAddOptions struct {
+	Insecure bool
+	Username string
+	Password string
+	ManifestAnnotateOptions
+}
+
 type BuildersOption struct {
 	Json bool
 }
 
 type BuildOptions struct {
-	File             []string
-	Tags             string
-	NoCache          bool
-	Rm               bool
-	ForceRm          bool
-	ContextDirectory string
-	Args             map[string]string
-	Log func(format string, args ...interface{})
-	In               io.Reader
-	Out              io.Writer
-	Err              io.Writer
-	OutputFormat     string
+	File    []string
+	Tags    []string
+	NoCache bool
+	Rm      bool
+	ForceRm bool
+	In      bool
+	Runtime string
+	Format  string
 }
 
 type FromOption struct {

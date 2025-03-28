@@ -1,29 +1,26 @@
-#   Copyright (c) 2023 KylinSoft Co., Ltd.
-#   Kylin trusted image builder(ktib) is licensed under Mulan PSL v2.
-#   You can use this software according to the terms and conditions of the Mulan PSL v2.
-#   You may obtain a copy of Mulan PSL v2 at:
-#            http://license.coscl.org.cn/MulanPSL2
-#   THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING
-#   BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-#   See the Mulan PSL v2 for more details.
-
 package imagemanager
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
-	"strings"
-
 	"gitee.com/openeuler/ktib/pkg/options"
+	types2 "gitee.com/openeuler/ktib/pkg/types"
 	"github.com/containers/common/libimage"
 	"github.com/containers/common/pkg/auth"
 	"github.com/containers/common/pkg/config"
+	cp "github.com/containers/image/v5/copy"
 	"github.com/containers/image/v5/docker/reference"
+	"github.com/containers/image/v5/manifest"
 	"github.com/containers/image/v5/types"
 	"github.com/containers/storage"
+	"github.com/opencontainers/go-digest"
+	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/sirupsen/logrus"
+	"os"
+	"strings"
 )
 
 type ImageManager struct {
@@ -47,26 +44,73 @@ func NewImageManager(store storage.Store) (*ImageManager, error) {
 	return imageManager, nil
 }
 
-func (im *ImageManager) ListImage(args []string, store storage.Store) ([]Image, error) {
-	var imageList []Image
-	image, err := store.Images()
+//func (im *ImageManager) ListImage(args []string, store storage.Store) ([]*Image, error) {
+//var imageList []*Image
+//image, err := store.Images()
+//if err != nil {
+//	return nil, err
+//}
+//for _, img := range image {
+//	size, err := store.ImageSize(img.ID)
+//	if err != nil {
+//		return nil, err
+//	}
+//	imageList = append(imageList, &Image{
+//		OriImage: img,
+//		Size:     size,
+//	})
+//}
+//return imageList, nil
+//}
+
+//func sortImages(images []*Image) []*Image {
+//	var filteredImages []*Image
+//
+//	for _, img := range images {
+//		// 如果没有名称，或者没有历史名称，并且是最近创建的，则认为是中间层
+//		if len(img.OriImage.Names) == 0 && len(img.OriImage.NamesHistory) == 0 {
+//			// 可以添加其他逻辑，例如检查创建时间
+//			continue // 跳过中间层镜像
+//		}
+//		filteredImages = append(filteredImages, img)
+//	}
+//
+//	return filteredImages
+//}
+
+func (im *ImageManager) ListImage(ops options.ImagesOption, store storage.Store, background context.Context) ([]*Image, error) {
+	listImagesOptions := &libimage.ListImagesOptions{
+		Filters:     ops.Filter,
+		SetListData: true,
+	}
+	listImagesOptions.Filters = append(listImagesOptions.Filters, "intermediate=false")
+	images, err := im.Manager.ListImages(background, nil, listImagesOptions)
 	if err != nil {
 		return nil, err
 	}
-	for _, img := range image {
-		size, err := store.ImageSize(img.ID)
+	var ktibImages []*Image
+	// 遍历获取到的镜像数据
+	for _, img := range images {
+		// 从存储中获取镜像的实际数据
+		storageImg := img.StorageImage()
+
+		size, err := store.ImageSize(img.ID())
 		if err != nil {
 			return nil, err
 		}
-		imageList = append(imageList, Image{
-			OriImage: img,
+
+		// 创建一个 Image 实例并填充数据
+		ktibImage := &Image{
+			OriImage: *storageImg, //storage.Image 直接赋值
 			Size:     size,
-		})
+		}
+
+		ktibImages = append(ktibImages, ktibImage)
 	}
-	return imageList, nil
+
+	return ktibImages, nil
 }
 
-// TODO: 以下函数需要重构到这里
 func (im *ImageManager) KtibLogin(ctx context.Context, lops *options.LoginOption, args []string, getLoginSet bool) error {
 	var loginOps *auth.LoginOptions
 	loginOps = &auth.LoginOptions{
@@ -118,17 +162,29 @@ func (im *ImageManager) Pull(imageName string) error {
 	return nil
 }
 
-func (im *ImageManager) Push(args []string) error {
+func (im *ImageManager) Push(ctx context.Context, source, destination string, op options.PushOption) (*options.ImagePushReport, error) {
 	runtime := im.Manager
 	pushOptions := &libimage.PushOptions{}
-	image := args[0]
-	destination := args[len(args)-1]
-	_, err := runtime.Push(context.Background(), image, destination, pushOptions)
-	if err != nil {
-		return err
+	pushOptions.Password = op.Password
+	pushOptions.Username = op.Username
+	pushOptions.SignBy = op.SignBy
+	pushOptions.Writer = os.Stderr
+	pushedManifestBytes, pushErr := runtime.Push(context.Background(), source, destination, pushOptions)
+	if pushErr == nil {
+		manifestDigest, err := manifest.Digest(pushedManifestBytes)
+		if err != nil {
+			return nil, err
+		}
+		return &options.ImagePushReport{ManifestDigest: manifestDigest.String()}, nil
 	}
-	fmt.Println("Successfully")
-	return nil
+	if _, err := im.Manager.LookupManifestList(source); err == nil {
+		pushedManifestString, err := im.ManifestPush(ctx, source, destination, op)
+		if err != nil {
+			return nil, err
+		}
+		return &options.ImagePushReport{ManifestDigest: pushedManifestString}, nil
+	}
+	return nil, pushErr
 }
 
 func (im *ImageManager) Remove(store storage.Store, images []string, op options.RemoveOption) error {
@@ -201,4 +257,227 @@ func setRegistriesConfPath(systemContext *types.SystemContext) {
 		systemContext.SystemRegistriesConfPath = envOverride
 		return
 	}
+}
+
+func (im *ImageManager) SaveImage(ctx context.Context, op options.SaveOption, tags []string, name string) error {
+	saveOptions := &libimage.SaveOptions{}
+	// 理论上saveOptions的如下标签应该基于saveOptions赋值，但是目前save不支持这些flags，所以先置为默认值
+	saveOptions.RemoveSignatures = true
+	saveOptions.DirForceCompress = false
+	saveOptions.OciAcceptUncompressedLayers = false
+	saveOptions.SignaturePolicyPath = ""
+
+	names := []string{name}
+	if op.MultiImageArchive {
+		names = append(names, tags...)
+	} else {
+		saveOptions.AdditionalTags = tags
+	}
+
+	return im.Manager.Save(ctx, names, op.Format, op.Output, saveOptions)
+}
+
+func (im *ImageManager) LoadImage(background context.Context, op options.LoadOption) (*options.ImageLoadReport, error) {
+	loadOptions := &libimage.LoadOptions{}
+	// 理论上应该从load的options里面赋值，但是目前不支持这些参数，暂时写成默认的
+	loadOptions.SignaturePolicyPath = ""
+	loadOptions.Writer = os.Stderr
+
+	loadedImages, err := im.Manager.Load(background, op.Input, loadOptions)
+	if err != nil {
+		return nil, err
+	}
+	return &options.ImageLoadReport{Names: loadedImages}, nil
+}
+
+func (im *ImageManager) ManifestCreate(ctx context.Context, name string, images []string, op options.ManifestCreateOptions) (string, error) {
+	if len(name) == 0 {
+		return "", errors.New("no name specified for creating a manifest list")
+	}
+
+	manifestList, err := im.Manager.CreateManifestList(name)
+	if err != nil {
+		if errors.Is(err, storage.ErrDuplicateName) && op.Amend {
+			amendList, amendErr := im.Manager.LookupManifestList(name)
+			if amendErr != nil {
+				return "", err
+			}
+			manifestList = amendList
+		} else {
+			return "", err
+		}
+	}
+
+	annotateOptions := &libimage.ManifestListAnnotateOptions{}
+	if len(op.Annotations) != 0 {
+		annotateOptions.Annotations = op.Annotations
+		if err := manifestList.AnnotateInstance("", annotateOptions); err != nil {
+			return "", err
+		}
+	}
+
+	addOptions := &libimage.ManifestListAddOptions{All: op.All}
+	for _, image := range images {
+		if _, err := manifestList.Add(ctx, image, addOptions); err != nil {
+			return "", err
+		}
+	}
+
+	return manifestList.ID(), nil
+}
+
+func (im *ImageManager) ManifestAnnotate(name string, image string, opts options.ManifestAnnotateOptions) (string, error) {
+	manifestList, err := im.Manager.LookupManifestList(name)
+	if err != nil {
+		return "", err
+	}
+	annotateOptions := &libimage.ManifestListAnnotateOptions{
+		Architecture: opts.Arch,
+		Features:     opts.Features,
+		OS:           opts.OS,
+		OSVersion:    opts.OSVersion,
+		Variant:      "",
+	}
+	if annotateOptions.Annotations, err = types2.MergeAnnotations(opts.Annotations, opts.Annotation); err != nil {
+		return "", err
+	}
+	instanceDigest, err := digest.Parse(image)
+	if err != nil {
+		return "", fmt.Errorf(`invalid image digest "%s": %v`, image, err)
+	}
+	if err := manifestList.AnnotateInstance(instanceDigest, annotateOptions); err != nil {
+		return "", err
+	}
+	return manifestList.ID(), nil
+}
+
+func (im *ImageManager) ManifestPush(background context.Context, name string, destination string, op options.PushOption) (string, error) {
+	manifestList, err := im.Manager.LookupManifestList(name)
+	if err != nil {
+		return "", err
+	}
+	pushOptions := &libimage.ManifestListPushOptions{}
+	compressionLevel := 0
+	// todo：以下参数暂不支持，赋为默认值，后续按实际情况补充参数
+	pushOptions.AuthFilePath = auth.GetDefaultAuthFile()
+	pushOptions.CertDirPath = ""
+	pushOptions.ImageListSelection = cp.CopyAllImages
+	pushOptions.RemoveSignatures = false
+	pushOptions.Signers = nil
+	pushOptions.SignPassphrase = ""
+	pushOptions.SignBySigstorePrivateKeyFile = ""
+	pushOptions.SignSigstorePrivateKeyPassphrase = nil
+	pushOptions.CompressionLevel = &compressionLevel
+	pushOptions.AddCompression = []string{}
+	pushOptions.ForceCompressionFormat = false
+
+	// 已支持参数赋值
+	pushOptions.Password = op.Password
+	pushOptions.Username = op.Username
+	pushOptions.SignBy = op.SignBy
+	pushOptions.Writer = os.Stderr
+	var manifestType string
+	if op.Format != "" {
+		switch op.Format {
+		case "oci":
+			manifestType = v1.MediaTypeImageManifest
+		case "v2s2", "docker":
+			manifestType = manifest.DockerV2Schema2MediaType
+		default:
+			return "", fmt.Errorf("unknown format %q. Choose one of the supported formats: 'oci' or 'v2s2'", op.Format)
+		}
+	}
+	pushOptions.ManifestMIMEType = manifestType
+	pushOptions.InsecureSkipTLSVerify = types.NewOptionalBool(op.Insecure)
+
+	manDigest, err := manifestList.Push(background, destination, pushOptions)
+	if err != nil {
+		return "", err
+	}
+	return manDigest.String(), err
+}
+
+func (im *ImageManager) ManifestAdd(background context.Context, manifestName string, images []string, opts options.ManifestAddOptions) (string, error) {
+	if len(images) < 1 {
+		return "", errors.New("manifest add requires at least one image")
+	}
+
+	manifestList, err := im.Manager.LookupManifestList(manifestName)
+	if err != nil {
+		return "", err
+	}
+
+	addOptions := &libimage.ManifestListAddOptions{
+		All:                   false,
+		AuthFilePath:          "",
+		CertDirPath:           "",
+		InsecureSkipTLSVerify: types.NewOptionalBool(opts.Insecure),
+		Username:              opts.Username,
+		Password:              opts.Password,
+	}
+
+	for _, image := range images {
+		instanceDigest, err := manifestList.Add(background, image, addOptions)
+		if err != nil {
+			return "", err
+		}
+
+		annotateOptions := &libimage.ManifestListAnnotateOptions{
+			Architecture: opts.Arch,
+			Features:     opts.Features,
+			OS:           opts.OS,
+			OSVersion:    opts.OSVersion,
+			Variant:      "",
+		}
+		if len(opts.Annotation) != 0 {
+			annotations := make(map[string]string)
+			for _, annotationSpec := range opts.Annotation {
+				spec := strings.SplitN(annotationSpec, "=", 2)
+				if len(spec) != 2 {
+					return "", fmt.Errorf("no value given for annotation %q", spec[0])
+				}
+				annotations[spec[0]] = spec[1]
+			}
+			opts.Annotations = Join(opts.Annotations, annotations)
+		}
+		annotateOptions.Annotations = opts.Annotations
+
+		if err := manifestList.AnnotateInstance(instanceDigest, annotateOptions); err != nil {
+			return "", err
+		}
+	}
+
+	return manifestList.ID(), nil
+}
+
+func (im *ImageManager) ManifestInspect(name string) ([]byte, error) {
+	manifestList, err := im.Manager.LookupManifestList(name)
+	if err != nil {
+		return nil, err
+	}
+	schema2List, err := manifestList.Inspect()
+	if err != nil {
+		return nil, err
+	}
+
+	rawSchema2List, err := json.Marshal(schema2List)
+	if err != nil {
+		return nil, err
+	}
+
+	var b bytes.Buffer
+	if err := json.Indent(&b, rawSchema2List, "", "    "); err != nil {
+		return nil, fmt.Errorf("rendering manifest %s for display: %w", name, err)
+	}
+	return b.Bytes(), nil
+}
+
+func Join(base map[string]string, override map[string]string) map[string]string {
+	if len(base) == 0 {
+		return override
+	}
+	for k, v := range override {
+		base[k] = v
+	}
+	return base
 }

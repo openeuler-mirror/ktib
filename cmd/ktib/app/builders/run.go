@@ -44,24 +44,25 @@ func RUN(cmd *cobra.Command, args []string, option options.RUNOption) error {
 
 func RUNCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "run [flags...] [builderID/builderName] [cmds...]",
-		Short:   "Running commands in a new container",
+		Use:     "run [builderID/builderName] [命令] [参数...]",
+		Short:   "Run commands in a new builder",
 		Aliases: []string{"run-builder"},
 		Args:    cobra.MinimumNArgs(2),
-		Long: `The 'run' command runs the command in a new container based on the specified builder. The first parameter is the builder ID or name, and the remaining parameters are the commands and parameters to be executed in the container.
+		Long: `The 'run' command runs the command in a new container based on the specified builder.
+The first parameter is the builder ID or name, and the remaining parameters are the commands and parameters to be executed in the container.
 
-flags:
-  --runtime string   The runtime of the container used (default to "runc")
-  --workdir string   The working directory inside the container (default to "/")
+options:
+  --runtime string   Container runtime used (default is "runc")
+  --workdir string   Working directory inside the container (default is "/")
 
-  Example:
-  #Run commands in the container according to the specified builder
+examples:
+  # Run commands in the container based on the specified builder
   ktib builders run builderID/builderName echo "Hello, World!"
 
-  #Run commands using specific runtime
+  # Run commands using a specific runtime
   ktib builders run --runtime crun builderID/builderName echo "Hello, World!"
 
-  #Run commands using a specific working directory
+  # Run commands using a specific working directory
   ktib builders run --workdir /app builderID/builderName ./app-entrypoint.sh`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return RUN(cmd, args, runOption)

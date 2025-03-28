@@ -12,14 +12,11 @@
 package builders
 
 import (
-	"errors"
-	"fmt"
-	"path/filepath"
-
-	"gitee.com/openeuler/ktib/pkg/builder"
 	"gitee.com/openeuler/ktib/pkg/options"
 	"gitee.com/openeuler/ktib/pkg/utils"
+	"github.com/containers/buildah/imagebuildah"
 	"github.com/spf13/cobra"
+	"golang.org/x/net/context"
 )
 
 func BUILDCmd() *cobra.Command {
@@ -27,45 +24,51 @@ func BUILDCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "build",
 		Short: "build an image",
-		Args:  cobra.MaximumNArgs(1),
+		Long: `The 'build' command builds a Docker image from a Dockerfile.
+		
+		Example:
+		 ktib builders build ./context-dir --file Dockerfile --tag my-image:latest
+		 ktib builders build -f Dockerfile -t my-image:latest . 
+		
+		Arguments:
+		 context-dir: The directory containing the Dockerfile and other files needed for the build.`,
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return build(cmd, args, &op)
 		},
 	}
 	flags := cmd.Flags()
-	flags.StringArrayVarP(&op.File, "file", "f", []string{""}, "Name of the Dockerfile (Default is 'PATH/Dockerfile')")
-	flags.StringVarP(&op.Tags, "tag", "t", "none", "tagged name to apply to the build image")
+	flags.StringArrayVarP(&op.File, "file", "f", nil, "Name of the Dockerfile (Default is 'PATH/Dockerfile')")
+	flags.StringSliceVarP(&op.Tags, "tag", "t", nil, "tagged name to apply to the built image")
+	flags.BoolVar(&op.NoCache, "no-cache", false, "Do not use cache when building the image. (default false)")
+	flags.BoolVar(&op.Rm, "rm", true, "Remove intermediate containers after a successful build. (default true)")
+	flags.BoolVar(&op.ForceRm, "force-rm", true, "Always remove intermediate containers. (default true)")
+	flags.BoolVar(&op.In, "stdin", false, "pass stdin into builders. (default false)")
+	flags.StringVar(&op.Runtime, "runtime", "runc", "Runtime to use for build")
+	flags.StringVar(&op.Format, "format", utils.DefaultFormat(), "`format` of the built image's manifest and metadata. Use BUILDAH_FORMAT environment variable to override.")
 	return cmd
 }
 
 func build(cmd *cobra.Command, args []string, op *options.BuildOptions) error {
-	var dockerfiles []string
-	dockerfiles = op.File
-	contextDir := ""
-	if len(args) > 0 {
-		absDir, err := filepath.Abs(args[0])
-		if err != nil {
-			return errors.New("error determining path to directory")
-		}
-		contextDir = absDir
-	} else {
-		return errors.New("no context directory specified")
-	}
-
-	if contextDir == "" {
-		return errors.New("no context directory specified, and no dockerfile specified")
-	}
-
-	if len(dockerfiles) == 0 {
-		dockerfiles = append(dockerfiles, filepath.Join(contextDir, "Dockerfile"))
+	dockerfiles, contextDir, err := utils.ResolveDockerfiles(op, args)
+	if err != nil {
+		return err
 	}
 
 	store, err := utils.GetStore(cmd)
 	if err != nil {
 		return err
 	}
-	if err := builder.BuildDockerfiles(store, op, dockerfiles...); err != nil {
-		fmt.Printf("error build dockerfiles %v\n", err)
+
+	ctx := context.Background()
+	buildahBuildOptions, err := utils.ParseBuildOptions(cmd, op, contextDir)
+	if err != nil {
+		return err
+	}
+
+	_, _, err = imagebuildah.BuildDockerfiles(ctx, store, *buildahBuildOptions, dockerfiles...)
+	if err != nil {
+		return err
 	}
 	return nil
 }

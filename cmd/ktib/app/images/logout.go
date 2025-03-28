@@ -29,12 +29,21 @@ func logout(cmd *cobra.Command, args []string) error {
 	}
 	return imageManager.Logout(args)
 }
-
 func LogoutCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "logout",
+		Use:   "logout [registry]",
 		Short: "Log out from a Docker registry",
-		Args:  cobra.MaximumNArgs(1),
+		Long: `'logout' command logs out from the specified Docker registry.
+
+If no argument is provided, it will log out from the default Docker registry.
+
+Example:
+  # Log out from the default Docker registry
+  ktib logout
+
+  # Log out from a specific registry
+  ktib logout registry.example.com`,
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 1 {
 				return errors.New("you can only logout of one warehouse at a time")

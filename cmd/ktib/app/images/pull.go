@@ -29,13 +29,21 @@ func Pull(cmd *cobra.Command, imageName string, ops options.PullOption) error {
 	}
 	return imageManager.Pull(imageName)
 }
-
 func PullCmd() *cobra.Command {
 	var op options.PullOption
 	cmd := &cobra.Command{
 		Use:   "pull",
 		Short: "Pull an images or a repository from a registry",
-		Args:  cobra.ExactArgs(1),
+		Long: `'pull' command downloads an image or repository from a Docker registry.
+You need to specify the name of the image or repository you want to pull.
+
+Example:
+  # Pull an image from the default registry
+  ktib pull my-image:latest
+
+  # Pull an image specifying a platform
+  ktib pull my-image:latest --platform linux/amd64`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			op.Remote = args[0]
 			return Pull(cmd, op.Remote, op)
@@ -45,3 +53,4 @@ func PullCmd() *cobra.Command {
 	flags.StringVar(&op.Platform, "platform", "", "Set platform if server is multi-platform capable")
 	return cmd
 }
+

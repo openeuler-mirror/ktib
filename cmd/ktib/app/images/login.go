@@ -22,8 +22,24 @@ import (
 func LoginCmd() *cobra.Command {
 	var op options.LoginOption
 	cmd := &cobra.Command{
-		Use:   "login",
+		Use:   "login [serverAddress]",
 		Short: "Log in to a Docker registry",
+		Long: `'login' command authenticates a user with a Docker registry.
+You can specify the server address as an argument or use the default Docker registry.
+
+Example:
+  # Log in to the default Docker registry
+  ktib login -u username -p password
+
+  # Log in to a custom Docker registry
+  ktib login registry.example.com -u username -p password
+
+Options:
+  --password, -p       Password for the registry login
+  --password-stdin     Take the password from stdin
+  --username, -u       Username for the registry login
+  --tls-verify         Require HTTPS and verify certificates
+  --get-login          Return the current login user for the registry`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 0 {
 				op.ServerAddress = args[0]

@@ -13,8 +13,14 @@ package utils
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"github.com/containers/buildah/define"
+	"io"
 	"os"
+	"path/filepath"
+	"strings"
+	"syscall"
 	"time"
 
 	"gitee.com/openeuler/ktib/pkg/imagemanager"
@@ -24,7 +30,6 @@ import (
 	"gitee.com/openeuler/ktib/pkg/builder"
 	ktype "gitee.com/openeuler/ktib/pkg/types"
 	"github.com/containers/common/pkg/report"
-	"github.com/containers/image/v5/types"
 	container "github.com/containers/storage"
 	"github.com/docker/go-units"
 	"github.com/opencontainers/go-digest"
@@ -65,12 +70,11 @@ func humanSize(s int64) string {
 	}
 }
 
-func sortImages(imgs []imagemanager.Image) ([]imageReport, error) {
+func sortImages(imgs []*imagemanager.Image) ([]imageReport, error) {
 	var imgReport []imageReport
 	for _, img := range imgs {
 		size := img.Size
 		createdAgo := units.HumanDuration(time.Since(img.OriImage.Created)) + " ago"
-		// 确保不会超出切片的边界
 		topLayer := img.OriImage.TopLayer
 		if len(topLayer) > 10 {
 			topLayer = topLayer[:10]
@@ -126,7 +130,7 @@ func sortContainers(containers []container.Container) ([]containerReport, error)
 	return containerReports, nil
 }
 
-func FormatImages(images []imagemanager.Image, ops options.ImagesOption) error {
+func FormatImages(images []*imagemanager.Image, ops options.ImagesOption) error {
 	//TODO 参考docker以image table format 输出
 	defaultImageTableFormat := "table {{.Name}} {{.ID}}  {{.Size}} {{.TopLayer}}   {{.Created}}"
 	defaultImageTableFormatWithDigest := "table {{.Name}} {{.ID}} {{.Digest}} {{.Size}} {{.TopLayer}} {{.Created}}"
@@ -170,12 +174,7 @@ func FormatImages(images []imagemanager.Image, ops options.ImagesOption) error {
 	return nil
 }
 
-func SystemContextFromFlagSet(c *cobra.Command) (types.SystemContext, error) {
-
-	return types.SystemContext{}, nil
-}
-
-func JsonFormatImages(images []imagemanager.Image, ops options.ImagesOption) error {
+func JsonFormatImages(images []*imagemanager.Image, ops options.ImagesOption) error {
 	var jsonImages []ktype.JsonImage
 
 	for _, image := range images {
@@ -266,6 +265,122 @@ func JsonFormatMountInfo(builders []*builder.Builder) error {
 	return nil
 }
 
-func FormatMountInfo(builders []*builder.Builder) error {
-	return nil
+func ParseBuildOptions(cmd *cobra.Command, flags *options.BuildOptions, contextDir string) (*define.BuildOptions, error) {
+	var output string
+	var tags []string
+	if cmd.Flag("tag").Changed {
+		tags = flags.Tags
+		if len(tags) > 0 {
+			output = tags[0]
+			tags = tags[1:]
+		}
+	}
+	var stdout, stderr, reporter *os.File
+	stdout = os.Stdout
+	stderr = os.Stderr
+	reporter = os.Stderr
+	var stdin io.Reader
+	if flags.In {
+		stdin = os.Stdin
+	}
+	var format string
+	flags.Format = strings.ToLower(flags.Format)
+	switch {
+	case strings.HasPrefix(flags.Format, define.OCI):
+		format = define.OCIv1ImageManifest
+	case strings.HasPrefix(flags.Format, define.DOCKER):
+		format = define.Dockerv2ImageManifest
+	default:
+		return nil, fmt.Errorf("unrecognized image type %q", flags.Format)
+	}
+	var uselayers bool
+	uselayers = true
+	opts := define.BuildOptions{
+		AdditionalTags:          tags,
+		ContextDirectory:        contextDir,
+		Err:                     stderr,
+		ForceRmIntermediateCtrs: flags.ForceRm,
+		Layers:                  uselayers,
+		NoCache:                 flags.NoCache,
+		RemoveIntermediateCtrs:  flags.Rm,
+		Runtime:                 flags.Runtime,
+		ReportWriter:            reporter,
+		In:                      stdin,
+		Out:                     stdout,
+		Output:                  output,
+		OutputFormat:            format,
+	}
+	return &opts, nil
+}
+
+func ResolveDockerfiles(op *options.BuildOptions, args []string) ([]string, string, error) {
+	var dockerfiles []string
+
+	// 收集 Dockerfile 路径
+	for _, f := range op.File {
+		if f == "-" {
+			if len(args) == 0 {
+				args = append(args, "-")
+			} else {
+				dockerfiles = append(dockerfiles, "/dev/stdin")
+			}
+		} else if op.File != nil {
+			dockerfiles = append(dockerfiles, f)
+		}
+	}
+
+	var contextDir string
+	if len(args) > 0 {
+		// 排除 `-`，确保上下文目录是有效的
+		if args[0] != "-" {
+			absDir, err := filepath.Abs(args[0])
+			if err != nil {
+				return nil, "", fmt.Errorf("determining path to directory %q: %w", args[0], err)
+			}
+			contextDir = absDir
+		} else {
+			// 如果 args 只有 `-`，可以选择使用当前工作目录
+			var err error
+			contextDir, err = os.Getwd()
+			if err != nil {
+				return nil, "", fmt.Errorf("determining current working directory: %w", err)
+			}
+		}
+	} else {
+		for i := range dockerfiles {
+			absFile, err := filepath.Abs(dockerfiles[i])
+			if err != nil {
+				return nil, "", fmt.Errorf("determining path to file %q: %w", dockerfiles[i], err)
+			}
+			contextDir = filepath.Dir(absFile)
+			dockerfiles[i] = absFile
+			break
+		}
+	}
+
+	if contextDir == "" {
+		return nil, "", errors.New("no context directory and no Containerfile specified")
+	}
+	if !IsDir(contextDir) {
+		return nil, "", fmt.Errorf("context must be a directory: %q", contextDir)
+	}
+
+	if len(dockerfiles) == 0 {
+		switch {
+		case FileExists(filepath.Join(contextDir, "Containerfile")):
+			if IsDir(filepath.Join(contextDir, "Containerfile")) {
+				return nil, "", fmt.Errorf("containerfile: cannot be path or directory")
+			}
+			dockerfiles = append(dockerfiles, filepath.Join(contextDir, "Containerfile"))
+		case FileExists(filepath.Join(contextDir, "Dockerfile")):
+			if IsDir(filepath.Join(contextDir, "Dockerfile")) {
+				return nil, "", fmt.Errorf("dockerfile: cannot be path or directory")
+			}
+			dockerfiles = append(dockerfiles, filepath.Join(contextDir, "Dockerfile"))
+		default:
+			return nil, "", fmt.Errorf("no Containerfile or Dockerfile specified or found in context directory, %s: %w", contextDir, syscall.ENOENT)
+		}
+	}
+
+	return dockerfiles, contextDir, nil
 }

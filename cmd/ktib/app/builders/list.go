@@ -38,6 +38,13 @@ func ListBuildersCmd() *cobra.Command {
 		Use:     "list",
 		Aliases: []string{"ls"},
 		Short:   "List working builder and their base images",
+		Long: `The 'list' command lists all the current builders and their associated base images.
+
+Example:
+  ktib builders list --json
+
+Options:
+  --json   Output the list in JSON format.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return listBuilders(cmd, args, op)
 		},
