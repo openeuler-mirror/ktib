@@ -12,15 +12,18 @@
 package images
 
 import (
-	"errors"
-
+	"context"
 	"gitee.com/openeuler/ktib/pkg/imagemanager"
 	"gitee.com/openeuler/ktib/pkg/options"
 	"gitee.com/openeuler/ktib/pkg/utils"
 	"github.com/spf13/cobra"
 )
 
+var op options.PushOption
+
 func push(cmd *cobra.Command, args []string) error {
+	source := args[0]
+	destination := args[len(args)-1]
 	store, err := utils.GetStore(cmd)
 	if err != nil {
 		return err
@@ -29,21 +32,23 @@ func push(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	return imageManager.Push(args)
+	_, err = imageManager.Push(context.Background(), source, destination, op)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 func PushCmd() *cobra.Command {
-	var op options.PushOption
+
 	cmd := &cobra.Command{
 		Use:   "push",
 		Short: "Push an images or a repository to a registry",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) < 1 {
-				return errors.New("requires exactly 1 argument")
-			}
-			return push(cmd, args)
-		},
+		Args:  cobra.MinimumNArgs(1),
+		RunE:  push,
 	}
 	flags := cmd.Flags()
 	flags.StringVar(&op.SignBy, "sign-by", "", "If non-empty, asks for a signature to be added during the copy, and specifies a key ID.")
+	flags.StringVar(&op.Password, "password", "", "The password to use for authentication.")
+	flags.StringVar(&op.Username, "username", "", "The username to use for authentication.")
 	return cmd
 }

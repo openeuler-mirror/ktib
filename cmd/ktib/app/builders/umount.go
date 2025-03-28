@@ -50,11 +50,21 @@ func umount(cmd *cobra.Command, args []string) error {
 	}
 	return nil
 }
-
 func UMOUNTCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
-		Use: "umount",
+		Use:   "umount [builderID/builderName...]",
+		Short: "Unmount specified builders",
+		Long: `'umount' command unmounts the specified builder containers.
+If no arguments are provided, it will unmount all builders.
+If one or more builder IDs or names are provided, it will only unmount those specified builders.
+
+Example:
+  # Unmount all builders
+  ktib builders umount
+
+  # Unmount specified builders
+  ktib builders umount builderID1 builderName2`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return umount(cmd, args)
 		},

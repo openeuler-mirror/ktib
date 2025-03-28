@@ -37,6 +37,12 @@ func newCmdScan() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "scan",
 		Short: "Run this command in order to scan dockerfile",
+		Long: `The scan command is used to scan Dockerfile files, rpm packages, and source code files
+scanning options need to be specified (such as dockerfile-audit, trivy)
+
+example:
+# Static compliance scanning
+  ktib scan dockerfile-audit --dockerfile /root/Dockerfile --json`,
 	}
 	cmd.AddCommand(
 		newSubCmdDokcerfile(),
@@ -44,7 +50,7 @@ func newCmdScan() *cobra.Command {
 
 	// TODO 添加flag参数
 	flag := cmd.Flags()
-	flag.StringVarP(&option.Driver, "diver", "d", "dockerfile-audit", "support dockerfile-audit|trivy|kysec-CIS")
+	flag.StringVarP(&option.Driver, "diver", "d", "dockerfile-audit", "used for static compliance scanning of Dockerfile files")
 	return cmd
 }
 
@@ -120,7 +126,6 @@ func GetArgumentsCmd(args o.Arguments) {
 			}
 
 			if args.GenerateReport {
-				//暂不支持
 				log.Println("Preparing to generate PDF report.")
 				err := report.GenerateLatexReport(*policy, results, args.ReportTemplate, args.ReportName)
 				if err != nil {

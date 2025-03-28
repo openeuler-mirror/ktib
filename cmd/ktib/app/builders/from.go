@@ -60,6 +60,13 @@ func FROMCmd() *cobra.Command {
 		Use:     "from",
 		Aliases: []string{"from", "create-builder"},
 		Short:   "Create a new builder based on an image.",
+		Long: `The 'from' command creates a new builder container based on a specified image.
+
+Example:
+  ktib builders from kylin-server:latest --name my-builder --pullpolicy=true --uidmap 1000:2000 --subuidmap 1000:1000
+
+Arguments:
+  image-name: The name of the image to base the new builder on.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return from(cmd, args, &op)
 		},
@@ -67,11 +74,11 @@ func FROMCmd() *cobra.Command {
 	flags := cmd.Flags()
 	flags.StringVarP(&op.Names, "-name", "n", "", "Image name")
 	flags.BoolVar(&op.PullPolicy, "pullpolicy", false, "Force images pull policy set ifnotparent")
-	flags.BoolVar(&op.HostUIDMap, "-hostuidmap", false, "Force host UID map")
-	flags.BoolVar(&op.HostGIDMap, "-hostgidmap", false, "Force host GID map")
-	flags.StringVar(&op.UIDMap, "-uidmap", "", "UID map")
-	flags.StringVar(&op.GIDMap, "-gidmap", "", "GID map")
-	flags.StringVar(&op.SubUIDMap, "-subuidmap", "", "subuid UID map for a user")
-	flags.StringVar(&op.SubGIDMap, "-subgidmap", "", "subgid GID map for a group")
+	flags.BoolVar(&op.HostUIDMap, "hostuidmap", false, "Force host UID map")
+	flags.BoolVar(&op.HostGIDMap, "hostgidmap", false, "Force host GID map")
+	flags.StringVar(&op.UIDMap, "uidmap", "", "UID map")
+	flags.StringVar(&op.GIDMap, "gidmap", "", "GID map")
+	flags.StringVar(&op.SubUIDMap, "subuidmap", "", "subuid UID map for a user")
+	flags.StringVar(&op.SubGIDMap, "subgidmap", "", "subgid GID map for a group")
 	return cmd
 }

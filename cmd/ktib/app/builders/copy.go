@@ -36,7 +36,7 @@ example:
 		Args: cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) < 3 {
-				return errors.New("Three parameters are required")
+				return errors.New("three parameters are required")
 			}
 			name := args[0]
 			args = tail(args)
@@ -45,7 +45,6 @@ example:
 			return Cp(cmd, name, destination, source)
 		},
 	}
-
 	return cmd
 }
 

@@ -24,10 +24,22 @@ func ADDCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add",
 		Short: "Example: add builder source destination",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		Long: `The 'add' command allows you to add content to a specified builder.
+
+Example:
+  ktib builders add myBuilder file1.txt /path/to/source /path/to/destination
+
+Arguments:
+  name        The name of the builder to which content will be added.
+  source      The source files or directories to be added.
+  destination The destination where the content will be placed.`,
+		Args: func(cmd *cobra.Command, args []string) error {
 			if len(args) < 3 {
-				return errors.New("requires exactly 3 arguments")
+				return errors.New("requires at least 3 arguments: builder-name source and destination")
 			}
+			return nil
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
 			name := args[0]
 			args = tail(args)
 			source := args[:len(args)-1]

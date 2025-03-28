@@ -12,20 +12,14 @@
 package images
 
 import (
-	"errors"
-
 	"gitee.com/openeuler/ktib/pkg/imagemanager"
 	"gitee.com/openeuler/ktib/pkg/options"
 	utils2 "gitee.com/openeuler/ktib/pkg/utils"
 	"github.com/spf13/cobra"
+	"golang.org/x/net/context"
 )
 
-// TODO: 当dockerfile制作镜像时，超过一层会panic；commit已有镜像名也会panic
 func imageList(cmd *cobra.Command, args []string, ops options.ImagesOption) error {
-	// 判断args长度, 按照docker设计两个imageName时会报错
-	if len(args) > 1 {
-		return errors.New("\"docker images\" requires at most 1 argument")
-	}
 	store, err := utils2.GetStore(cmd)
 	if err != nil {
 		return err
@@ -34,7 +28,7 @@ func imageList(cmd *cobra.Command, args []string, ops options.ImagesOption) erro
 	if err != nil {
 		return err
 	}
-	images, err := imageManager.ListImage(args, store)
+	images, err := imageManager.ListImage(ops, store, context.Background())
 	if err != nil {
 		return err
 	}
@@ -49,6 +43,7 @@ func ImageListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List images",
+		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return imageList(cmd, args, op)
 		},
