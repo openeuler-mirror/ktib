@@ -50,22 +50,22 @@ func MOUNTCmd() *cobra.Command {
 	var op options.MountOption
 	cmd := &cobra.Command{
 		Use:   "mount [builderID/builderName...]",
-		Short: "挂载指定的构建器",
-		Long: `'mount'命令用于挂载指定的构建器容器。
-如果不传入任何参数,则会挂载所有的构建器。
-如果传入一个或多个构建器的ID或名称,则只会挂载指定的构建器。
+		Short: "Mount the specified builder",
+		Long: `The 'mount' command is used to mount the specified builder container.
+If no parameters are passed in, all builders will be mounted.
+If one or more builder IDs or names are passed in, only the specified builder will be mounted.
 
-示例:
-  # 挂载所有构建器
+Example:
+  #Mount all builders
   ktib builders mount
 
-  # 挂载指定的构建器
+  #Mount the specified builder
   ktib builders mount builderID1 builderName2`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return mount(cmd, args, &op)
 		},
 	}
 	flags := cmd.Flags()
-	flags.BoolVar(&op.Json, "json", false, "以JSON格式输出挂载信息")
+	flags.BoolVar(&op.Json, "json", false, "Output mounting information in JSON format")
 	return cmd
 }

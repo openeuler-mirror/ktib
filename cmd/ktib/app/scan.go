@@ -120,6 +120,7 @@ func GetArgumentsCmd(args o.Arguments) {
 			}
 
 			if args.GenerateReport {
+				//暂不支持
 				log.Println("Preparing to generate PDF report.")
 				err := report.GenerateLatexReport(*policy, results, args.ReportTemplate, args.ReportName)
 				if err != nil {

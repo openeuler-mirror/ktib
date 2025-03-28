@@ -27,7 +27,7 @@ import (
 
 	"gitee.com/openeuler/ktib/pkg/options"
 	cpier "github.com/containers/image/v5/copy"
-	v5manifest "github.com/containers/image/v5/manifest"
+
 	//"github.com/containers/image/v5/docker/reference"
 	"github.com/containers/image/v5/signature"
 	"github.com/containers/image/v5/transports/alltransports"
@@ -63,9 +63,7 @@ type Builder struct {
 	Cmd         string
 	Env         []string
 	Message     string
-	Manifest    v1.Manifest
 	OCIv1       v1.Image
-	DockerV2    v5manifest.Schema2Image
 	Workdir     string
 	out         io.Writer
 }
@@ -142,7 +140,6 @@ func FindBuilder(store storage.Store, name string) (*Builder, error) {
 		return nil, err
 	}
 	statefile := filepath.Join(cdir, stateFile)
-
 	buildstate, err := ioutil.ReadFile(statefile)
 	if err != nil && os.IsNotExist(err) {
 		return nil, err
@@ -296,9 +293,7 @@ func (b *Builder) Commit(exportTo string) error {
 	if err != nil {
 		return err
 	}
-
 	ops := &cpier.Options{}
-
 	// First need to determine whether there are changes in the builder's layers, if there are changes you need to
 	// merge the layers, no changes only need to copy the image.
 	if b.FromImageID != "" {
@@ -375,31 +370,12 @@ func (b *Builder) Commit(exportTo string) error {
 		}
 		nwImage, err := b.Store.CreateImage("", nname, destLayer.ID, "", imageOptions)
 		if err != nil {
-			logrus.Errorf("fail to create new image at store: %w", err)
+			logrus.Errorf("fail to create new image at store: %v", err)
 			return err
 		}
-
-		// generate manifest info and setBigData to new images
-		items, err := b.generateManifests(nwImage.ID)
-
-		// the manifest and instance.json information from builderBigData, write it to the new image
-		for _, item := range items {
-			var data []byte
-			data, err = b.builderBigData(b.ContainerID, item)
-			if err != nil {
-				return fmt.Errorf("error copying data item %q: %w", item, err)
-			}
-			logrus.Infof("the id is %s , and the data is %s", item, data)
-			err := b.Store.SetImageBigData(nwImage.ID, item, data, v5manifest.Digest)
-			if err != nil {
-				return fmt.Errorf("error copying data item %q", item, err)
-			}
-			logrus.Debugf("copied data item %q to %q", item, nwImage.ID)
-		}
-
 		if removeOldImage {
 			if err := b.Store.DeleteContainer(b.ContainerID); err != nil {
-				logrus.Errorf("fail to remove builder %s of %w", b.ContainerID, err)
+				logrus.Errorf("fail to remove builder %s of %v", b.ContainerID, err)
 				return err
 			}
 			if _, err := b.Store.DeleteImage(b.FromImageID, true); err != nil {
@@ -425,67 +401,6 @@ func (b *Builder) Commit(exportTo string) error {
 	return nil
 }
 
-// generate the manifest message and write it to BigData of builder
-func (b *Builder) generateManifests(id string) ([]string, error) {
-	// keys include sha256:imageID、 manifest-sha256:imageDigestID、manifest.
-	// digest of manifest-sha256:imageDigestID and manifest is sha256:imageDigestID, and content is consistent with the image-spec
-	// digest of sha256:imageID is self, and content is Schema2Image
-	bigDatas := []storage.ContainerBigDataOption{}
-	bigDataName := []string{}
-	// about opencontainer image-spec manifest from builder
-	imageSpecManifestData, err := json.Marshal(b.Manifest)
-	if err != nil {
-		logrus.Errorf("")
-		return nil, err
-	}
-	// about docker image spec from builder
-	schema2ImageData, err := json.Marshal(b.DockerV2)
-	if err != nil {
-		logrus.Errorf("")
-		return nil, err
-	}
-	manifestDigest := digest.FromBytes(schema2ImageData)
-	// generate bigDataOption
-	bigDatas = append(bigDatas, storage.ContainerBigDataOption{
-		Key:  storage.ImageDigestManifestBigDataNamePrefix,
-		Data: imageSpecManifestData,
-	})
-	bigDatas = append(bigDatas, storage.ContainerBigDataOption{
-		Key:  storage.ImageDigestManifestBigDataNamePrefix + "-" + manifestDigest.String(),
-		Data: imageSpecManifestData,
-	})
-	bigDatas = append(bigDatas, storage.ContainerBigDataOption{
-		Key:  digest.NewDigestFromHex(digest.Canonical.String(), id).String(),
-		Data: schema2ImageData,
-	})
-	for _, data := range bigDatas {
-		b.setBuilderBigData(b.ID, data.Key, data.Data)
-		bigDataName = append(bigDataName, data.Key)
-	}
-
-	return bigDataName, nil
-}
-
-func (b Builder) setBuilderBigData(id, key string, data []byte) error {
-	err := b.Store.SetContainerBigData(id, key, data)
-	if err != nil {
-		logrus.Errorf("Failed to set BigData to builder: %w", err)
-		return err
-	}
-	return nil
-}
-
-// builderBigData retrieves a (possibly large) chunk of named data
-// associated with an container.
-func (b *Builder) builderBigData(id, key string) ([]byte, error) {
-	data, err := b.Store.ContainerBigData(id, key)
-	if err != nil {
-		logrus.Errorf("Failed to get BigData from builder: %w", err)
-		return nil, err
-	}
-	return data, nil
-}
-
 func (b *Builder) verifyCommitTag(name string) (error, bool) {
 	isRemove := false
 	if b.Store.Exists(name) {
@@ -496,7 +411,7 @@ func (b *Builder) verifyCommitTag(name string) (error, bool) {
 		}
 		logrus.Infof("begin to delete reuse image tag: %s", epImg.ID)
 		if err := b.Store.RemoveNames(epImg.ID, []string{name}); err != nil {
-			logrus.Errorf("fail to remove reuse image tag: %w", err)
+			logrus.Errorf("fail to remove reuse image tag: %v", err)
 			return err, isRemove
 		}
 		isRemove = true
@@ -568,7 +483,7 @@ func (b *Builder) Run(args []string, ops options.RUNOption) error {
 	}
 	// Currently, the cni component is not supported to create container networks, so the host network is still used.
 	if err = g.RemoveLinuxNamespace("network"); err != nil {
-		return fmt.Errorf("error removing network namespace for run", err)
+		return fmt.Errorf("error removing network namespace for run, %v", err)
 	}
 	if err := b.Mount(""); err != nil {
 		return err
@@ -688,6 +603,13 @@ func BuildDockerfiles(store storage.Store, op *options.BuildOptions, dockerfile 
 			}
 			//Execute each step of construction
 			if err := exec.BuildStep(fmt.Sprintf("%d", stepN), line); err != nil {
+				if exec.builders != nil {
+					err := exec.builders.Remove()
+					if err != nil {
+						logrus.Errorf("failed to remove work-containers during the build images %v", err)
+					}
+					exec.builders = nil
+				}
 				return err
 			}
 			stepN += 1
