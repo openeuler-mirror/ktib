@@ -174,42 +174,11 @@ func (d *LabelDirective) GetType() DockerfileDirectiveType {
 
 func NewLabelDirective(rawContent string) *LabelDirective {
 	labels := make(map[string]string)
-	fmt.Println(rawContent)
-	// 先检查 rawContent 是否符合预期的 LABEL 格式
-	if !strings.HasPrefix(rawContent, "LABEL ") {
-		// 处理不符合预期格式的情况
-		labels := make(map[string]string)
-		parts := strings.Split(rawContent, "\"")
-		key := strings.TrimSpace(parts[0])
-		value := strings.TrimSpace(parts[2])
-		value = strings.ReplaceAll(value, "\\", "")
-		labels[key] = value
-		return &LabelDirective{
-			Type:    LABEL,
-			Content: rawContent,
-			Labels:  labels,
-		}
-	}
-
-	// 提取 key 和 value
-	// 示例格式: LABEL maintainer="john@example.com"
-	parts := strings.Fields(rawContent)[1:] // 获取 LABEL 后面的内容
-	for _, part := range parts {
-		if strings.Contains(part, "=") {
-			kv := strings.SplitN(part, "=", 2) // 只分割成两部分
-			key := strings.TrimSpace(kv[0])
-			value := strings.TrimSpace(kv[1])
-
-			// 移除引号
-			if strings.HasPrefix(value, "\"") && strings.HasSuffix(value, "\"") {
-				value = value[1 : len(value)-1]
-			}
-
-			// 存储到 labels 中
-			labels[key] = strings.ReplaceAll(value, "\\", "") // 去除反斜杠
-		}
-	}
-
+	parts := strings.Split(rawContent, "\"")
+	key := strings.TrimSpace(parts[0])
+	value := strings.TrimSpace(parts[2])
+	value = strings.ReplaceAll(value, "\\", "")
+	labels[key] = value
 	return &LabelDirective{
 		Type:    LABEL,
 		Content: rawContent,
@@ -281,7 +250,7 @@ func NewExposeDirective(rawContent string) *ExposeDirective {
 		Content: rawContent,
 	}
 	ports := strings.Split(rawContent, " ")
-	directive.Ports = ports[1:]
+	directive.Ports = ports
 	return directive
 }
 
@@ -345,18 +314,16 @@ func NewAddDirective(rawContent string) *AddDirective {
 	// 正则匹配一下是否存在chown
 	re := regexp.MustCompile(`(?:--chown=(\S+)\s+)?(\S+)\s+(\S+)`)
 	matches := re.FindStringSubmatch(rawContent)
-	if strings.HasSuffix(rawContent, "--chown") {
-		if len(matches) == 4 {
-			chown = matches[1]
-			source = matches[2]
-			destination = matches[3]
-		}
+	if len(matches) == 4 {
+		chown = matches[1]
+		source = matches[2]
+		destination = matches[3]
 	} else {
 		// 没chown前面是源后面是目标
 		parts := strings.Split(rawContent, " ")
 		if len(parts) >= 2 {
-			source = parts[len(parts)-2]
-			destination = parts[len(parts)-1]
+			source = parts[0]
+			destination = parts[1]
 		}
 	}
 	return &AddDirective{
@@ -393,21 +360,17 @@ func (d CopyDirective) Get() map[string]interface{} {
 
 func NewCopyDirective(rawContent string) *CopyDirective {
 	var chown, source, destination string
-	// 正则匹配一下是否存在chown
 	re := regexp.MustCompile(`(?:--chown=(\S+)\s+)?(\S+)\s+(\S+)`)
 	matches := re.FindStringSubmatch(rawContent)
-	if strings.HasSuffix(rawContent, "--chown") {
-		if len(matches) == 4 {
-			chown = matches[1]
-			source = matches[2]
-			destination = matches[3]
-		}
+	if len(matches) == 4 {
+		chown = matches[1]
+		source = matches[2]
+		destination = matches[3]
 	} else {
-		// 没chown前面是源后面是目标
 		parts := strings.Split(rawContent, " ")
 		if len(parts) >= 2 {
-			source = parts[len(parts)-2]
-			destination = parts[len(parts)-1]
+			source = parts[0]
+			destination = parts[1]
 		}
 	}
 	return &CopyDirective{
@@ -571,20 +534,14 @@ type ShellDirective struct {
 	RunLastStage []map[string]string
 }
 
-func (d ShellDirective) Get() map[string]interface{} {
-	return map[string]interface{}{
-		"type":        d.Type.String(),
-		"raw_content": d.Content,
-	}
-}
 func (d *ShellDirective) GetType() DockerfileDirectiveType {
 	return d.Type
 }
 
-func NewShellDirective(rawContent string) *ShellDirective {
-	return &ShellDirective{
+func NewShellDirective(rawContent map[string]interface{}) ShellDirective {
+	return ShellDirective{
 		Type:    SHELL,
-		Content: rawContent,
+		Content: rawContent["content"].(string),
 	}
 }
 
@@ -601,10 +558,10 @@ func (d *StopsignalDirective) GetType() DockerfileDirectiveType {
 
 func NewStopsignalDirective(rawContent string) *StopsignalDirective {
 	parts := strings.Fields(rawContent)
-	//if len(parts) != 1 {
-	//	return nil
-	//}
-	signal := parts[len(parts)-1]
+	if len(parts) != 1 {
+		return nil
+	}
+	signal := parts[0]
 	return &StopsignalDirective{
 		Type:    STOPSIGNAL,
 		Content: rawContent,
