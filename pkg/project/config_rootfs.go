@@ -1,12 +1,13 @@
-#   Copyright (c) 2023 KylinSoft Co., Ltd.
-#   Kylin trusted image builder(ktib) is licensed under Mulan PSL v2.
-#   You can use this software according to the terms and conditions of the Mulan PSL v2.
-#   You may obtain a copy of Mulan PSL v2 at:
-#            http://license.coscl.org.cn/MulanPSL2
-#   THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING
-#   BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-#   See the Mulan PSL v2 for more details.
-
+/*
+   Copyright (c) 2023 KylinSoft Co., Ltd.
+   Kylin trusted image builder(ktib) is licensed under Mulan PSL v2.
+   You can use this software according to the terms and conditions of the Mulan PSL v2.
+   You may obtain a copy of Mulan PSL v2 at:
+            http://license.coscl.org.cn/MulanPSL2
+   THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING
+   BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+   See the Mulan PSL v2 for more details.
+*/
 package project
 
 import (
@@ -136,7 +137,7 @@ func addCommandToScriptAndRun(target string) error {
 
 	cmd = exec.Command("sh", "-c", "echo \"\" > "+target+"/chroot_script.sh")
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("error creating chroot_script.sh file%s: %v", target+"/chroot_script.sh", err)
+		return fmt.Errorf("error creating chroot_script.sh file: %v", err)
 	}
 
 	// add executable permissions to chroot_script.sh
