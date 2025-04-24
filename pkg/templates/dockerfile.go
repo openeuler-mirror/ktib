@@ -42,3 +42,10 @@ USER 1001
 # TODO: Set the default CMD for the image
 # CMD ["/usr/bin/xxx"]
 `
+
+// BaseImageDockerfile 是用于构建基础镜像的 Dockerfile 模板
+const BaseImageDockerfile = `# {{.ImageName}} 基础镜像
+FROM scratch
+ADD rootfs.tar /
+CMD ["/bin/bash"]
+`
