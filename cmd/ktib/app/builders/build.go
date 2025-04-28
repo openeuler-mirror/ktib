@@ -46,6 +46,7 @@ func BUILDCmd() *cobra.Command {
 	flags.BoolVar(&op.In, "stdin", false, "pass stdin into builders. (default false)")
 	flags.StringVar(&op.Runtime, "runtime", "runc", "Runtime to use for build")
 	flags.StringVar(&op.Format, "format", utils.DefaultFormat(), "`format` of the built image's manifest and metadata. Use BUILDAH_FORMAT environment variable to override.")
+	flags.StringArrayVarP(&op.BuildArg, "build-arg", "", []string{}, "Set build-time variables")
 	return cmd
 }
 

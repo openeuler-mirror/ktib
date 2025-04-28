@@ -12,8 +12,9 @@
 package options
 
 import (
-	"github.com/containers/image/v5/types"
 	"io"
+
+	"github.com/containers/image/v5/types"
 )
 
 type Option struct {
@@ -111,14 +112,15 @@ type BuildersOption struct {
 }
 
 type BuildOptions struct {
-	File    []string
-	Tags    []string
-	NoCache bool
-	Rm      bool
-	ForceRm bool
-	In      bool
-	Runtime string
-	Format  string
+	File     []string
+	Tags     []string
+	NoCache  bool
+	Rm       bool
+	ForceRm  bool
+	In       bool
+	Runtime  string
+	Format   string
+	BuildArg []string
 }
 
 type FromOption struct {
