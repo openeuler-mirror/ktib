@@ -15,13 +15,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/containers/buildah/define"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/containers/buildah/define"
 
 	"gitee.com/openeuler/ktib/pkg/imagemanager"
 
@@ -295,6 +296,20 @@ func ParseBuildOptions(cmd *cobra.Command, flags *options.BuildOptions, contextD
 	}
 	var uselayers bool
 	uselayers = true
+
+	// 添加build-args处理
+	var buildArgs map[string]string
+	if len(flags.BuildArg) > 0 {
+		buildArgs = make(map[string]string)
+		for _, arg := range flags.BuildArg {
+			parts := strings.SplitN(arg, "=", 2)
+			if len(parts) != 2 {
+				return nil, fmt.Errorf("invalid build-arg value %q, must be in KEY=VALUE format", arg)
+			}
+			buildArgs[parts[0]] = parts[1]
+		}
+	}
+
 	opts := define.BuildOptions{
 		AdditionalTags:          tags,
 		ContextDirectory:        contextDir,
@@ -309,6 +324,7 @@ func ParseBuildOptions(cmd *cobra.Command, flags *options.BuildOptions, contextD
 		Out:                     stdout,
 		Output:                  output,
 		OutputFormat:            format,
+		Args:                    buildArgs,
 	}
 	return &opts, nil
 }
