@@ -123,9 +123,6 @@ func (b *Bootstrap) BuildRootfs(configFile string) error {
 		return fmt.Errorf("解析YAML失败: %v", err)
 	}
 
-	// 确保必要的包被安装
-	ensureRequiredPackages(&config)
-
 	// 安装软件包
 	packages := config.Packages.InstallPkgs
 	if err := InstallPackages(yumConfig, target, packages...); err != nil {
@@ -234,23 +231,4 @@ func (b *Bootstrap) CleanRootfs() error {
 
 	fmt.Println("rootfs 清理完成")
 	return nil
-}
-
-// ensureRequiredPackages 确保必要的包被安装
-func ensureRequiredPackages(config *Config) {
-	// 必要的基础包列表
-	requiredPkgs := []string{"yum", "iproute"}
-
-	// 检查必要的包是否已经在配置中
-	pkgMap := make(map[string]bool)
-	for _, pkg := range config.Packages.InstallPkgs {
-		pkgMap[pkg] = true
-	}
-
-	// 添加缺少的必要包
-	for _, pkg := range requiredPkgs {
-		if !pkgMap[pkg] {
-			config.Packages.InstallPkgs = append(config.Packages.InstallPkgs, pkg)
-		}
-	}
 }
