@@ -37,6 +37,7 @@ func newCmdImage() *cobra.Command {
 		imagetool.SaveCmd(),
 		imagetool.LoadCmd(),
 		imagetool.Manifest(),
-		imagetool.TAGCmd())
+		imagetool.TAGCmd(),
+		imagetool.ImageInspectCmd())
 	return cmd
 }
