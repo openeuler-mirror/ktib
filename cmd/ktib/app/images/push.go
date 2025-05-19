@@ -13,6 +13,8 @@ package images
 
 import (
 	"context"
+	"fmt"
+
 	"gitee.com/openeuler/ktib/pkg/imagemanager"
 	"gitee.com/openeuler/ktib/pkg/options"
 	"gitee.com/openeuler/ktib/pkg/utils"
@@ -32,9 +34,13 @@ func push(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	_, err = imageManager.Push(context.Background(), source, destination, op)
+	report, err := imageManager.Push(context.Background(), source, destination, op)
 	if err != nil {
 		return err
+	}
+	// 显示推送后的摘要信息
+	if report != nil && report.ManifestDigest != "" {
+		fmt.Printf("%s\n", report.ManifestDigest)
 	}
 	return nil
 }

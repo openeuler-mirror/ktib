@@ -15,12 +15,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
+
 	"gitee.com/openeuler/ktib/pkg/imagemanager"
 	"gitee.com/openeuler/ktib/pkg/options"
 	"gitee.com/openeuler/ktib/pkg/utils"
 	"github.com/containers/image/v5/types"
 	"github.com/spf13/cobra"
-	"strings"
 )
 
 type manifestCreateOpts struct {
@@ -235,10 +236,11 @@ func manifestPush(cmd *cobra.Command, args []string, op manifestPushOpts) error 
 		return err
 	}
 
-	_, err = imageManager.ManifestPush(context.Background(), listImageSpec, destSpec, op.PushOption)
+	manifestSHA256, err := imageManager.ManifestPush(context.Background(), listImageSpec, destSpec, op.PushOption)
 	if err != nil {
 		return err
 	}
+	fmt.Printf("%s\n", manifestSHA256)
 	return nil
 }
 
