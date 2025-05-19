@@ -72,7 +72,7 @@ Arguments:
 		},
 	}
 	flags := cmd.Flags()
-	flags.StringVarP(&op.Names, "-name", "n", "", "Image name")
+	flags.StringVarP(&op.Names, "name", "n", "", "Image name")
 	flags.BoolVar(&op.PullPolicy, "pullpolicy", false, "Force images pull policy set ifnotparent")
 	flags.BoolVar(&op.HostUIDMap, "hostuidmap", false, "Force host UID map")
 	flags.BoolVar(&op.HostGIDMap, "hostgidmap", false, "Force host GID map")

@@ -1,12 +1,14 @@
 /*
-   Copyright (c) 2023 KylinSoft Co., Ltd.
-   Kylin trusted image builder(ktib) is licensed under Mulan PSL v2.
-   You can use this software according to the terms and conditions of the Mulan PSL v2.
-   You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-   THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING
-   BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-   See the Mulan PSL v2 for more details.
+Copyright (c) 2023 KylinSoft Co., Ltd.
+Kylin trusted image builder(ktib) is licensed under Mulan PSL v2.
+You can use this software according to the terms and conditions of the Mulan PSL v2.
+You may obtain a copy of Mulan PSL v2 at:
+
+	http://license.coscl.org.cn/MulanPSL2
+
+THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING
+BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+See the Mulan PSL v2 for more details.
 */
 package imagemanager
 
@@ -16,6 +18,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"strings"
+
 	"gitee.com/openeuler/ktib/pkg/options"
 	types2 "gitee.com/openeuler/ktib/pkg/types"
 	"github.com/containers/common/libimage"
@@ -29,8 +34,6 @@ import (
 	"github.com/opencontainers/go-digest"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/sirupsen/logrus"
-	"os"
-	"strings"
 )
 
 type ImageManager struct {
@@ -53,40 +56,6 @@ func NewImageManager(store storage.Store) (*ImageManager, error) {
 	}
 	return imageManager, nil
 }
-
-//func (im *ImageManager) ListImage(args []string, store storage.Store) ([]*Image, error) {
-//var imageList []*Image
-//image, err := store.Images()
-//if err != nil {
-//	return nil, err
-//}
-//for _, img := range image {
-//	size, err := store.ImageSize(img.ID)
-//	if err != nil {
-//		return nil, err
-//	}
-//	imageList = append(imageList, &Image{
-//		OriImage: img,
-//		Size:     size,
-//	})
-//}
-//return imageList, nil
-//}
-
-//func sortImages(images []*Image) []*Image {
-//	var filteredImages []*Image
-//
-//	for _, img := range images {
-//		// 如果没有名称，或者没有历史名称，并且是最近创建的，则认为是中间层
-//		if len(img.OriImage.Names) == 0 && len(img.OriImage.NamesHistory) == 0 {
-//			// 可以添加其他逻辑，例如检查创建时间
-//			continue // 跳过中间层镜像
-//		}
-//		filteredImages = append(filteredImages, img)
-//	}
-//
-//	return filteredImages
-//}
 
 func (im *ImageManager) ListImage(ops options.ImagesOption, store storage.Store, background context.Context) ([]*Image, error) {
 	listImagesOptions := &libimage.ListImagesOptions{
@@ -490,4 +459,26 @@ func Join(base map[string]string, override map[string]string) map[string]string 
 		base[k] = v
 	}
 	return base
+}
+
+func (im *ImageManager) Inspect(ctx context.Context, name string) (*libimage.ImageData, error) {
+	// 查找镜像，注意这里需要接收三个返回值：image, resolvedName, err
+	image, _, err := im.Manager.LookupImage(name, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// 设置检查选项，包括计算镜像大小和父镜像
+	inspectOptions := &libimage.InspectOptions{
+		WithSize:   true,
+		WithParent: true,
+	}
+
+	// 调用 libimage 的 Inspect 方法获取镜像数据
+	imageData, err := image.Inspect(ctx, inspectOptions)
+	if err != nil {
+		return nil, err
+	}
+
+	return imageData, nil
 }
