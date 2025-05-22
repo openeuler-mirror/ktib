@@ -42,26 +42,14 @@ const (
 )
 
 func (d DockerfileDirectiveType) String() string {
-	return [...]string{
-		"FROM",
-		"RUN",
-		"CMD",
-		"LABEL",
-		"MAINTAINER",
-		"EXPOSE",
-		"ENV",
-		"ADD",
-		"COPY",
-		"ENTRYPOINT",
-		"VOLUME",
-		"USER",
-		"WORKDIR",
-		"ARG",
-		"ONBUILD",
-		"STOPSIGNAL",
-		"HEALTHCHECK",
-		"SHELL",
-	}[d-1]
+	names := [...]string{
+		"FROM", "RUN", "CMD", "LABEL", "MAINTAINER", "EXPOSE", "ENV", "ADD", "COPY",
+		"ENTRYPOINT", "VOLUME", "USER", "WORKDIR", "ARG", "ONBUILD", "STOPSIGNAL", "HEALTHCHECK", "SHELL",
+	}
+	if int(d) < 1 || int(d) > len(names) {
+		return fmt.Sprintf("UNKNOWN_DIRECTIVE(%d)", d)
+	}
+	return names[d-1]
 }
 
 type DfDirective interface {
@@ -528,6 +516,28 @@ func (d VolumeDirective) Get() map[string]interface{} {
 	}
 }
 
+type HealthcheckDirective struct {
+	Type    DockerfileDirectiveType `json:"type"`
+	Content string                  `json:"raw_content"`
+}
+
+func (d *HealthcheckDirective) GetType() DockerfileDirectiveType {
+	return d.Type
+}
+func NewHealthcheckDirective(rawContent string) *HealthcheckDirective {
+	return &HealthcheckDirective{
+		Type:    HEALTHCHECK,
+		Content: rawContent,
+	}
+}
+
+func (d HealthcheckDirective) Get() map[string]interface{} {
+	return map[string]interface{}{
+		"type":        d.Type.String(),
+		"raw_content": d.Content,
+	}
+}
+
 type ShellDirective struct {
 	Type         DockerfileDirectiveType `json:"type"`
 	Content      string                  `json:"raw_content"`
@@ -538,10 +548,17 @@ func (d *ShellDirective) GetType() DockerfileDirectiveType {
 	return d.Type
 }
 
-func NewShellDirective(rawContent map[string]interface{}) ShellDirective {
-	return ShellDirective{
+func NewShellDirective(rawContent string) *ShellDirective {
+	return &ShellDirective{
 		Type:    SHELL,
-		Content: rawContent["content"].(string),
+		Content: rawContent,
+	}
+}
+
+func (d ShellDirective) Get() map[string]interface{} {
+	return map[string]interface{}{
+		"type":        d.Type.String(),
+		"raw_content": d.Content,
 	}
 }
 
@@ -558,10 +575,10 @@ func (d *StopsignalDirective) GetType() DockerfileDirectiveType {
 
 func NewStopsignalDirective(rawContent string) *StopsignalDirective {
 	parts := strings.Fields(rawContent)
-	if len(parts) != 1 {
-		return nil
+	signal := ""
+	if len(parts) >= 1 {
+		signal = parts[0]
 	}
-	signal := parts[0]
 	return &StopsignalDirective{
 		Type:    STOPSIGNAL,
 		Content: rawContent,
