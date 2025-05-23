@@ -85,6 +85,9 @@ func (df *Dockerfile) GetPath() string {
 }
 
 func (df *Dockerfile) AddDirective(directive DfDirective) {
+	if directive == nil {
+		return
+	}
 	df.Directives = append(df.Directives, directive)
 }
 
@@ -106,6 +109,9 @@ func (df *Dockerfile) GetRunDirectivesLastStage() []DfDirective {
 func (df *Dockerfile) GetDirectives() map[string][]DfDirective {
 	result := make(map[string][]DfDirective)
 	for _, directive := range df.Directives {
+		if directive == nil {
+			continue
+		}
 		directiveType := strconv.Itoa(int(directive.GetType()))
 		switch directiveType {
 		case strconv.Itoa(FROM):

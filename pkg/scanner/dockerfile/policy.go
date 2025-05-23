@@ -47,6 +47,10 @@ func (p *Policy) EvaluateDockerfile(dockerfileObject Dockerfile) PolicyResult {
 	for _, rule := range p.PolicyRules {
 		testRuleResults := rule.Test(dockerfileObject.GetDirectives())
 		if testRuleResults != nil {
+			// 转换规则类型为字符串
+			for i := range *testRuleResults {
+				(*testRuleResults)[i].Type = rule.GetType()
+			}
 			testResults = append(testResults, *testRuleResults...)
 		}
 	}
@@ -61,7 +65,7 @@ func (p *Policy) EvaluateDockerfile(dockerfileObject Dockerfile) PolicyResult {
 	} else {
 		return PolicyResult{
 			Filename:     dockerfileObject.GetFilename(),
-			AuditOutcome: "fail",
+			AuditOutcome: "pass", // 修正这里，如果没有问题应该是pass
 			Maintainers:  dockerfileObject.GetMaintainers(),
 			Path:         dockerfileObject.GetPath(),
 		}

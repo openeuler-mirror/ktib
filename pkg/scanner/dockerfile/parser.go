@@ -13,9 +13,10 @@ package dockerfile
 
 import (
 	"fmt"
-	"github.com/moby/buildkit/frontend/dockerfile/parser"
 	"log"
 	"os"
+
+	"github.com/moby/buildkit/frontend/dockerfile/parser"
 )
 
 var logger *log.Logger
@@ -54,7 +55,6 @@ type ParseResult struct {
 	Directives  map[string][]DfDirective `json:"directives"`
 }
 
-
 type DockerfileVisitor struct {
 	Dockerfile *Dockerfile
 }
@@ -73,39 +73,49 @@ func (v *DockerfileVisitor) VisitDockerfile(visitedChildren *parser.Node) interf
 		if parsedLine.Next != nil {
 			lineContent = parsedLine.Next.Dump()
 		}
+		// 拼接命令类型和内容
+		fullLine := parsedLine.Value
+		if lineContent != "" {
+			fullLine = parsedLine.Value + " " + lineContent
+		}
 		switch lineType {
 		case FROM:
-			v.Dockerfile.AddDirective(NewFromDirective(lineContent))
+			v.Dockerfile.AddDirective(NewFromDirective(fullLine))
 		case USER:
-			v.Dockerfile.AddDirective(NewUserDirective(lineContent))
+			v.Dockerfile.AddDirective(NewUserDirective(fullLine))
 		case RUN:
-			v.Dockerfile.AddDirective(NewRunDirective(lineContent))
+			v.Dockerfile.AddDirective(NewRunDirective(fullLine))
 		case LABEL:
-			v.Dockerfile.AddDirective(NewLabelDirective(lineContent))
+			v.Dockerfile.AddDirective(NewLabelDirective(fullLine))
 		case EXPOSE:
-			v.Dockerfile.AddDirective(NewExposeDirective(lineContent))
+			v.Dockerfile.AddDirective(NewExposeDirective(fullLine))
 		case MAINTAINER:
-			v.Dockerfile.AddDirective(NewMaintainerDirective(lineContent))
+			v.Dockerfile.AddDirective(NewMaintainerDirective(fullLine))
 		case ADD:
-			v.Dockerfile.AddDirective(NewAddDirective(lineContent))
+			v.Dockerfile.AddDirective(NewAddDirective(fullLine))
 		case COPY:
-			v.Dockerfile.AddDirective(NewCopyDirective(lineContent))
+			v.Dockerfile.AddDirective(NewCopyDirective(fullLine))
 		case ENV:
-			v.Dockerfile.AddDirective(NewEnvDirective(lineContent))
+			v.Dockerfile.AddDirective(NewEnvDirective(fullLine))
 		case ENTRYPOINT:
-			v.Dockerfile.AddDirective(NewEntrypointDirective(lineContent))
+			v.Dockerfile.AddDirective(NewEntrypointDirective(fullLine))
 		case WORKDIR:
-			v.Dockerfile.AddDirective(NewWorkdirDirective(lineContent))
+			v.Dockerfile.AddDirective(NewWorkdirDirective(fullLine))
 		case VOLUME:
-			v.Dockerfile.AddDirective(NewVolumeDirective(lineContent))
+			v.Dockerfile.AddDirective(NewVolumeDirective(fullLine))
 		case STOPSIGNAL:
-			v.Dockerfile.AddDirective(NewStopsignalDirective(lineContent))
+			v.Dockerfile.AddDirective(NewStopsignalDirective(fullLine))
 		case ARG:
-			v.Dockerfile.AddDirective(NewArgDirective(lineContent))
+			v.Dockerfile.AddDirective(NewArgDirective(fullLine))
 		case CMD:
-			v.Dockerfile.AddDirective(NewCmdDirective(lineContent))
+			v.Dockerfile.AddDirective(NewCmdDirective(fullLine))
+		case HEALTHCHECK:
+			// 占位，防止nil
+			v.Dockerfile.AddDirective(NewHealthcheckDirective(fullLine))
+		case SHELL:
+			v.Dockerfile.AddDirective(NewShellDirective(fullLine))
 		default:
-			logger.Println(fmt.Sprintf("Directive type not recognized or not implemented yet: %v", lineType))
+			logger.Println(fmt.Sprintf("Directive type not recognized or not implemented yet: %v", lineType.String()))
 			continue
 		}
 	}
@@ -144,6 +154,12 @@ func parseDirectiveType(name string) DockerfileDirectiveType {
 		return ARG
 	case "CMD":
 		return CMD
+	case "ONBUILD":
+		return ONBUILD
+	case "HEALTHCHECK":
+		return HEALTHCHECK
+	case "SHELL":
+		return SHELL
 	}
 	return 0
 }

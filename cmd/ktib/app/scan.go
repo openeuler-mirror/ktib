@@ -13,14 +13,14 @@ package app
 
 import (
 	"encoding/json"
-	o "gitee.com/openeuler/ktib/pkg/options"
-	"gitee.com/openeuler/ktib/pkg/report"
-	"gitee.com/openeuler/ktib/pkg/scanner/dockerfile"
-	"github.com/spf13/cobra"
 	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
+
+	o "gitee.com/openeuler/ktib/pkg/options"
+	"gitee.com/openeuler/ktib/pkg/scanner/dockerfile"
+	"github.com/spf13/cobra"
 )
 
 var option o.Option
@@ -72,7 +72,6 @@ func initScanDockerfileFlags(cmd *cobra.Command) {
 	flag.StringVar(&args.Dockerfile, "dockerfile", "", "The DockerfileMsg to audit. Can be both a file or a directory.")
 	flag.BoolVar(&args.ParseOnly, "parse-only", false, "Simply Parse the DockerfileMsg(s) and return the content, without applying any policy. Only JSON report is supported for this.")
 	flag.BoolVar(&args.GenerateJSON, "json", false, "Generate a JSON file with the findings.")
-	flag.BoolVar(&args.GenerateReport, "report", false, "Generate a PDF report about the findings.")
 	flag.StringVar(&args.JSONOutfile, "outfile", "dockerfile-audit.json", "Name of the JSON file.")
 	flag.StringVar(&args.ReportName, "name", "report.pdf", "The name of the PDF report.")
 	flag.StringVar(&args.ReportTemplate, "template", "templates/report-template.tex", "The template for the report to use.")
@@ -112,26 +111,20 @@ func GetArgumentsCmd(args o.Arguments) {
 			log.Println("No files were processed, reports will be skipped.")
 		} else {
 			if args.GenerateJSON {
-				jsonData, err := json.MarshalIndent(results, "", "  ")
+				outFile, err := os.Create(args.JSONOutfile)
 				if err != nil {
 					log.Fatal(err)
 				}
+				defer outFile.Close()
 
-				err = ioutil.WriteFile(args.JSONOutfile, jsonData, 0644)
-				if err != nil {
+				encoder := json.NewEncoder(outFile)
+				encoder.SetIndent("", "  ")
+				encoder.SetEscapeHTML(false)
+				if err := encoder.Encode(results); err != nil {
 					log.Fatal(err)
 				}
 
 				log.Printf("JSON report generated: %s\n", args.JSONOutfile)
-			}
-
-			if args.GenerateReport {
-				log.Println("Preparing to generate PDF report.")
-				err := report.GenerateLatexReport(*policy, results, args.ReportTemplate, args.ReportName)
-				if err != nil {
-					return
-				}
-				log.Printf("PDF report generated: %s\n", args.ReportName)
 			}
 		}
 	}

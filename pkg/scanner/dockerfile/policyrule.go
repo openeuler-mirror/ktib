@@ -12,6 +12,8 @@
 package dockerfile
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"log"
 	"regexp"
@@ -34,10 +36,34 @@ const (
 )
 
 type Rule struct {
-	Type        PolicyRuleType
-	Details     string
-	Mitigations string
-	Statement   []string
+	Type        PolicyRuleType `json:"Type"`
+	Details     string         `json:"Details"`
+	Mitigations string         `json:"Mitigations"`
+	Statement   []string       `json:"Statement,omitempty"`
+	Line        int            `json:"Line,omitempty"`
+	Directive   string         `json:"Directive,omitempty"`
+	Level       string         `json:"Level,omitempty"`
+}
+
+// 添加MarshalJSON方法以自定义JSON序列化
+func (r Rule) MarshalJSON() ([]byte, error) {
+	type Alias Rule
+	buf := new(bytes.Buffer)
+	encoder := json.NewEncoder(buf)
+	encoder.SetEscapeHTML(false) // 禁用HTML转义，保持特殊字符原样
+	err := encoder.Encode(&struct {
+		Type string `json:"Type"`
+		Alias
+	}{
+		Type:  r.Type.String(),
+		Alias: Alias(r),
+	})
+	if err != nil {
+		return nil, err
+	}
+	// 移除encoder添加的换行符
+	bytes := buf.Bytes()
+	return bytes[:len(bytes)-1], nil
 }
 
 type PolicyTestResult struct {
@@ -64,7 +90,7 @@ func (r *PolicyTestResult) GetResult() *[]Rule {
 	return nil
 }
 
-func (r *PolicyTestResult) AddResult(details, mitigations string, ruleType PolicyRuleType, content string) {
+func (r *PolicyTestResult) AddResult(details, mitigations string, ruleType PolicyRuleType, content string, directiveType ...string) {
 	result := Rule{
 		Details:     details,
 		Mitigations: mitigations,
@@ -121,7 +147,7 @@ func NewEnforceRegistryPolicy(allowedRegistries []string, enabled bool) *Enforce
 		GenericPolicyRule: GenericPolicyRule{
 			Type:        ENFORCE_REGISTRY,
 			TestResult:  PolicyTestResult{},
-			Description: "Allow images to be based (using the FROM command) only on images belonging to approved repositories.",
+			Description: "仅允许使用已批准仓库中的镜像构建镜像。（使用 FROM 命令）",
 		},
 		AllowedRegistries: allowedRegistries,
 		Enabled:           enabled,
@@ -159,7 +185,7 @@ func (r *EnforceRegistryPolicy) Test(dockerfileDirectives map[string][]DfDirecti
 				if !found {
 					r.TestResult.AddResult(
 						"Registry "+registry+" 不是允许拉取镜像的注册表。",
-						"应该更改 FROM 语句，使用允许的注册表之一的镜像："+
+						"应该更改 FROM 语句，使用来源于允许的镜像仓库注册表的镜像："+
 							strings.Join(r.AllowedRegistries, ", "),
 						r.Type,
 						fromDirective.Content,
@@ -172,7 +198,7 @@ func (r *EnforceRegistryPolicy) Test(dockerfileDirectives map[string][]DfDirecti
 }
 
 func (r *EnforceRegistryPolicy) Details() string {
-	return "The following registries are allowed: " + strings.Join(r.AllowedRegistries, ", ") + "."
+	return "允许使用的镜像仓库: " + strings.Join(r.AllowedRegistries, ", ") + "。"
 }
 
 type ForbidTags struct {
@@ -185,7 +211,7 @@ func NewForbidTags(tags []string) *ForbidTags {
 		GenericPolicyRule: GenericPolicyRule{
 			Type:        FORBID_TAGS,
 			TestResult:  PolicyTestResult{},
-			Description: "Restrict the use of certain tags for the images the build is sourced from (using FROM command)",
+			Description: "限制使用某些标签作为构建源的镜像（使用 FROM 命令）",
 		},
 		ForbiddenTags: tags,
 	}
@@ -202,8 +228,8 @@ func (r *ForbidTags) Test(directives map[string][]DfDirective) *[]Rule {
 			}
 			tag := fromDirective.ImageTag
 			if contains(r.ForbiddenTags, tag) {
-				r.TestResult.AddResult(fmt.Sprintf("Tag %s is not allowed.", tag),
-					fmt.Sprintf("The FROM statements should be changed using an image with a fixed tag or without any of the following tags: %s",
+				r.TestResult.AddResult(fmt.Sprintf("标签 %s 不允许使用。", tag),
+					fmt.Sprintf("FROM 语句应该更改为使用具有固定标签的镜像，或者不使用以下任何标签: %s",
 						strings.Join(r.ForbiddenTags, ", ")),
 					r.Type, fromDirective.Content)
 			} else {
@@ -215,7 +241,7 @@ func (r *ForbidTags) Test(directives map[string][]DfDirective) *[]Rule {
 }
 
 func (rule *ForbidTags) Details() string {
-	return fmt.Sprintf("The following tags are forbidden: %s.", strings.Join(rule.ForbiddenTags, ", "))
+	return fmt.Sprintf("以下标签被禁止使用: %s。", strings.Join(rule.ForbiddenTags, ", "))
 }
 
 type ForbidInsecureRegistries struct {
@@ -228,7 +254,7 @@ func NewForbidInsecureRegistries(enabled bool) *ForbidInsecureRegistries {
 		GenericPolicyRule: GenericPolicyRule{
 			Type:        FORBID_INSECURE_REGISTRIES,
 			TestResult:  PolicyTestResult{},
-			Description: "Forbid the use of HTTP protocol for the registries from which source images are stored.",
+			Description: "禁止使用 HTTP 协议的镜像仓库。",
 		},
 		Enabled: enabled,
 	}
@@ -242,8 +268,8 @@ func (rule *ForbidInsecureRegistries) Test(dockerfileStatements map[string][]DfD
 		if fromDirective, ok := statementInterface.(*FromDirective); ok {
 			registry := fromDirective.Registry
 			if strings.HasPrefix(registry, "http://") {
-				testResult.AddResult(fmt.Sprintf("Registry %s uses HTTP and therefore it is considered insecure", registry),
-					"The FROM statement should be changed using images from a registry which uses HTTPS.",
+				testResult.AddResult(fmt.Sprintf("镜像仓库 %s 使用 HTTP 协议，因此被视为不安全", registry),
+					"FROM 语句应该更改为使用 HTTPS 协议的镜像仓库中的镜像。",
 					rule.Type, fromDirective.Content)
 			}
 		}
@@ -263,7 +289,7 @@ type ForbidRoot struct {
 func NewForbidRoot(enabled bool) *ForbidRoot {
 	return &ForbidRoot{
 		GenericPolicyRule: GenericPolicyRule{
-			Description: "Forbid the container to run as a privileged (root) user.",
+			Description: "禁止容器以特权用户（root）身份运行。",
 			Type:        FORBID_ROOT,
 		},
 		Enabled: enabled,
@@ -274,8 +300,8 @@ func (rule *ForbidRoot) Test(dockerfileStatements map[string][]DfDirective) *[]R
 	testResult := NewPolicyTestResult()
 	userStatements := dockerfileStatements["user"]
 	if len(userStatements) == 0 {
-		testResult.AddResult("No USER statements found. By default, if privileges are not dropped, the container will run as root.",
-			"Create a user and add a USER statement before the entrypoint of the image to run the application as a non-privileged user.",
+		testResult.AddResult("未找到 USER 指令。默认情况下，如果不降低权限，容器将以 root 用户身份运行。",
+			"创建一个用户并在镜像的入口点之前添加 USER 指令，以非特权用户身份运行应用程序。",
 			rule.Type, "")
 	} else {
 		lastUserStatement := userStatements[len(userStatements)-1]
@@ -283,8 +309,8 @@ func (rule *ForbidRoot) Test(dockerfileStatements map[string][]DfDirective) *[]R
 		if userDirective, ok := lastUserStatementInterface.(*UserDirective); ok {
 			lastUser := userDirective.User
 			if lastUser == "0" || lastUser == "root" {
-				testResult.AddResult("The last USER statement found elevates privileged to root.",
-					"Add one more USER statement before the entrypoint of the image to run the application as a non-privileged user.",
+				testResult.AddResult("最后一个 USER 指令将权限提升为 root。",
+					"在镜像的入口点之前添加另一个 USER 指令，以非特权用户身份运行应用程序。",
 					rule.Type, userDirective.Content)
 			}
 		}
@@ -300,7 +326,7 @@ type ForbidPrivilegedPorts struct {
 func NewForbidPrivilegedPorts(enabled bool) *ForbidPrivilegedPorts {
 	return &ForbidPrivilegedPorts{
 		GenericPolicyRule: GenericPolicyRule{
-			Description: "Forbid the image to expose privileged ports that require administrative permissions.",
+			Description: "禁止镜像暴露需要管理员权限的特权端口。",
 			Type:        FORBID_PRIVILEGED_PORTS,
 		},
 		Enabled: enabled,
@@ -317,14 +343,14 @@ func (rule *ForbidPrivilegedPorts) Test(dockerfileDirective map[string][]DfDirec
 			for _, port := range ports {
 				portNum, err := strconv.Atoi(port)
 				if err == nil && portNum <= 1024 {
-					testResult.AddResult(fmt.Sprintf("The container exposes a privileged port: %s. Privileged ports require the application which uses it to run as root.", port),
-						"Change the configuration for the application to bind on a port greater than 1024, and change the Dockerfile to reflect this modification.",
+					testResult.AddResult(fmt.Sprintf("容器暴露了特权端口: %s。特权端口要求使用它的应用程序以 root 身份运行。", port),
+						"更改应用程序的配置，使其绑定到大于 1024 的端口，并更改 Dockerfile 以反映此修改。",
 						rule.Type, exposeDirective.Content)
 				} else {
 					portNumber := rule.getPortFromEnv(port, dockerfileDirective)
 					if portNumber != nil && *portNumber <= 1024 {
-						testResult.AddResult(fmt.Sprintf("The container exposes a privileged port: %d. Privileged ports require the application which uses it to run as root.", *portNumber),
-							"Change the configuration for the application to bind on a port greater than 1024, and change the Dockerfile to reflect this modification.",
+						testResult.AddResult(fmt.Sprintf("容器暴露了特权端口: %d。特权端口要求使用它的应用程序以 root 身份运行。", *portNumber),
+							"更改应用程序的配置，使其绑定到大于 1024 的端口，并更改 Dockerfile 以反映此修改。",
 							rule.Type, exposeDirective.Content)
 					}
 				}
@@ -360,7 +386,7 @@ func NewForbidPackages(forbiddenPackages []string) *ForbidPackages {
 	return &ForbidPackages{
 		ForbiddenPackages: forbiddenPackages,
 		GenericPolicyRule: GenericPolicyRule{
-			Description: "Forbid the installation/use of dangerous packages.",
+			Description: "禁止安装/使用危险的软件包。",
 			Type:        FORBID_PACKAGES,
 		},
 	}
@@ -379,8 +405,8 @@ func (rule *ForbidPackages) Test(mapDirectives map[string][]DfDirective) *[]Rule
 				packageRegex := regexp.MustCompile(fmt.Sprintf(`(^|[^a-zA-Z0-9])%s([^a-zA-Z0-9]|$)`, pkg))
 				match := packageRegex.MatchString(statement.Get()["raw_content"].(string))
 				if match {
-					testResult.AddResult(fmt.Sprintf("Forbidden package \"%s\" is installed or used.", pkg),
-						fmt.Sprintf("The RUN/CMD/ENTRYPOINT statement should be reviewed and package \"%s\" should be removed unless absolutely necessary.", pkg),
+					testResult.AddResult(fmt.Sprintf("禁止的软件包 \"%s\" 被安装或使用。", pkg),
+						fmt.Sprintf("应该审查 RUN/CMD/ENTRYPOINT 指令并移除软件包 \"%s\"，除非绝对必要。", pkg),
 						rule.Type, statement.Get()["raw_content"].(string))
 				}
 			}
@@ -388,8 +414,8 @@ func (rule *ForbidPackages) Test(mapDirectives map[string][]DfDirective) *[]Rule
 	} else {
 		for _, pkg := range rule.ForbiddenPackages {
 			if contains(installedPackages, pkg) {
-				testResult.AddResult(fmt.Sprintf("Forbidden package \"%s\" is installed.", pkg),
-					fmt.Sprintf("The RUN statements should be reviewed and package \"%s\" should be removed unless absolutely necessary.", pkg),
+				testResult.AddResult(fmt.Sprintf("禁止的软件包 \"%s\" 已安装。", pkg),
+					fmt.Sprintf("应该审查 RUN 指令并移除软件包 \"%s\"，除非绝对必要。", pkg),
 					rule.Type, "")
 			}
 		}
@@ -468,7 +494,7 @@ func contains(slice []string, str string) bool {
 }
 
 func (rule *ForbidPackages) Details() string {
-	return fmt.Sprintf("The following packages are forbidden: %s.", strings.Join(rule.ForbiddenPackages, ", "))
+	return fmt.Sprintf("以下软件包被禁止使用: %s。", strings.Join(rule.ForbiddenPackages, ", "))
 }
 
 type ForbidSecrets struct {
@@ -480,7 +506,7 @@ type ForbidSecrets struct {
 func NewForbidSecrets(secretsPatterns, allowedPatterns []string) *ForbidSecrets {
 	return &ForbidSecrets{
 		GenericPolicyRule: GenericPolicyRule{
-			Description: "Forbid the inclusion of secrets in the image.",
+			Description: "禁止在镜像中包含敏感信息。",
 			Type:        FORBID_SECRETS,
 		},
 		secretsPatterns: secretsPatterns,
@@ -500,8 +526,8 @@ func (fs *ForbidSecrets) Test(dockerfileStatements map[string][]DfDirective) *[]
 			isForbidden, pattern := fs.isForbiddenPattern(sources.(string))
 			if isForbidden && !fs.isWhitelistedPattern(sources.(string)) {
 				fs.TestResult.AddResult(
-					fmt.Sprintf("Forbidden file matching pattern \"%s\" is added into the image.", pattern),
-					"The ADD statement should be changed or removed. Secrets should be provisioned using a safer and stateless way (Vault, Kubernetes secrets) instead.",
+					fmt.Sprintf("符合模式 \"%s\" 的禁止文件被添加到镜像中。", pattern),
+					"应该更改或移除 ADD 指令。应该使用更安全和无状态的方式（如 Vault、Kubernetes secrets）来提供敏感信息。",
 					fs.Type,
 					statement.Get()["raw_content"].(string),
 				)
@@ -512,8 +538,8 @@ func (fs *ForbidSecrets) Test(dockerfileStatements map[string][]DfDirective) *[]
 			isForbidden, pattern := fs.isForbiddenPattern(sources.(string))
 			if isForbidden && !fs.isWhitelistedPattern(sources.(string)) {
 				fs.TestResult.AddResult(
-					fmt.Sprintf("Forbidden file matching pattern \"%s\" is added into the image.", pattern),
-					"The COPY statement should be changed or removed. Secrets should be provisioned using a safer and stateless way (Vault, Kubernetes secrets) instead.",
+					fmt.Sprintf("符合模式 \"%s\" 的禁止文件被添加到镜像中。", pattern),
+					"应该更改或移除 COPY 指令。应该使用更安全和无状态的方式（如 Vault、Kubernetes secrets）来提供敏感信息。",
 					fs.Type,
 					statement.Get()["raw_content"].(string),
 				)
@@ -546,7 +572,7 @@ func (fs *ForbidSecrets) isWhitelistedPattern(source string) bool {
 }
 
 func (fs *ForbidSecrets) Details() string {
-	return fmt.Sprintf("The following patterns are forbidden: %s.\nThe following patterns are whitelisted: %s",
+	return fmt.Sprintf("以下模式被禁止: %s。\n以下模式被允许: %s",
 		joinStrings(fs.secretsPatterns), joinStrings(fs.allowedPatterns))
 }
 
