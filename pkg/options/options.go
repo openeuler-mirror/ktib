@@ -39,6 +39,7 @@ type LoginOption struct {
 	Stdin         io.Reader
 	Stdout        io.Writer
 	GetLoginSet   bool
+	Insecure      bool
 }
 
 type PullOption struct {
@@ -112,15 +113,17 @@ type BuildersOption struct {
 }
 
 type BuildOptions struct {
-	File     []string
-	Tags     []string
-	NoCache  bool
-	Rm       bool
-	ForceRm  bool
-	In       bool
-	Runtime  string
-	Format   string
-	BuildArg []string
+	File      []string
+	Tags      []string
+	NoCache   bool
+	Rm        bool
+	ForceRm   bool
+	In        bool
+	Runtime   string
+	Format    string
+	BuildArg  []string
+	TLSVerify bool
+	Insecure  bool
 }
 
 type FromOption struct {
