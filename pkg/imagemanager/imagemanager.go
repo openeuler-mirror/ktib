@@ -107,6 +107,12 @@ func (im *ImageManager) KtibLogin(ctx context.Context, lops *options.LoginOption
 		DockerCertPath:                    loginOps.CertDir,
 		DockerDaemonInsecureSkipTLSVerify: lops.TLSVerify,
 	}
+
+	// 设置 insecure 参数
+	if lops.Insecure {
+		sctx.DockerInsecureSkipTLSVerify = types.OptionalBoolTrue
+	}
+
 	setRegistriesConfPath(sctx)
 	loginOps.GetLoginSet = getLoginSet
 	return auth.Login(ctx, sctx, loginOps, args)
@@ -133,6 +139,13 @@ func (im *ImageManager) Pull(imageName string) error {
 		return err
 	}
 	pullOptions := &libimage.PullOptions{}
+
+	// 添加对 SystemContext 的设置
+	if pullOptions.SystemContext == nil {
+		pullOptions.SystemContext = &types.SystemContext{}
+	}
+	setRegistriesConfPath(pullOptions.SystemContext)
+
 	images, err := runtime.Pull(ctx, imageName, pullPolicy, pullOptions)
 	if err != nil {
 		return err
@@ -148,6 +161,19 @@ func (im *ImageManager) Push(ctx context.Context, source, destination string, op
 	pushOptions.Username = op.Username
 	pushOptions.SignBy = op.SignBy
 	pushOptions.Writer = os.Stderr
+
+	if op.Insecure {
+		pushOptions.InsecureSkipTLSVerify = types.OptionalBoolTrue
+	} else {
+		pushOptions.InsecureSkipTLSVerify = types.OptionalBoolFalse
+	}
+
+	// 添加对 SystemContext 的设置
+	if pushOptions.SystemContext == nil {
+		pushOptions.SystemContext = &types.SystemContext{}
+	}
+	setRegistriesConfPath(pushOptions.SystemContext)
+
 	pushedManifestBytes, pushErr := runtime.Push(context.Background(), source, destination, pushOptions)
 	if pushErr == nil {
 		manifestDigest, err := manifest.Digest(pushedManifestBytes)
@@ -294,8 +320,14 @@ func (im *ImageManager) ManifestCreate(ctx context.Context, name string, images 
 			return "", err
 		}
 	}
+	addOptions := &libimage.ManifestListAddOptions{
+		All:                   op.All,
+		InsecureSkipTLSVerify: op.SkipTLSVerify,
+	}
 
-	addOptions := &libimage.ManifestListAddOptions{All: op.All}
+	sysCtx := &types.SystemContext{}
+	setRegistriesConfPath(sysCtx)
+
 	for _, image := range images {
 		if _, err := manifestList.Add(ctx, image, addOptions); err != nil {
 			return "", err
@@ -367,8 +399,18 @@ func (im *ImageManager) ManifestPush(background context.Context, name string, de
 		}
 	}
 	pushOptions.ManifestMIMEType = manifestType
-	pushOptions.InsecureSkipTLSVerify = types.NewOptionalBool(op.Insecure)
 
+	// 确保 insecure 参数正确设置到 CopyOptions 中
+	if op.Insecure {
+		pushOptions.InsecureSkipTLSVerify = types.OptionalBoolTrue
+	} else {
+		pushOptions.InsecureSkipTLSVerify = types.OptionalBoolFalse
+	}
+	// 添加对 SystemContext 的设置
+	if pushOptions.SystemContext == nil {
+		pushOptions.SystemContext = &types.SystemContext{}
+	}
+	setRegistriesConfPath(pushOptions.SystemContext)
 	manDigest, err := manifestList.Push(background, destination, pushOptions)
 	if err != nil {
 		return "", err

@@ -56,5 +56,6 @@ func PushCmd() *cobra.Command {
 	flags.StringVar(&op.SignBy, "sign-by", "", "If non-empty, asks for a signature to be added during the copy, and specifies a key ID.")
 	flags.StringVar(&op.Password, "password", "", "The password to use for authentication.")
 	flags.StringVar(&op.Username, "username", "", "The username to use for authentication.")
+	flags.BoolVar(&op.Insecure, "insecure", false, "允许不安全的 HTTP 连接或 HTTPS 连接（跳过 TLS 验证）")
 	return cmd
 }

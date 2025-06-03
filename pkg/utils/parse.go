@@ -22,15 +22,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/containers/buildah/define"
-
-	"gitee.com/openeuler/ktib/pkg/imagemanager"
-
-	"gitee.com/openeuler/ktib/pkg/options"
-
 	"gitee.com/openeuler/ktib/pkg/builder"
+	"gitee.com/openeuler/ktib/pkg/imagemanager"
+	"gitee.com/openeuler/ktib/pkg/options"
 	ktype "gitee.com/openeuler/ktib/pkg/types"
+	"github.com/containers/buildah/define"
 	"github.com/containers/common/pkg/report"
+	"github.com/containers/image/v5/types"
 	container "github.com/containers/storage"
 	"github.com/docker/go-units"
 	"github.com/opencontainers/go-digest"
@@ -325,8 +323,35 @@ func ParseBuildOptions(cmd *cobra.Command, flags *options.BuildOptions, contextD
 		Output:                  output,
 		OutputFormat:            format,
 		Args:                    buildArgs,
+		// 添加 SystemContext 设置
+		SystemContext: &types.SystemContext{},
 	}
+
+	// 设置 TLS 验证
+	if flags.Insecure {
+		opts.SystemContext.DockerInsecureSkipTLSVerify = types.OptionalBoolTrue
+	} else if !flags.TLSVerify {
+		opts.SystemContext.DockerInsecureSkipTLSVerify = types.OptionalBoolTrue
+	}
+
+	// 设置 registries.conf 路径
+	setRegistriesConfPath(opts.SystemContext)
+
 	return &opts, nil
+}
+
+func setRegistriesConfPath(systemContext *types.SystemContext) {
+	if systemContext.SystemRegistriesConfPath != "" {
+		return
+	}
+	if envOverride, ok := os.LookupEnv("CONTAINERS_REGISTRIES_CONF"); ok {
+		systemContext.SystemRegistriesConfPath = envOverride
+		return
+	}
+	if envOverride, ok := os.LookupEnv("REGISTRIES_CONFIG_PATH"); ok {
+		systemContext.SystemRegistriesConfPath = envOverride
+		return
+	}
 }
 
 func ResolveDockerfiles(op *options.BuildOptions, args []string) ([]string, string, error) {
