@@ -49,7 +49,6 @@ var unnecessaryFiles = []string{
 	"/var/lib/dnf",
 	"/run/nologin",
 	"/var/log",
-	"/tmp",
 }
 
 func ConfigureRootfs(target string, config Config) error {

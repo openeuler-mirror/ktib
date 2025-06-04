@@ -13,9 +13,10 @@ package dockerfile
 
 import (
 	"errors"
-	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"log"
+
+	"gopkg.in/yaml.v2"
 )
 
 type Policy struct {
@@ -44,31 +45,35 @@ func NewDockerfilePolicy(policyFile string) (*Policy, error) {
 
 func (p *Policy) EvaluateDockerfile(dockerfileObject Dockerfile) PolicyResult {
 	var testResults []Rule
+	hasFailures := false
+
 	for _, rule := range p.PolicyRules {
 		testRuleResults := rule.Test(dockerfileObject.GetDirectives())
-		if testRuleResults != nil {
+		if testRuleResults != nil && len(*testRuleResults) > 0 {
 			// 转换规则类型为字符串
 			for i := range *testRuleResults {
 				(*testRuleResults)[i].Type = rule.GetType()
+				// 检查是否有失败项
+				if (*testRuleResults)[i].Status == "fail" {
+					hasFailures = true
+				}
 			}
 			testResults = append(testResults, *testRuleResults...)
 		}
 	}
-	if len(testResults) > 0 {
-		return PolicyResult{
-			Tests:        testResults,
-			Filename:     dockerfileObject.GetFilename(),
-			AuditOutcome: "fail",
-			Maintainers:  dockerfileObject.GetMaintainers(),
-			Path:         dockerfileObject.GetPath(),
-		}
-	} else {
-		return PolicyResult{
-			Filename:     dockerfileObject.GetFilename(),
-			AuditOutcome: "pass", // 修正这里，如果没有问题应该是pass
-			Maintainers:  dockerfileObject.GetMaintainers(),
-			Path:         dockerfileObject.GetPath(),
-		}
+
+	// 根据是否有失败项决定整体结果
+	auditOutcome := "pass"
+	if hasFailures {
+		auditOutcome = "fail"
+	}
+
+	return PolicyResult{
+		Tests:        testResults, // 现在包含合规和不合规项
+		Filename:     dockerfileObject.GetFilename(),
+		AuditOutcome: auditOutcome,
+		Maintainers:  dockerfileObject.GetMaintainers(),
+		Path:         dockerfileObject.GetPath(),
 	}
 }
 
