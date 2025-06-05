@@ -29,6 +29,7 @@ import (
 	cp "github.com/containers/image/v5/copy"
 	"github.com/containers/image/v5/docker/reference"
 	"github.com/containers/image/v5/manifest"
+	auth_config "github.com/containers/image/v5/pkg/docker/config"
 	"github.com/containers/image/v5/types"
 	"github.com/containers/storage"
 	"github.com/opencontainers/go-digest"
@@ -146,12 +147,41 @@ func (im *ImageManager) Pull(imageName string) error {
 	}
 	setRegistriesConfPath(pullOptions.SystemContext)
 
+	// 获取所有凭据并检查是否需要设置 InsecureSkipTLSVerify
+	allCreds, err := auth_config.GetAllCredentials(pullOptions.SystemContext)
+	if err != nil {
+		// 如果获取凭据失败，记录日志但不影响拉取流程
+		fmt.Printf("Warning: Failed to get credentials: %v\n", err)
+	} else {
+		// 从镜像名称中提取仓库地址
+		if imageRegistry := extractRegistryFromImageName(imageName); imageRegistry != "" {
+			// 检查凭据中是否有匹配的仓库地址
+			for credRegistry := range allCreds {
+				if imageRegistry == credRegistry {
+					// 找到匹配的仓库，设置 InsecureSkipTLSVerify 为 true
+					pullOptions.InsecureSkipTLSVerify = types.OptionalBoolTrue
+					fmt.Printf("Setting InsecureSkipTLSVerify=true for registry: %s\n", imageRegistry)
+					break
+				}
+			}
+		}
+	}
+
 	images, err := runtime.Pull(ctx, imageName, pullPolicy, pullOptions)
 	if err != nil {
 		return err
 	}
 	fmt.Printf("%s\n", images[0].ID())
 	return nil
+}
+
+func extractRegistryFromImageName(imageName string) string {
+	// 解析镜像名称
+	ref, err := reference.ParseNormalizedNamed(imageName)
+	if err != nil {
+		return ""
+	}
+	return reference.Domain(ref)
 }
 
 func (im *ImageManager) Push(ctx context.Context, source, destination string, op options.PushOption) (*options.ImagePushReport, error) {
@@ -173,6 +203,26 @@ func (im *ImageManager) Push(ctx context.Context, source, destination string, op
 		pushOptions.SystemContext = &types.SystemContext{}
 	}
 	setRegistriesConfPath(pushOptions.SystemContext)
+
+	// 获取所有凭据并检查是否需要设置 InsecureSkipTLSVerify
+	allCreds, err := auth_config.GetAllCredentials(pushOptions.SystemContext)
+	if err != nil {
+		// 如果获取凭据失败，记录日志但不影响拉取流程
+		fmt.Printf("Warning: Failed to get credentials: %v\n", err)
+	} else {
+		// 从镜像名称中提取仓库地址
+		if imageRegistry := extractRegistryFromImageName(source); imageRegistry != "" {
+			// 检查凭据中是否有匹配的仓库地址
+			for credRegistry := range allCreds {
+				if imageRegistry == credRegistry {
+					// 找到匹配的仓库，设置 InsecureSkipTLSVerify 为 true
+					pushOptions.InsecureSkipTLSVerify = types.OptionalBoolTrue
+					fmt.Printf("Setting InsecureSkipTLSVerify=true for registry: %s\n", imageRegistry)
+					break
+				}
+			}
+		}
+	}
 
 	pushedManifestBytes, pushErr := runtime.Push(context.Background(), source, destination, pushOptions)
 	if pushErr == nil {
@@ -327,7 +377,19 @@ func (im *ImageManager) ManifestCreate(ctx context.Context, name string, images 
 
 	sysCtx := &types.SystemContext{}
 	setRegistriesConfPath(sysCtx)
-
+	// 添加凭据匹配逻辑
+	allCreds, err := auth_config.GetAllCredentials(sysCtx)
+	if err == nil {
+		for _, image := range images {
+			registryDomain := extractRegistryFromImageName(image)
+			for registry := range allCreds {
+				if registry == registryDomain {
+					addOptions.InsecureSkipTLSVerify = types.OptionalBoolTrue
+					break
+				}
+			}
+		}
+	}
 	for _, image := range images {
 		if _, err := manifestList.Add(ctx, image, addOptions); err != nil {
 			return "", err
@@ -399,11 +461,21 @@ func (im *ImageManager) ManifestPush(background context.Context, name string, de
 		}
 	}
 	pushOptions.ManifestMIMEType = manifestType
-
+	// 添加凭据匹配逻辑
+	allCreds, err := auth_config.GetAllCredentials(pushOptions.SystemContext)
+	if err == nil {
+		registryDomain := extractRegistryFromImageName(destination)
+		for registry := range allCreds {
+			if registry == registryDomain {
+				pushOptions.InsecureSkipTLSVerify = types.OptionalBoolTrue
+				break
+			}
+		}
+	}
 	// 确保 insecure 参数正确设置到 CopyOptions 中
 	if op.Insecure {
 		pushOptions.InsecureSkipTLSVerify = types.OptionalBoolTrue
-	} else {
+	} else if !op.Insecure {
 		pushOptions.InsecureSkipTLSVerify = types.OptionalBoolFalse
 	}
 	// 添加对 SystemContext 的设置
@@ -411,6 +483,7 @@ func (im *ImageManager) ManifestPush(background context.Context, name string, de
 		pushOptions.SystemContext = &types.SystemContext{}
 	}
 	setRegistriesConfPath(pushOptions.SystemContext)
+
 	manDigest, err := manifestList.Push(background, destination, pushOptions)
 	if err != nil {
 		return "", err
@@ -436,7 +509,21 @@ func (im *ImageManager) ManifestAdd(background context.Context, manifestName str
 		Username:              opts.Username,
 		Password:              opts.Password,
 	}
-
+	// 添加凭据匹配逻辑
+	sysCtx := &types.SystemContext{}
+	setRegistriesConfPath(sysCtx)
+	allCreds, err := auth_config.GetAllCredentials(sysCtx)
+	if err == nil {
+		for _, image := range images {
+			registryDomain := extractRegistryFromImageName(image)
+			for registry := range allCreds {
+				if registry == registryDomain {
+					addOptions.InsecureSkipTLSVerify = types.OptionalBoolTrue
+					break
+				}
+			}
+		}
+	}
 	for _, image := range images {
 		instanceDigest, err := manifestList.Add(background, image, addOptions)
 		if err != nil {
