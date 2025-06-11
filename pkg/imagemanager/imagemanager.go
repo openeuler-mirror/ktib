@@ -147,23 +147,27 @@ func (im *ImageManager) Pull(imageName string) error {
 	}
 	setRegistriesConfPath(pullOptions.SystemContext)
 
-	// 获取所有凭据并检查是否需要设置 InsecureSkipTLSVerify
-	allCreds, err := auth_config.GetAllCredentials(pullOptions.SystemContext)
-	if err != nil {
-		// 如果获取凭据失败，记录日志但不影响拉取流程
-		fmt.Printf("Warning: Failed to get credentials: %v\n", err)
+	// 获取已登录的认证信息
+	credentials, err := auth_config.GetAllCredentials(pullOptions.SystemContext)
+	if err != nil || len(credentials) == 0 {
+		// 没有认证信息时，使用默认的TLS验证设置
+		pullOptions.InsecureSkipTLSVerify = types.OptionalBoolFalse
 	} else {
-		// 从镜像名称中提取仓库地址
-		if imageRegistry := extractRegistryFromImageName(imageName); imageRegistry != "" {
-			// 检查凭据中是否有匹配的仓库地址
-			for credRegistry := range allCreds {
-				if imageRegistry == credRegistry {
-					// 找到匹配的仓库，设置 InsecureSkipTLSVerify 为 true
-					pullOptions.InsecureSkipTLSVerify = types.OptionalBoolTrue
-					fmt.Printf("Setting InsecureSkipTLSVerify=true for registry: %s\n", imageRegistry)
-					break
-				}
+		// 有认证信息时，检查镜像仓库是否匹配
+		imageRegistry := extractRegistryFromImageName(imageName)
+		matchFound := false
+		if imageRegistry != "" {
+			if _, exists := credentials[imageRegistry]; exists {
+				matchFound = true
 			}
+		}
+
+		if matchFound {
+			// 镜像来源于已登录的镜像仓库
+			pullOptions.InsecureSkipTLSVerify = types.OptionalBoolTrue
+		} else {
+			// 镜像不来源于已登录的镜像仓库
+			pullOptions.InsecureSkipTLSVerify = types.OptionalBoolFalse
 		}
 	}
 
@@ -192,34 +196,37 @@ func (im *ImageManager) Push(ctx context.Context, source, destination string, op
 	pushOptions.SignBy = op.SignBy
 	pushOptions.Writer = os.Stderr
 
-	if op.Insecure {
-		pushOptions.InsecureSkipTLSVerify = types.OptionalBoolTrue
-	} else {
-		pushOptions.InsecureSkipTLSVerify = types.OptionalBoolFalse
-	}
-
 	// 添加对 SystemContext 的设置
 	if pushOptions.SystemContext == nil {
 		pushOptions.SystemContext = &types.SystemContext{}
 	}
 	setRegistriesConfPath(pushOptions.SystemContext)
 
-	// 获取所有凭据并检查是否需要设置 InsecureSkipTLSVerify
-	allCreds, err := auth_config.GetAllCredentials(pushOptions.SystemContext)
-	if err != nil {
-		// 如果获取凭据失败，记录日志但不影响拉取流程
-		fmt.Printf("Warning: Failed to get credentials: %v\n", err)
+	// 如果用户明确设置了insecure参数，优先使用用户设置
+	if op.Insecure {
+		pushOptions.InsecureSkipTLSVerify = types.OptionalBoolTrue
 	} else {
-		// 从镜像名称中提取仓库地址
-		if imageRegistry := extractRegistryFromImageName(source); imageRegistry != "" {
-			// 检查凭据中是否有匹配的仓库地址
-			for credRegistry := range allCreds {
-				if imageRegistry == credRegistry {
-					// 找到匹配的仓库，设置 InsecureSkipTLSVerify 为 true
-					pushOptions.InsecureSkipTLSVerify = types.OptionalBoolTrue
-					fmt.Printf("Setting InsecureSkipTLSVerify=true for registry: %s\n", imageRegistry)
-					break
+		// 获取已登录的认证信息
+		credentials, err := auth_config.GetAllCredentials(pushOptions.SystemContext)
+		if err != nil || len(credentials) == 0 {
+			// 没有认证信息时，使用默认的TLS验证设置
+			pushOptions.InsecureSkipTLSVerify = types.OptionalBoolFalse
+		} else {
+			// 有认证信息时，检查目标仓库是否匹配
+			destinationRegistry := extractRegistryFromImageName(destination)
+			matchFound := false
+			if destinationRegistry != "" {
+				if _, exists := credentials[destinationRegistry]; exists {
+					matchFound = true
 				}
+			}
+
+			if matchFound {
+				// 目标仓库是已登录的镜像仓库
+				pushOptions.InsecureSkipTLSVerify = types.OptionalBoolTrue
+			} else {
+				// 目标仓库不是已登录的镜像仓库
+				pushOptions.InsecureSkipTLSVerify = types.OptionalBoolFalse
 			}
 		}
 	}
@@ -460,29 +467,43 @@ func (im *ImageManager) ManifestPush(background context.Context, name string, de
 			return "", fmt.Errorf("unknown format %q. Choose one of the supported formats: 'oci' or 'v2s2'", op.Format)
 		}
 	}
-	pushOptions.ManifestMIMEType = manifestType
-	// 添加凭据匹配逻辑
-	allCreds, err := auth_config.GetAllCredentials(pushOptions.SystemContext)
-	if err == nil {
-		registryDomain := extractRegistryFromImageName(destination)
-		for registry := range allCreds {
-			if registry == registryDomain {
-				pushOptions.InsecureSkipTLSVerify = types.OptionalBoolTrue
-				break
-			}
-		}
-	}
-	// 确保 insecure 参数正确设置到 CopyOptions 中
-	if op.Insecure {
-		pushOptions.InsecureSkipTLSVerify = types.OptionalBoolTrue
-	} else if !op.Insecure {
-		pushOptions.InsecureSkipTLSVerify = types.OptionalBoolFalse
-	}
+
 	// 添加对 SystemContext 的设置
 	if pushOptions.SystemContext == nil {
 		pushOptions.SystemContext = &types.SystemContext{}
 	}
 	setRegistriesConfPath(pushOptions.SystemContext)
+
+	// 如果用户明确设置了insecure参数，优先使用用户设置
+	if op.Insecure {
+		pushOptions.InsecureSkipTLSVerify = types.OptionalBoolTrue
+	} else {
+		// 获取已登录的认证信息
+		credentials, err := auth_config.GetAllCredentials(pushOptions.SystemContext)
+		if err != nil || len(credentials) == 0 {
+			// 没有认证信息时，使用默认的TLS验证设置
+			pushOptions.InsecureSkipTLSVerify = types.OptionalBoolFalse
+		} else {
+			// 有认证信息时，检查目标仓库是否匹配
+			destinationRegistry := extractRegistryFromImageName(destination)
+			matchFound := false
+			if destinationRegistry != "" {
+				if _, exists := credentials[destinationRegistry]; exists {
+					matchFound = true
+				}
+			}
+
+			if matchFound {
+				// 目标仓库是已登录的镜像仓库
+				pushOptions.InsecureSkipTLSVerify = types.OptionalBoolTrue
+			} else {
+				// 目标仓库不是已登录的镜像仓库
+				pushOptions.InsecureSkipTLSVerify = types.OptionalBoolFalse
+			}
+		}
+	}
+
+	pushOptions.ManifestMIMEType = manifestType
 
 	manDigest, err := manifestList.Push(background, destination, pushOptions)
 	if err != nil {
@@ -501,29 +522,46 @@ func (im *ImageManager) ManifestAdd(background context.Context, manifestName str
 		return "", err
 	}
 
-	addOptions := &libimage.ManifestListAddOptions{
-		All:                   false,
-		AuthFilePath:          "",
-		CertDirPath:           "",
-		InsecureSkipTLSVerify: types.NewOptionalBool(opts.Insecure),
-		Username:              opts.Username,
-		Password:              opts.Password,
-	}
-	// 添加凭据匹配逻辑
+	// 添加对 SystemContext 的设置
 	sysCtx := &types.SystemContext{}
 	setRegistriesConfPath(sysCtx)
-	allCreds, err := auth_config.GetAllCredentials(sysCtx)
-	if err == nil {
+
+	// 获取已登录的认证信息
+	credentials, err := auth_config.GetAllCredentials(sysCtx)
+	insecureSkipTLS := types.OptionalBoolFalse
+	if err == nil && len(credentials) > 0 {
+		// 有认证信息时，检查所有镜像的仓库是否匹配
+		matchFound := false
 		for _, image := range images {
-			registryDomain := extractRegistryFromImageName(image)
-			for registry := range allCreds {
-				if registry == registryDomain {
-					addOptions.InsecureSkipTLSVerify = types.OptionalBoolTrue
+			imageRegistry := extractRegistryFromImageName(image)
+			if imageRegistry != "" {
+				if _, exists := credentials[imageRegistry]; exists {
+					matchFound = true
 					break
 				}
 			}
 		}
+
+		if matchFound {
+			// 至少有一个镜像来源于已登录的镜像仓库
+			insecureSkipTLS = types.OptionalBoolTrue
+		}
 	}
+
+	// 如果用户明确设置了insecure参数，优先使用用户设置
+	if opts.Insecure {
+		insecureSkipTLS = types.OptionalBoolTrue
+	}
+
+	addOptions := &libimage.ManifestListAddOptions{
+		All:                   false,
+		AuthFilePath:          "",
+		CertDirPath:           "",
+		InsecureSkipTLSVerify: insecureSkipTLS,
+		Username:              opts.Username,
+		Password:              opts.Password,
+	}
+
 	for _, image := range images {
 		instanceDigest, err := manifestList.Add(background, image, addOptions)
 		if err != nil {

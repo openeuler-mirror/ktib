@@ -27,7 +27,9 @@ import (
 	"gitee.com/openeuler/ktib/pkg/options"
 	ktype "gitee.com/openeuler/ktib/pkg/types"
 	"github.com/containers/buildah/define"
+	"github.com/containers/common/pkg/auth"
 	"github.com/containers/common/pkg/report"
+	auth_config "github.com/containers/image/v5/pkg/docker/config"
 	"github.com/containers/image/v5/types"
 	container "github.com/containers/storage"
 	"github.com/docker/go-units"
@@ -264,7 +266,7 @@ func JsonFormatMountInfo(builders []*builder.Builder) error {
 	return nil
 }
 
-func ParseBuildOptions(cmd *cobra.Command, flags *options.BuildOptions, contextDir string) (*define.BuildOptions, error) {
+func ParseBuildOptions(cmd *cobra.Command, flags *options.BuildOptions, contextDir string, dockerfilePaths []string) (*define.BuildOptions, error) {
 	var output string
 	var tags []string
 	if cmd.Flag("tag").Changed {
@@ -327,16 +329,50 @@ func ParseBuildOptions(cmd *cobra.Command, flags *options.BuildOptions, contextD
 		SystemContext: &types.SystemContext{},
 	}
 
+	// 设置认证文件路径，使用已登录的认证信息
+	opts.SystemContext.AuthFilePath = auth.GetDefaultAuthFile()
+
 	// 设置 TLS 验证
 	if flags.Insecure {
-		opts.SystemContext.DockerInsecureSkipTLSVerify = types.OptionalBoolTrue
-	} else if !flags.TLSVerify {
 		opts.SystemContext.DockerInsecureSkipTLSVerify = types.OptionalBoolTrue
 	}
 
 	// 设置 registries.conf 路径
 	setRegistriesConfPath(opts.SystemContext)
 
+	// 获取已登录的认证信息
+	credentials, err := auth_config.GetAllCredentials(opts.SystemContext)
+	if err != nil || len(credentials) == 0 {
+		// 没有认证信息时，使用默认的TLS验证设置
+		opts.SystemContext.DockerInsecureSkipTLSVerify = types.OptionalBoolFalse
+	} else {
+		// 有认证信息时，检查Dockerfile中的镜像仓库是否匹配
+		matchFound := false
+		for _, dockerfilePath := range dockerfilePaths {
+			repositories, err := ParseDockerfileFromImage(dockerfilePath)
+			if err != nil {
+				continue // 忽略解析错误，继续处理其他Dockerfile
+			}
+
+			for _, repo := range repositories {
+				if _, exists := credentials[repo]; exists {
+					matchFound = true
+					break
+				}
+			}
+			if matchFound {
+				break
+			}
+		}
+
+		if matchFound {
+			// Dockerfile中使用的镜像来源于已登录的镜像仓库
+			opts.SystemContext.DockerInsecureSkipTLSVerify = types.OptionalBoolTrue
+		} else {
+			// Dockerfile中使用的镜像不来源于已登录的镜像仓库
+			opts.SystemContext.DockerInsecureSkipTLSVerify = types.OptionalBoolFalse
+		}
+	}
 	return &opts, nil
 }
 
@@ -424,4 +460,86 @@ func ResolveDockerfiles(op *options.BuildOptions, args []string) ([]string, stri
 	}
 
 	return dockerfiles, contextDir, nil
+}
+
+// ParseDockerfileFromImage 解析dockerfile，获取FROM的镜像的仓库地址
+// 比如: cr.kylinos.cn/test/myapp:01，获取到cr.kylinos.cn
+func ParseDockerfileFromImage(dockerfilePath string) ([]string, error) {
+	var repositories []string
+
+	// 读取Dockerfile内容
+	file, err := os.Open(dockerfilePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open dockerfile %s: %w", dockerfilePath, err)
+	}
+	defer file.Close()
+
+	content, err := io.ReadAll(file)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read dockerfile %s: %w", dockerfilePath, err)
+	}
+
+	// 按行分割内容
+	lines := strings.Split(string(content), "\n")
+
+	for _, line := range lines {
+		// 去除前后空格
+		line = strings.TrimSpace(line)
+
+		// 跳过空行和注释
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		// 检查是否是FROM指令（不区分大小写）
+		if strings.HasPrefix(strings.ToUpper(line), "FROM ") {
+			// 提取FROM后面的镜像名称
+			parts := strings.Fields(line)
+			if len(parts) >= 2 {
+				imageName := parts[1]
+
+				// 解析镜像名称，去除tag和digest
+				repository := parseImageRepository(imageName)
+				if repository != "" {
+					repositories = append(repositories, repository)
+				}
+			}
+		}
+	}
+
+	return repositories, nil
+}
+
+// parseImageRepository 从完整的镜像名称中提取仓库地址
+// 例如: cr.kylinos.cn/test/myapp:01 -> cr.kylinos.cn
+// 例如: ubuntu:20.04 -> "" (没有明确的仓库地址)
+// 例如: registry.io:5000/user/app@sha256:abc123 -> registry.io:5000
+func parseImageRepository(imageName string) string {
+	if imageName == "" {
+		return ""
+	}
+
+	// 去除digest部分 (以@开头的部分)
+	if idx := strings.Index(imageName, "@"); idx != -1 {
+		imageName = imageName[:idx]
+	}
+
+	// 去除tag部分 (最后一个:后面的部分)
+	if idx := strings.LastIndex(imageName, ":"); idx != -1 {
+		// 检查:后面是否包含/，如果包含则说明这个:是仓库地址的一部分（端口号）
+		tagPart := imageName[idx+1:]
+		if !strings.Contains(tagPart, "/") {
+			// 这是一个tag，去除它
+			imageName = imageName[:idx]
+		}
+	}
+
+	// 提取仓库地址部分
+	// 如果镜像名称包含/，则第一个/之前的部分是仓库地址
+	if idx := strings.Index(imageName, "/"); idx != -1 {
+		return imageName[:idx]
+	}
+
+	// 如果没有/，没有明确的仓库地址
+	return ""
 }

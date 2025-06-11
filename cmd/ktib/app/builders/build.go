@@ -65,7 +65,7 @@ func build(cmd *cobra.Command, args []string, op *options.BuildOptions) error {
 	}
 
 	ctx := context.Background()
-	buildahBuildOptions, err := utils.ParseBuildOptions(cmd, op, contextDir)
+	buildahBuildOptions, err := utils.ParseBuildOptions(cmd, op, contextDir, dockerfiles)
 	if err != nil {
 		return err
 	}
