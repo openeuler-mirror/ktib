@@ -18,7 +18,7 @@ import (
 
 func InstallPackages(yumConfig, target string, packages ...string) error {
 	cmd := exec.Command("yum", "-c", yumConfig, "--installroot="+target, "--releasever=/", "--setopt=tsflags=nodocs",
-		"--setopt=group_package_types=mandatory", "-y", "install")
+		"--setopt=group_package_types=mandatory", "--setopt=install_weak_deps=False", "-y", "install")
 	cmd.Args = append(cmd.Args, packages...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
