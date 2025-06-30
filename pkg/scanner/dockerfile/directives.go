@@ -89,7 +89,8 @@ func NewFromDirective(rawContent string) *FromDirective {
 		Content: rawContent,
 	}
 	// 解析 rawContent 字符串,提取各个属性
-	parts := strings.Split(rawContent, "/")
+	imageContent := strings.TrimPrefix(rawContent, "FROM ")
+	parts := strings.Split(imageContent, "/")
 	switch len(parts) {
 	case 3:
 		directive.Registry = parts[0]
