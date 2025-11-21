@@ -75,7 +75,7 @@ type BuilderOptions struct {
 	PullPolicy bool
 }
 
-func newBuidler(store storage.Store, options BuilderOptions) (*Builder, error) {
+func NewBuilder(store storage.Store, options BuilderOptions) (*Builder, error) {
 	var err error
 	var container *storage.Container
 	var optionNames []string
@@ -116,10 +116,6 @@ func newBuidler(store storage.Store, options BuilderOptions) (*Builder, error) {
 		return nil, err
 	}
 	return builder, nil
-}
-
-func NewBuilder(store storage.Store, options BuilderOptions) (*Builder, error) {
-	return newBuidler(store, options)
 }
 
 func FindBuilder(store storage.Store, name string) (*Builder, error) {
@@ -256,7 +252,7 @@ func (b *Builder) Remove(op options.RemoveOption) error {
 	return nil
 }
 
-func (b Builder) name() string {
+func (b *Builder) name() string {
 	return b.Name
 }
 
@@ -469,7 +465,7 @@ func (b *Builder) generateManifests(id string) ([]string, error) {
 	return bigDataName, nil
 }
 
-func (b Builder) setBuilderBigData(id, key string, data []byte) error {
+func (b *Builder) setBuilderBigData(id, key string, data []byte) error {
 	err := b.Store.SetContainerBigData(id, key, data)
 	if err != nil {
 		logrus.Errorf("Failed to set BigData to builder: %w", err)
@@ -490,21 +486,20 @@ func (b *Builder) builderBigData(id, key string) ([]byte, error) {
 }
 
 func (b *Builder) verifyCommitTag(name string) (error, bool) {
-	isRemove := false
-	if b.Store.Exists(name) {
-		epImg, err := b.Store.Image(name)
-		b.FromImageID = epImg.ID
-		if err != nil {
-			return err, isRemove
-		}
-		logrus.Infof("begin to delete reuse image tag: %s", epImg.ID)
-		if err := b.Store.RemoveNames(epImg.ID, []string{name}); err != nil {
-			logrus.Errorf("fail to remove reuse image tag: %w", err)
-			return err, isRemove
-		}
-		isRemove = true
+	if !b.Store.Exists(name) {
+		return nil, false
 	}
-	return nil, isRemove
+	epImg, err := b.Store.Image(name)
+	b.FromImageID = epImg.ID
+	if err != nil {
+		return err, false
+	}
+	logrus.Infof("begin to delete reuse image tag: %s", epImg.ID)
+	if err := b.Store.RemoveNames(epImg.ID, []string{name}); err != nil {
+		logrus.Errorf("fail to remove reuse image tag: %v", err)
+		return err, false
+	}
+	return nil, true
 }
 
 func (b *Builder) SetWorkdir(args string) {
