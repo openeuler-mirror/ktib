@@ -47,9 +47,9 @@ func ImageListCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return imageList(cmd, args, op)
 		},
-		Example: `ktib images images
-ktib images images [imageName]
-ktib images images --format '{{.ID}} {{.Name}} {{.Size}}'`,
+		Example: `ktib images list
+ktib images list [imageName]
+ktib images list --format '{{.ID}} {{.Name}} {{.Size}}'`,
 	}
 	flag := cmd.Flags()
 	flag.BoolVarP(&op.Quiet, "quiet", "q", false, "Only show numeric IDs")
