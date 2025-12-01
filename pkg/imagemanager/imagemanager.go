@@ -281,8 +281,7 @@ func (im *ImageManager) Remove(store storage.Store, images []string, op options.
 func (im *ImageManager) Tag(store storage.Store, args []string) error {
 	name := args[0]
 	if !store.Exists(name) {
-		err := errors.New("image not exist")
-		return err
+		return fmt.Errorf("image not exist: %s", name)
 	}
 	for i, arg := range args[1:] {
 		if strings.HasSuffix(arg, ":") {
