@@ -12,14 +12,14 @@
 package dockerfile
 
 import (
-	"bytes"
-	"gitee.com/openeuler/ktib/pkg/scanner/parsingutils"
-	"github.com/moby/buildkit/frontend/dockerfile/parser"
-	"io/ioutil"
-	"log"
-	"path/filepath"
-	"strconv"
-	"strings"
+    "bytes"
+    "gitee.com/openeuler/ktib/pkg/scanner/parsingutils"
+    "github.com/moby/buildkit/frontend/dockerfile/parser"
+    "io/ioutil"
+    "path/filepath"
+    "strconv"
+    "strings"
+    "github.com/sirupsen/logrus"
 )
 
 type Error interface {
@@ -55,11 +55,11 @@ func NewDockerfile(path string) (*Dockerfile, error) {
 		Maintainers: make([]string, 0),
 	}
 
-	content, err := ioutil.ReadFile(path)
-	if err != nil {
-		log.Printf("%s does not exist or it is not a file.\n%s\n", dockerfile.Path, err)
-		return nil, &NotDockerfileError{}
-	}
+    content, err := ioutil.ReadFile(path)
+    if err != nil {
+        logrus.Errorf("%s does not exist or it is not a file. %s", dockerfile.Path, err)
+        return nil, &NotDockerfileError{}
+    }
 
 	dockerfileContent := normalizeContent(string(content))
 	if len(dockerfileContent) == 0 {

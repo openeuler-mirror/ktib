@@ -12,14 +12,11 @@
 package dockerfile
 
 import (
-	"fmt"
-	"log"
-	"os"
-
-	"github.com/moby/buildkit/frontend/dockerfile/parser"
+    "github.com/moby/buildkit/frontend/dockerfile/parser"
+    "github.com/sirupsen/logrus"
 )
 
-var logger *log.Logger
+var loggerInitialized bool
 
 type DockerfileObject struct {
 	From               string
@@ -66,8 +63,7 @@ func NewDockerfileVisitor(dockerfile *Dockerfile) *DockerfileVisitor {
 }
 
 func (v *DockerfileVisitor) VisitDockerfile(visitedChildren *parser.Node) interface{} {
-	logger = log.New(os.Stdout, "", log.LstdFlags)
-	for _, parsedLine := range visitedChildren.Children {
+    for _, parsedLine := range visitedChildren.Children {
 		lineType := parseDirectiveType(parsedLine.Value)
 		var lineContent string
 		if parsedLine.Next != nil {
@@ -115,7 +111,7 @@ func (v *DockerfileVisitor) VisitDockerfile(visitedChildren *parser.Node) interf
 		case SHELL:
 			v.Dockerfile.AddDirective(NewShellDirective(fullLine))
 		default:
-			logger.Println(fmt.Sprintf("Directive type not recognized or not implemented yet: %v", lineType.String()))
+			logrus.Warnf("Directive type not recognized or not implemented yet: %v", lineType.String())
 			continue
 		}
 	}

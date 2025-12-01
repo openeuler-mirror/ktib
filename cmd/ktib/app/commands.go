@@ -12,11 +12,14 @@
 package app
 
 import (
+	"gitee.com/openeuler/ktib/pkg/logging"
 	"github.com/lithammer/dedent"
 	"github.com/spf13/cobra"
 )
 
 func NewCommand() *cobra.Command {
+	var logLevel string
+	var logFormat string
 	cmds := &cobra.Command{
 		Use:   "ktib",
 		Short: "ktib: Trusted access control tool for kcr ",
@@ -69,9 +72,12 @@ func NewCommand() *cobra.Command {
 		`),
 		// TODO Check that docker git is installed in your environment.
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			logging.Setup(logLevel, logFormat)
 			return nil
 		},
 	}
+	cmds.PersistentFlags().StringVar(&logLevel, "log-level", "", "log level: trace|debug|info|warn|error|fatal|panic")
+	cmds.PersistentFlags().StringVar(&logFormat, "log-format", "", "log format: text|json")
 	// TODO init or load config
 	// TODO register all commands
 	cmds.AddCommand(
