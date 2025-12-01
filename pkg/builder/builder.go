@@ -328,6 +328,9 @@ func (b *Builder) Commit(exportTo string) error {
 		var layerOps storage.LayerOptions
 		var diffOps storage.DiffOptions
 		diffrdcloser, err := b.Store.Diff(imageLayer, containerLayer, &diffOps)
+		if err != nil {
+			return fmt.Errorf("failed to get layer diff: %w", err)
+		}
 
 		tar, err := os.CreateTemp("", "layer-diff-tar-")
 		wt := bufio.NewWriter(tar)

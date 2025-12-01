@@ -155,8 +155,7 @@ func (im *ImageManager) Remove(store storage.Store, images []string, op options.
 func (im *ImageManager) Tag(store storage.Store, args []string) error {
 	name := args[0]
 	if !store.Exists(name) {
-		err := errors.New("image not exist")
-		return err
+		return fmt.Errorf("image not exist: %s", name)
 	}
 	for i, arg := range args[1:] {
 		if strings.HasSuffix(arg, ":") {
@@ -200,8 +199,7 @@ func (im *ImageManager) SaveImage(args []string, store storage.Store, tarFileNam
 		return fmt.Errorf("save failed, image name or ID cannot be empty")
 	}
 	if !store.Exists(args[0]) {
-		err := errors.New("image not exist")
-		return err
+		fmt.Errorf("image not exist: %s", args[0]) 
 	}
 	var output io.Writer
 	if tarFileName == "" {
