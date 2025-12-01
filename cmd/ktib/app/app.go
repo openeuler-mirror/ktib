@@ -12,16 +12,18 @@
 package app
 
 import (
-	"gitee.com/openeuler/ktib/pkg/utils"
+    "gitee.com/openeuler/ktib/pkg/utils"
+    "gitee.com/openeuler/ktib/pkg/logging"
 )
 
 func Run() error {
 	//A library subroutine needed to run a subprocess.
 	//So reexec.Init() should be called in main()
-	if utils.ReexecInit() {
-		return nil
-	}
-	cmd := NewCommand()
-	cmd.CompletionOptions.DisableDefaultCmd = true
-	return cmd.Execute()
+    if utils.ReexecInit() {
+        return nil
+    }
+    logging.Setup("", "")
+    cmd := NewCommand()
+    cmd.CompletionOptions.DisableDefaultCmd = true
+    return cmd.Execute()
 }

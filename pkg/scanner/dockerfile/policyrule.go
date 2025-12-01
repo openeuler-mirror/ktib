@@ -12,13 +12,13 @@
 package dockerfile
 
 import (
-	"bytes"
-	"encoding/json"
-	"fmt"
-	"log"
-	"regexp"
-	"strconv"
-	"strings"
+    "bytes"
+    "encoding/json"
+    "fmt"
+    "regexp"
+    "strconv"
+    "strings"
+    "github.com/sirupsen/logrus"
 )
 
 type PolicyRuleType int
@@ -130,10 +130,10 @@ func (t PolicyRuleType) String() string {
 		"FORBID_SECRETS",
 		"FORBID_LAX_CHMOD",
 	}
-	if t < GENERIC_POLICY || t > FORBID_LAX_CHMOD {
-		log.Fatalf("Invalid PolicyRuleType: %d", t)
-	}
-	return names[t-1]
+    if t < GENERIC_POLICY || t > FORBID_LAX_CHMOD {
+        logrus.Fatalf("Invalid PolicyRuleType: %d", t)
+    }
+    return names[t-1]
 }
 
 func (r *GenericPolicyRule) Describe() string {

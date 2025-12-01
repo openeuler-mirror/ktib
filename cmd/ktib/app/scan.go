@@ -12,25 +12,25 @@
 package app
 
 import (
-	"encoding/json"
-	"io/ioutil"
-	"log"
-	"os"
-	"path/filepath"
+    "encoding/json"
+    "io/ioutil"
+    "os"
+    "path/filepath"
 
-	o "gitee.com/openeuler/ktib/pkg/options"
-	"gitee.com/openeuler/ktib/pkg/scanner/dockerfile"
-	"github.com/spf13/cobra"
+    o "gitee.com/openeuler/ktib/pkg/options"
+    "gitee.com/openeuler/ktib/pkg/scanner/dockerfile"
+    "github.com/sirupsen/logrus"
+    "github.com/spf13/cobra"
 )
 
 var option o.Option
 var args o.Arguments
-var logger *log.Logger
+var loggerInitialized bool
 
 const PolicyYaml = "/etc/ktib/policy.yaml"
 
 func init() {
-	logger = log.New(os.Stderr, "", log.LstdFlags)
+    loggerInitialized = true
 }
 
 func newCmdScan() *cobra.Command {
@@ -84,59 +84,59 @@ func GetArgumentsCmd(args o.Arguments) {
 	if args.ParseOnly {
 		// 传入等待解析的dockerfile文件集合 []string，返回每个dockerfile的解析结果 []options.parseResult
 		parsedFiles := Parse(filesToProcess)
-		if len(parsedFiles) == 0 {
-			log.Println("No files were processed, reports will be skipped.")
-		} else {
-			if args.GenerateJSON {
-				jsonData, err := json.MarshalIndent(parsedFiles, "", "  ")
-				if err != nil {
-					log.Fatal(err)
-				}
+        if len(parsedFiles) == 0 {
+            logrus.Info("No files were processed, reports will be skipped.")
+        } else {
+            if args.GenerateJSON {
+                jsonData, err := json.MarshalIndent(parsedFiles, "", "  ")
+                if err != nil {
+                    logrus.Fatal(err)
+                }
 
-				err = ioutil.WriteFile(args.JSONOutfile, jsonData, 0644)
-				if err != nil {
-					log.Fatal(err)
-				}
+                err = ioutil.WriteFile(args.JSONOutfile, jsonData, 0644)
+                if err != nil {
+                    logrus.Fatal(err)
+                }
 
-				log.Printf("JSON report generated: %s\n", args.JSONOutfile)
-			}
-		}
-	} else {
-		policy, err := GetPolicy(args.PolicyFile)
-		if err != nil {
-			logger.Fatalln("failed to get policy")
-		}
-		results := Audit(filesToProcess, policy)
-		if len(results) == 0 {
-			log.Println("No files were processed, reports will be skipped.")
-		} else {
-			if args.GenerateJSON {
-				outFile, err := os.Create(args.JSONOutfile)
-				if err != nil {
-					log.Fatal(err)
-				}
-				defer outFile.Close()
+                logrus.Infof("JSON report generated: %s", args.JSONOutfile)
+            }
+        }
+    } else {
+        policy, err := GetPolicy(args.PolicyFile)
+        if err != nil {
+            logrus.Fatal("failed to get policy")
+        }
+        results := Audit(filesToProcess, policy)
+        if len(results) == 0 {
+            logrus.Info("No files were processed, reports will be skipped.")
+        } else {
+            if args.GenerateJSON {
+                outFile, err := os.Create(args.JSONOutfile)
+                if err != nil {
+                    logrus.Fatal(err)
+                }
+                defer outFile.Close()
 
-				encoder := json.NewEncoder(outFile)
-				encoder.SetIndent("", "  ")
-				encoder.SetEscapeHTML(false)
-				if err := encoder.Encode(results); err != nil {
-					log.Fatal(err)
-				}
+                encoder := json.NewEncoder(outFile)
+                encoder.SetIndent("", "  ")
+                encoder.SetEscapeHTML(false)
+                if err := encoder.Encode(results); err != nil {
+                    logrus.Fatal(err)
+                }
 
-				log.Printf("JSON report generated: %s\n", args.JSONOutfile)
-			}
-		}
-	}
+                logrus.Infof("JSON report generated: %s", args.JSONOutfile)
+            }
+        }
+    }
 }
 
 func GetFilesToProcess(argsDockerfile string) []string {
 	filesToProcess := make([]string, 0)
 
 	fileInfo, err := os.Stat(argsDockerfile)
-	if err != nil {
-		log.Fatal(err)
-	}
+    if err != nil {
+        logrus.Fatal(err)
+    }
 
 	if fileInfo.IsDir() {
 		err := filepath.Walk(argsDockerfile, func(path string, info os.FileInfo, err error) error {
@@ -151,17 +151,17 @@ func GetFilesToProcess(argsDockerfile string) []string {
 	} else {
 		filesToProcess = append(filesToProcess, argsDockerfile)
 	}
-	log.Printf("Scanning %d files in %s\n", len(filesToProcess), argsDockerfile)
+    logrus.Infof("Scanning %d files in %s", len(filesToProcess), argsDockerfile)
 
 	return filesToProcess
 }
 
 func GetPolicy(policyFile string) (*dockerfile.Policy, error) {
 	policy, err := dockerfile.NewDockerfilePolicy(policyFile)
-	if err != nil {
-		logger.Println(err)
-		os.Exit(1)
-	}
+    if err != nil {
+        logrus.Error(err)
+        os.Exit(1)
+    }
 	return policy, nil
 }
 
@@ -184,10 +184,10 @@ func Audit(filesToProcess []string, policy *dockerfile.Policy) []dockerfile.Poli
 	results := make([]dockerfile.PolicyResult, 0)
 	for _, file := range filesToProcess {
 		result, err := auditor.Audit(file)
-		if err == nil {
-			results = append(results, result)
-			log.Printf("Scanning file: %s\n", file)
-		}
-	}
-	return results
+        if err == nil {
+            results = append(results, result)
+            logrus.Infof("Scanning file: %s", file)
+        }
+    }
+    return results
 }
