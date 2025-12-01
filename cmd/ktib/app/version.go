@@ -12,18 +12,17 @@
 package app
 
 import (
-    "gitee.com/openeuler/ktib/pkg/utils"
-    "gitee.com/openeuler/ktib/pkg/logging"
+	"fmt"
+
+	"github.com/spf13/cobra"
 )
 
-func Run(version string) error {
-	//A library subroutine needed to run a subprocess.
-	//So reexec.Init() should be called in main()
-    if utils.ReexecInit() {
-        return nil
-    }
-    logging.Setup("", "")
-    cmd := NewCommand(version)
-    cmd.CompletionOptions.DisableDefaultCmd = true
-    return cmd.Execute()
+func newCmdVersion() *cobra.Command {
+	return &cobra.Command{
+		Use:   "version",
+		Short: "Print ktib version",
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Println(cmd.Root().Version)
+		},
+	}
 }

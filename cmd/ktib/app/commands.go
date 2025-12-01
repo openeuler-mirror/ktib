@@ -17,7 +17,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func NewCommand() *cobra.Command {
+func NewCommand(version string) *cobra.Command {
 	var logLevel string
 	var logFormat string
 	cmds := &cobra.Command{
@@ -76,6 +76,8 @@ func NewCommand() *cobra.Command {
 			return nil
 		},
 	}
+	cmds.Version = version
+	cmds.SetVersionTemplate("{{.Version}}\n")
 	cmds.PersistentFlags().StringVar(&logLevel, "log-level", "", "log level: trace|debug|info|warn|error|fatal|panic")
 	cmds.PersistentFlags().StringVar(&logFormat, "log-format", "", "log format: text|json")
 	// TODO init or load config
@@ -86,6 +88,8 @@ func NewCommand() *cobra.Command {
 		newCmdImage(),
 		newCmdBuilder(),
 		// todo: 还没实现
-		newCmdMake())
+		newCmdMake(),
+		newCmdVersion(),
+	)
 	return cmds
 }
