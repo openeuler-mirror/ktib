@@ -50,7 +50,7 @@ example:
 
 	// TODO 添加flag参数
 	flag := cmd.Flags()
-	flag.StringVarP(&option.Driver, "diver", "d", "dockerfile-audit", "used for static compliance scanning of Dockerfile files")
+	flag.StringVarP(&option.Driver, "driver", "d", "dockerfile-audit", "used for static compliance scanning of Dockerfile files")
 	return cmd
 }
 

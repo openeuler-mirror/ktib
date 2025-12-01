@@ -19,12 +19,12 @@ import (
 func NewCommand() *cobra.Command {
 	cmds := &cobra.Command{
 		Use:   "ktib",
-		Short: "ktib: Trusted access controll tool for kcr ",
+		Short: "ktib: Trusted access control tool for kcr ",
 		Long: dedent.Dedent(`
 
 			    ┌──────────────────────────────────────────────────────────┐
 			    │ KTIB                                                     │
-			    │ Trusted access controll tool for kcr                     │
+			    │ Trusted access control tool for kcr                     │
 			    │                                                          │
 			    │ Please give us feedback at:                              │
 			    │ https://gitee.com/openeuler/ktib/issues                  │
@@ -45,7 +45,7 @@ func NewCommand() *cobra.Command {
 			    ┌──────────────────────────────────────────────────────────┐
 			    │ Scan phase:                                              │
 			    ├──────────────────────────────────────────────────────────┤
-			    │ builder-machine# ktib scan --check-test=ture             │
+			    │ builder-machine# ktib scan --check-test=true             │
 			    └──────────────────────────────────────────────────────────┘
 
 			    ┌──────────────────────────────────────────────────────────┐
