@@ -12,10 +12,11 @@
 package dockerfile
 
 import (
-	"encoding/json"
-	"fmt"
-	"regexp"
-	"strings"
+    "encoding/json"
+    "fmt"
+    "net/url"
+    "regexp"
+    "strings"
 )
 
 type DockerfileDirectiveType int
@@ -88,34 +89,57 @@ func NewFromDirective(rawContent string) *FromDirective {
 		Type:    FROM,
 		Content: rawContent,
 	}
-	// 解析 rawContent 字符串,提取各个属性
-	imageContent := strings.TrimPrefix(rawContent, "FROM ")
-	parts := strings.Split(imageContent, "/")
-	switch len(parts) {
-	case 3:
-		directive.Registry = parts[0]
-		directive.ImageName = parts[2]
-	case 2:
-		directive.Registry = parts[0]
-		directive.ImageName = parts[1]
-	case 1:
-		directive.ImageName = parts[0]
-	default:
-		fmt.Errorf("invalid format for from rawContent: %s", rawContent)
+    content := strings.TrimSpace(strings.TrimPrefix(rawContent, "FROM "))
+    tokens := strings.Fields(content)
+	idx := 0
+	if len(tokens) == 0 {
+		return directive
 	}
-
-	// 进一步解析 imageName 部分,提取 tag、platform 等信息
-	if strings.Contains(directive.ImageName, ":") {
-		parts := strings.Split(directive.ImageName, ":")
-		directive.ImageName = parts[0]
-		directive.ImageTag = parts[1]
+	if strings.HasPrefix(tokens[0], "--platform=") {
+		directive.Platform = strings.TrimPrefix(tokens[0], "--platform=")
+		idx = 1
 	}
-	if strings.Contains(directive.ImageName, "@") {
-		parts := strings.Split(directive.ImageName, "@")
-		directive.ImageName = parts[0]
-		directive.Platform = parts[1]
+    base := ""
+	if idx < len(tokens) {
+		base = tokens[idx]
+		idx = idx + 1
 	}
-	return directive
+	if idx+1 < len(tokens) && strings.EqualFold(tokens[idx], "as") {
+		directive.ImageLocalName = strings.Trim(tokens[idx+1], "\"'")
+	}
+    ref := base
+    if ref == "" {
+        return directive
+    }
+    // 处理显式 scheme 的镜像引用
+    if strings.HasPrefix(ref, "http://") || strings.HasPrefix(ref, "https://") {
+        if u, err := url.Parse(ref); err == nil {
+            directive.Registry = u.Host
+            path := strings.TrimPrefix(u.Path, "/")
+            ref = path
+        }
+    }
+    if at := strings.Index(ref, "@"); at != -1 {
+        directive.Platform = ref[at+1:]
+        ref = ref[:at]
+    }
+    nameTag := ref
+    if colon := strings.LastIndex(nameTag, ":"); colon != -1 {
+        directive.ImageName = nameTag[:colon]
+        directive.ImageTag = nameTag[colon+1:]
+    } else {
+        directive.ImageName = nameTag
+        directive.ImageTag = "latest"
+    }
+    // 提取 registry（无 scheme 情况）
+    if slash := strings.Index(directive.ImageName, "/"); slash != -1 {
+        first := strings.Split(directive.ImageName, "/")[0]
+        if strings.Contains(first, ".") || strings.Contains(first, ":") {
+            directive.Registry = first
+            directive.ImageName = strings.Join(strings.Split(directive.ImageName, "/")[1:], "/")
+        }
+    }
+    return directive
 }
 
 type RunDirective struct {
@@ -163,11 +187,16 @@ func (d *LabelDirective) GetType() DockerfileDirectiveType {
 
 func NewLabelDirective(rawContent string) *LabelDirective {
 	labels := make(map[string]string)
-	parts := strings.Split(rawContent, "\"")
-	key := strings.TrimSpace(parts[0])
-	value := strings.TrimSpace(parts[2])
-	value = strings.ReplaceAll(value, "\\", "")
-	labels[key] = value
+	content := strings.TrimSpace(strings.TrimPrefix(rawContent, "LABEL "))
+	parts := strings.Fields(content)
+	for _, p := range parts {
+		if strings.Contains(p, "=") {
+			kv := strings.SplitN(p, "=", 2)
+			k := strings.Trim(kv[0], "\"'")
+			v := strings.Trim(kv[1], "\"'")
+			labels[k] = v
+		}
+	}
 	return &LabelDirective{
 		Type:    LABEL,
 		Content: rawContent,
@@ -234,13 +263,23 @@ func (d *ExposeDirective) GetType() DockerfileDirectiveType {
 }
 
 func NewExposeDirective(rawContent string) *ExposeDirective {
-	directive := &ExposeDirective{
-		Type:    EXPOSE,
-		Content: rawContent,
-	}
-	ports := strings.Split(rawContent, " ")
-	directive.Ports = ports
-	return directive
+    directive := &ExposeDirective{
+        Type:    EXPOSE,
+        Content: rawContent,
+    }
+    s := strings.TrimSpace(strings.TrimPrefix(rawContent, "EXPOSE "))
+    if s != "" {
+        ports := strings.Fields(s)
+        cleaned := make([]string, 0, len(ports))
+        for _, p := range ports {
+            cleaned = append(cleaned, strings.Trim(p, "\"'"))
+        }
+        directive.Ports = cleaned
+    }
+    if len(directive.Ports) > 0 {
+        directive.Content = "EXPOSE " + strings.Join(directive.Ports, " ")
+    }
+    return directive
 }
 
 type MaintainerDirective struct {

@@ -12,13 +12,14 @@
 package dockerfile
 
 import (
-    "bytes"
-    "encoding/json"
-    "fmt"
-    "regexp"
-    "strconv"
-    "strings"
-    "github.com/sirupsen/logrus"
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"regexp"
+	"strconv"
+	"strings"
+
+	"github.com/sirupsen/logrus"
 )
 
 type PolicyRuleType int
@@ -130,10 +131,10 @@ func (t PolicyRuleType) String() string {
 		"FORBID_SECRETS",
 		"FORBID_LAX_CHMOD",
 	}
-    if t < GENERIC_POLICY || t > FORBID_LAX_CHMOD {
-        logrus.Fatalf("Invalid PolicyRuleType: %d", t)
-    }
-    return names[t-1]
+	if t < GENERIC_POLICY || t > FORBID_LAX_CHMOD {
+		logrus.Fatalf("Invalid PolicyRuleType: %d", t)
+	}
+	return names[t-1]
 }
 
 func (r *GenericPolicyRule) Describe() string {
@@ -173,6 +174,14 @@ func NewEnforceRegistryPolicy(allowedRegistries []string, enabled bool) *Enforce
 func (r *EnforceRegistryPolicy) Test(dockerfileDirectives map[string][]DfDirective) *[]Rule {
 	r.TestResult = NewPolicyTestResult()
 	fromStatements := dockerfileDirectives["from"]
+	stageNames := make(map[string]struct{})
+	for _, s := range fromStatements {
+		if fd, ok := s.(*FromDirective); ok {
+			if fd.ImageLocalName != "" {
+				stageNames[fd.ImageLocalName] = struct{}{}
+			}
+		}
+	}
 	for _, statement := range fromStatements {
 		var statementInterface interface{} = statement
 		if fromDirective, ok := statementInterface.(*FromDirective); ok {
@@ -181,14 +190,11 @@ func (r *EnforceRegistryPolicy) Test(dockerfileDirectives map[string][]DfDirecti
 			}
 			registry := fromDirective.Registry
 			isFromLocalImage := false
-			for _, s := range fromStatements {
-				var sInterface interface{} = s
-				if sDirective, ok := sInterface.(*FromDirective); ok {
-					if fromDirective.ImageLocalName == sDirective.ImageName {
-						isFromLocalImage = true
-						break
-					}
-				}
+			if _, ok := stageNames[fromDirective.ImageName]; ok {
+				isFromLocalImage = true
+			}
+			if registry == "" && !strings.Contains(fromDirective.ImageName, "/") {
+				isFromLocalImage = true
 			}
 			if !isFromLocalImage {
 				found := false
@@ -201,7 +207,12 @@ func (r *EnforceRegistryPolicy) Test(dockerfileDirectives map[string][]DfDirecti
 				if !found {
 					// 不合规项
 					r.TestResult.AddResult(
-						"Registry "+registry+" 不是允许拉取镜像的注册表。",
+						func() string {
+							if registry == "" {
+								return "Registry 默认注册表 不是允许拉取镜像的注册表。"
+							}
+							return "Registry " + registry + " 不是允许拉取镜像的注册表。"
+						}(),
 						"应该更改 FROM 语句，使用来源于允许的镜像仓库注册表的镜像："+
 							strings.Join(r.AllowedRegistries, ", "),
 						r.Type,
@@ -209,11 +220,13 @@ func (r *EnforceRegistryPolicy) Test(dockerfileDirectives map[string][]DfDirecti
 					)
 				} else {
 					// 新增：合规项
-					r.TestResult.AddPassResult(
-						"Registry "+registry+" 是允许的镜像仓库注册表。",
-						r.Type,
-						fromDirective.Content,
-					)
+					if registry != "" {
+						r.TestResult.AddPassResult(
+							"Registry "+registry+" 是允许的镜像仓库注册表。",
+							r.Type,
+							fromDirective.Content,
+						)
+					}
 				}
 			}
 		}
@@ -243,12 +256,25 @@ func NewForbidTags(tags []string) *ForbidTags {
 
 func (r *ForbidTags) Test(directives map[string][]DfDirective) *[]Rule {
 	fromStatements := directives["from"]
+	stageNames := make(map[string]struct{})
+	for _, s := range fromStatements {
+		if fd, ok := s.(*FromDirective); ok {
+			if fd.ImageLocalName != "" {
+				stageNames[fd.ImageLocalName] = struct{}{}
+			}
+		}
+	}
 	for _, statement := range fromStatements {
 		var fromDirectiveInterface interface{} = statement
 		if fromDirective, ok := fromDirectiveInterface.(*FromDirective); ok {
 			image := fromDirective.ImageName
 			if image == "scratch" {
 				return nil
+			}
+			if fromDirective.Registry == "" && !strings.Contains(image, "/") {
+				if _, isStage := stageNames[image]; isStage {
+					continue
+				}
 			}
 			tag := fromDirective.ImageTag
 			if contains(r.ForbiddenTags, tag) {
@@ -293,16 +319,19 @@ func (rule *ForbidInsecureRegistries) Test(dockerfileStatements map[string][]DfD
 	for _, statement := range fromStatements {
 		var statementInterface interface{} = statement
 		if fromDirective, ok := statementInterface.(*FromDirective); ok {
-			registry := fromDirective.Registry
-			if strings.HasPrefix(registry, "http://") {
-				testResult.AddResult(fmt.Sprintf("镜像仓库 %s 被视为不安全", registry),
+			raw := fromDirective.Content
+			if strings.HasPrefix(raw, "FROM http://") {
+				reg := fromDirective.Registry
+				testResult.AddResult(fmt.Sprintf("镜像仓库 %s 被视为不安全", reg),
 					"FROM 语句应该更改为使用 HTTPS 协议的镜像仓库中的镜像。",
 					rule.Type, fromDirective.Content)
 			} else {
-				testResult.AddPassResult(
-					fmt.Sprintf("镜像仓库 %s 被视为安全", registry),
-					rule.Type,
-					fromDirective.Content)
+				if fromDirective.Registry != "" {
+					testResult.AddPassResult(
+						fmt.Sprintf("镜像仓库 %s 被视为安全", fromDirective.Registry),
+						rule.Type,
+						fromDirective.Content)
+				}
 			}
 		}
 	}
