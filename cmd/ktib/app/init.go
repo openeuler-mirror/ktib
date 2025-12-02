@@ -58,30 +58,34 @@ func newCmdProject() *cobra.Command {
 
 // newSubCmdDefaultConfig 创建生成默认配置的子命令
 func newSubCmdDefaultConfig() *cobra.Command {
+	var option struct {
+		timezone string
+	}
 	cmd := &cobra.Command{
 		Use:   "default_config",
 		Short: "Run this command in order to generate default config",
 		Example: ` # generate default config example
-  ktib project default_config > config.yml`,
+  ktib project default_config > config.yml
+  # generate default config with custom timezone
+  ktib project default_config --timezone "America/New_York" > config.yml`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			outputFileName := cmd.OutOrStdout().(*os.File).Name()
 			if outputFileName == "" {
 				outputFileName = "config.yml"
 			}
-			if len(args) > 0 || cmd.Flags().NFlag() > 0 {
-				return fmt.Errorf("invalid usage. Use 'ktib project default_config > config.yml'")
-			}
-			return runDefaultConfig(outputFileName)
+			return runDefaultConfig(outputFileName, option.timezone)
 		},
 		Args: cobra.NoArgs,
 	}
 	cmd.SetOut(os.Stdout)
+	// 添加时区选项
+	cmd.Flags().StringVar(&option.timezone, "timezone", "Asia/Shanghai", "Set the timezone for the configuration (e.g., Asia/Shanghai, America/New_York, Europe/London)")
 	return cmd
 }
 
 // runDefaultConfig 执行生成默认配置的操作
-func runDefaultConfig(outputFileName string) error {
-	yamlContent := `packages:
+func runDefaultConfig(outputFileName, timezone string) error {
+	yamlContent := fmt.Sprintf(`packages:
   install_pkgs:
     - yum
     - iproute
@@ -94,9 +98,9 @@ func runDefaultConfig(outputFileName string) error {
 network: 
     networking: yes
     hostname: localhost.localdomain
-locale: "%_install_langs en_US.UTF-8"
-timezone: "Asia/Shanghai"
-`
+locale: "%%_install_langs en_US.UTF-8"
+timezone: "%s"
+`, timezone)
 	data := []byte(yamlContent)
 	err := ioutil.WriteFile(outputFileName, data, 0644)
 	if err != nil {
