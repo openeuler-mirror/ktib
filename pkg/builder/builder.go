@@ -27,6 +27,7 @@ import (
 	"gitee.com/openeuler/ktib/pkg/options"
 	cpier "github.com/containers/image/v5/copy"
 	v5manifest "github.com/containers/image/v5/manifest"
+
 	//"github.com/containers/image/v5/docker/reference"
 	"github.com/containers/image/v5/signature"
 	"github.com/containers/image/v5/transports/alltransports"
@@ -91,11 +92,11 @@ func NewBuilder(store storage.Store, options BuilderOptions) (*Builder, error) {
 
 	imageID := ""
 	if image != "" {
-		iMage, err := store.Image(image)
+		img, err := store.Image(image)
 		if err != nil {
 			return nil, err
 		}
-		imageID = iMage.ID
+		imageID = img.ID
 	}
 
 	container, err = store.CreateContainer("", optionNames, imageID, "", "", &coptions)
@@ -276,15 +277,18 @@ func (b *Builder) Commit(exportTo string) error {
 		return err
 	}
 	policyContext, err := signature.NewPolicyContext(policy)
+	if err != nil {
+		return err
+	}
 	var imageLayer string
 	var containerLayer string
 	importFrom := b.FromImage
 	if !b.Store.Exists(importFrom) && b.FromImageID != "" {
-		iMage, err := b.Store.Image(b.FromImageID)
+		img, err := b.Store.Image(b.FromImageID)
 		if err != nil {
 			return err
 		}
-		importFrom = iMage.Names[0]
+		importFrom = img.Names[0]
 	} else {
 		importFrom = "scratch"
 	}
@@ -382,6 +386,9 @@ func (b *Builder) Commit(exportTo string) error {
 
 		// generate manifest info and setBigData to new images
 		items, err := b.generateManifests(nwImage.ID)
+		if err != nil {
+			return err
+		}
 
 		// the manifest and instance.json information from builderBigData, write it to the new image
 		for _, item := range items {
