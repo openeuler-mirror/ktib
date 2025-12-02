@@ -254,6 +254,11 @@ func (im *ImageManager) Remove(store storage.Store, images []string, op options.
 	for i, img := range images {
 		// If more than one tag exists for the image, the Untag operation is performed
 		names, err := store.Names(img)
+		if err != nil {
+			logrus.Debugf("Failed to get names for image %s: %v", img, err)
+			allErrors = append(allErrors, err)
+			continue
+		}
 		im, err := store.Image(img)
 		if err != nil {
 			logrus.Errorf("No such image: %s", img)
@@ -283,14 +288,14 @@ func (im *ImageManager) Tag(store storage.Store, args []string) error {
 	if !store.Exists(name) {
 		return fmt.Errorf("image not exist: %s", name)
 	}
-		for i, arg := range args[1:] {
-			if strings.HasSuffix(arg, ":") {
-				return fmt.Errorf("Error parsing reference: %s is not a valid repository/tag: invalid reference format", arg)
-			}
-			if !strings.Contains(arg, ":") {
-				args[1:][i] += ":latest"
-			}
+	for i, arg := range args[1:] {
+		if strings.HasSuffix(arg, ":") {
+			return fmt.Errorf("Error parsing reference: %s is not a valid repository/tag: invalid reference format", arg)
 		}
+		if !strings.Contains(arg, ":") {
+			args[1:][i] += ":latest"
+		}
+	}
 	for i, s := range args[1:] {
 		noralName, err := reference.ParseNormalizedNamed(s)
 		if err != nil {
