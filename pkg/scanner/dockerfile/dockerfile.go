@@ -164,20 +164,26 @@ func (df *Dockerfile) GetRaw() []map[string]interface{} {
 }
 
 func (df *Dockerfile) GetMaintainers() string {
-	for _, directive := range df.Directives {
-		if directive.GetType() == LABEL {
-			labels := directive.Get()["labels"]
-			for _, label := range labels.(map[string]string) {
-				return label
-			}
-		} else if directive.GetType() == MAINTAINER {
-			maintainers := directive.Get()["maintainers"]
-			if maintainers != nil {
-				return strings.Join(maintainers.([]string), ", ")
-			}
-		}
-	}
-	return ""
+    for _, directive := range df.Directives {
+        if directive.GetType() == LABEL {
+            labels := directive.Get()["labels"]
+            if m, ok := labels.(map[string]string); ok {
+                if v, ok := m["maintainer"]; ok {
+                    return v
+                }
+                if v, ok := m["org.opencontainers.image.authors"]; ok {
+                    return v
+                }
+            }
+        } else if directive.GetType() == MAINTAINER {
+            raw := directive.Get()["raw_content"].(string)
+            s := strings.TrimSpace(strings.TrimPrefix(raw, "MAINTAINER "))
+            if s != "" {
+                return s
+            }
+        }
+    }
+    return ""
 }
 
 func normalizeContent(content string) string {

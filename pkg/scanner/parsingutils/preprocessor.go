@@ -12,9 +12,10 @@
 package parsingutils
 
 import (
-    "regexp"
-    "strings"
-    "github.com/sirupsen/logrus"
+	"regexp"
+	"strings"
+
+	"github.com/sirupsen/logrus"
 )
 
 type DockerfilePreprocessor struct {
@@ -51,12 +52,12 @@ func (p *DockerfilePreprocessor) resolveEnvs(envs map[string]string) {
 		envNames := []string{"[$]" + key, "[$]{" + key + "(-[\\S]+)?}"}
 		for _, pattern := range envNames {
 			regex := regexp.MustCompile(pattern)
-            if regex.MatchString(p.content) {
-                logrus.Debugf("Resolving env variable %s with value %s.", key, value)
-            }
-            p.content = regex.ReplaceAllString(p.content, value)
-        }
-    }
+			if regex.MatchString(p.content) {
+				logrus.Debugf("Resolving env variable %s with value %s.", key, value)
+			}
+			p.content = regex.ReplaceAllString(p.content, value)
+		}
+	}
 }
 
 func (p *DockerfilePreprocessor) removeComments() {
@@ -116,11 +117,11 @@ func (p *DockerfilePreprocessor) getEnvKeyValue() map[string]string {
 	for _, line := range dockerfileLines {
 		if envMatch.MatchString(line) {
 			if lineWithKeyValues.MatchString(line) {
-                logrus.Debugf("Key value ENV match: %s", line)
-                line = strings.ReplaceAll(line, "\\ ", "#")
-                line = p.replaceSpacesInQuotes(line)
-                envs := strings.Split(line, " ")[1:]
-                for _, env := range envs {
+				logrus.Debugf("Key value ENV match: %s", line)
+				line = strings.ReplaceAll(line, "\\ ", "#")
+				line = p.replaceSpacesInQuotes(line)
+				envs := strings.Split(line, " ")[1:]
+				for _, env := range envs {
 					parts := strings.Split(env, "=")
 					key := parts[0]
 					value := strings.Trim(parts[1], "\"'")
