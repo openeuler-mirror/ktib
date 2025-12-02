@@ -13,9 +13,7 @@ package app
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
-	"os/exec"
 	"strings"
 
 	"gitee.com/openeuler/ktib/pkg/project"
@@ -102,9 +100,9 @@ locale: "%%_install_langs en_US.UTF-8"
 timezone: "%s"
 `, timezone)
 	data := []byte(yamlContent)
-	err := ioutil.WriteFile(outputFileName, data, 0644)
+	err := os.WriteFile(outputFileName, data, 0644)
 	if err != nil {
-		fmt.Printf("failed to write file %v\n", err)
+		return fmt.Errorf("failed to write config file %s: %v", outputFileName, err)
 	}
 	return nil
 }
@@ -221,7 +219,7 @@ It also performs additional environment configuration operations to optimize the
 
 			// 执行清理操作
 			if err := boot.CleanRootfs(); err != nil {
-				return fmt.Errorf("Failed to clean rootfs: %v", err)
+				return fmt.Errorf("failed to clean rootfs: %v", err)
 			}
 
 			logrus.Println("Successfully cleaned rootfs")
@@ -278,6 +276,7 @@ It packages the rootfs into a container image that can be used with container ru
 	return cmd
 }
 
+/*
 // checkRpmPackageInstalled 检查RPM包是否已安装
 func checkRpmPackageInstalled(packageName string) error {
 	// 运行 rpm 命令来检查包是否已安装
@@ -293,3 +292,4 @@ func checkRpmPackageInstalled(packageName string) error {
 	}
 	return nil
 }
+*/
