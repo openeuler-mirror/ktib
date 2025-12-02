@@ -283,14 +283,14 @@ func (im *ImageManager) Tag(store storage.Store, args []string) error {
 	if !store.Exists(name) {
 		return fmt.Errorf("image not exist: %s", name)
 	}
-	for i, arg := range args[1:] {
-		if strings.HasSuffix(arg, ":") {
-			return errors.New(fmt.Sprintf("Error parsing reference: %s is not a valid repository/tag: invalid reference format", arg))
+		for i, arg := range args[1:] {
+			if strings.HasSuffix(arg, ":") {
+				return fmt.Errorf("Error parsing reference: %s is not a valid repository/tag: invalid reference format", arg)
+			}
+			if !strings.Contains(arg, ":") {
+				args[1:][i] += ":latest"
+			}
 		}
-		if !strings.Contains(arg, ":") {
-			args[1:][i] += ":latest"
-		}
-	}
 	for i, s := range args[1:] {
 		noralName, err := reference.ParseNormalizedNamed(s)
 		if err != nil {

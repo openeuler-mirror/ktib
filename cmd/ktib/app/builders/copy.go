@@ -53,9 +53,9 @@ func Cp(cmd *cobra.Command, name, destination string, source []string) error {
 	if err != nil {
 		return err
 	}
-	builderobj, err := builder.FindBuilder(store, name)
-	if err != nil {
-		return errors.New(fmt.Sprintf("Not found the %s builder", name))
-	}
-	return builderobj.Add(destination, source, false)
+    builderobj, err := builder.FindBuilder(store, name)
+    if err != nil {
+        return fmt.Errorf("Not found the %s builder", name)
+    }
+    return builderobj.Add(destination, source, false)
 }

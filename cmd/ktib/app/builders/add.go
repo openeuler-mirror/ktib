@@ -55,15 +55,15 @@ func add(cmd *cobra.Command, name, destination string, source []string) error {
 	if err != nil {
 		return err
 	}
-	builderobj, err := builder.FindBuilder(store, name)
-	if err != nil {
-		return errors.New(fmt.Sprintf("Not found the %s builder", name))
-	}
-	err = builderobj.Add(destination, source, true)
-	if err != nil {
-		return errors.New(fmt.Sprintf("error adding content to builder: %s", err))
-	}
-	return nil
+    builderobj, err := builder.FindBuilder(store, name)
+    if err != nil {
+        return fmt.Errorf("Not found the %s builder", name)
+    }
+    err = builderobj.Add(destination, source, true)
+    if err != nil {
+        return fmt.Errorf("error adding content to builder: %s", err)
+    }
+    return nil
 }
 
 func tail(a []string) []string {

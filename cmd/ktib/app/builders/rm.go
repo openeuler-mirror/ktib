@@ -57,9 +57,9 @@ Arguments:
 }
 
 func rm(cmd *cobra.Command, args []string, op options.RemoveOption) error {
-	if len(args) == 0 {
-		return errors.New(fmt.Sprintf("No container names provided for remove-builder"))
-	}
+    if len(args) == 0 {
+        return errors.New("No container names provided for remove-builder")
+    }
 
 	store, err := utils.GetStore(cmd)
 	if err != nil {

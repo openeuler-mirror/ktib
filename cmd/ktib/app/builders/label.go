@@ -12,13 +12,12 @@
 package builders
 
 import (
-	"errors"
-	"fmt"
-	"gitee.com/openeuler/ktib/pkg/builder"
-	"gitee.com/openeuler/ktib/pkg/options"
-	"gitee.com/openeuler/ktib/pkg/utils"
-	"github.com/spf13/cobra"
-	"strings"
+    "fmt"
+    "gitee.com/openeuler/ktib/pkg/builder"
+    "gitee.com/openeuler/ktib/pkg/options"
+    "gitee.com/openeuler/ktib/pkg/utils"
+    "github.com/spf13/cobra"
+    "strings"
 )
 
 func LABELCmd() *cobra.Command {
@@ -45,10 +44,10 @@ func label(cmd *cobra.Command, args []string, op options.IFIOptions) error {
 	if err != nil {
 		return err
 	}
-	builderobj, err := builder.FindBuilder(store, args[0])
-	if err != nil {
-		return errors.New(fmt.Sprintf("Not found the %s builder", args[0]))
-	}
+    builderobj, err := builder.FindBuilder(store, args[0])
+    if err != nil {
+        return fmt.Errorf("Not found the %s builder", args[0])
+    }
 	containerId := args[0]
 	// 将 args[1] 解析为 map[string]string
 	labels, err := parseLabels(args[1])
