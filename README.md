@@ -4,7 +4,8 @@
 kylin trusted image builder
 
 #### 软件架构
-软件架构说明
+x86_64
+aarch64
 
 
 #### 安装教程
