@@ -12,11 +12,11 @@
 package dockerfile
 
 import (
-    "errors"
-    "io/ioutil"
+	"errors"
+	"os"
 
-    "gopkg.in/yaml.v2"
-    "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
+	"gopkg.in/yaml.v2"
 )
 
 type Policy struct {
@@ -79,21 +79,21 @@ func (p *Policy) EvaluateDockerfile(dockerfileObject Dockerfile) PolicyResult {
 
 func (p *Policy) initRules() error {
 	var policyRules map[string]interface{}
-    yamlFile, err := ioutil.ReadFile(p.PolicyFile)
-    if err != nil {
-        logrus.Errorf("Failed to read %s: %v", p.PolicyFile, err)
-        return errors.New("failed to read policy file")
-    }
-    err = yaml.Unmarshal(yamlFile, &policyRules)
-    if err != nil {
-        logrus.Errorf("Failed to parse %s: %v", p.PolicyFile, err)
-        return errors.New("invalid yaml file")
-    }
+	yamlFile, err := os.ReadFile(p.PolicyFile)
+	if err != nil {
+		logrus.Errorf("Failed to read %s: %v", p.PolicyFile, err)
+		return errors.New("failed to read policy file")
+	}
+	err = yaml.Unmarshal(yamlFile, &policyRules)
+	if err != nil {
+		logrus.Errorf("Failed to parse %s: %v", p.PolicyFile, err)
+		return errors.New("invalid yaml file")
+	}
 	policies, ok := policyRules["policy"].(map[interface{}]interface{})
-    if !ok {
-        logrus.Error("Invalid policy file format: missing 'policy' section")
-        return errors.New("invalid policy file format")
-    }
+	if !ok {
+		logrus.Error("Invalid policy file format: missing 'policy' section")
+		return errors.New("invalid policy file format")
+	}
 
 	if enforceRegistries, ok := policies["enforce_authorized_registries"].(map[interface{}]interface{}); ok {
 		if enabled, ok := enforceRegistries["enabled"].(bool); ok {
@@ -162,29 +162,29 @@ func (p *Policy) initRules() error {
 					if p, ok := pattern.(string); ok {
 						secretsPatterns = append(secretsPatterns, p)
 					} else {
-                        logrus.Warnf("Invalid secrets_patterns format, skipping: %v", pattern)
-                        continue
-                    }
-                }
-            } else {
-                logrus.Warn("Invalid secrets_patterns format. Skipping.")
-            }
-            if patterns, ok := forbidSecrets["allowed_patterns"].([]interface{}); ok {
-                for _, pattern := range patterns {
-                    if p, ok := pattern.(string); ok {
-                        allowedPatterns = append(allowedPatterns, p)
-                    } else {
-                        logrus.Warnf("Invalid allowed_patterns format, skipping: %v", pattern)
-                        continue
-                    }
-                }
-                forbidSecrets := NewForbidSecrets(secretsPatterns, allowedPatterns)
-                p.PolicyRules = append(p.PolicyRules, forbidSecrets)
-            }
-        }
-    } else {
-        logrus.Warn("forbid_secrets rule added but no secrets_patterns defined.")
-    }
+						logrus.Warnf("Invalid secrets_patterns format, skipping: %v", pattern)
+						continue
+					}
+				}
+			} else {
+				logrus.Warn("Invalid secrets_patterns format. Skipping.")
+			}
+			if patterns, ok := forbidSecrets["allowed_patterns"].([]interface{}); ok {
+				for _, pattern := range patterns {
+					if p, ok := pattern.(string); ok {
+						allowedPatterns = append(allowedPatterns, p)
+					} else {
+						logrus.Warnf("Invalid allowed_patterns format, skipping: %v", pattern)
+						continue
+					}
+				}
+				forbidSecrets := NewForbidSecrets(secretsPatterns, allowedPatterns)
+				p.PolicyRules = append(p.PolicyRules, forbidSecrets)
+			}
+		}
+	} else {
+		logrus.Warn("forbid_secrets rule added but no secrets_patterns defined.")
+	}
 
 	return nil
 }

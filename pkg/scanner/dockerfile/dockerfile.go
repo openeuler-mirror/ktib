@@ -12,33 +12,16 @@
 package dockerfile
 
 import (
-    "bytes"
+    "fmt"
     "gitee.com/openeuler/ktib/pkg/scanner/parsingutils"
     "github.com/moby/buildkit/frontend/dockerfile/parser"
-    "io/ioutil"
+    "os"
     "path/filepath"
     "strconv"
     "strings"
-    "github.com/sirupsen/logrus"
 )
 
-type Error interface {
-	error
-}
-
-type NotDockerfileError struct {
-}
-
-func (e *NotDockerfileError) Error() string {
-	return "Not a Dockerfile error"
-}
-
-type EmptyFileError struct {
-}
-
-func (e *EmptyFileError) Error() string {
-	return "Empty file error"
-}
+// legacy error types removed; return wrapped original errors for better diagnostics
 
 type Dockerfile struct {
 	Directives  []DfDirective
@@ -48,29 +31,28 @@ type Dockerfile struct {
 }
 
 func NewDockerfile(path string) (*Dockerfile, error) {
-	dockerfile := &Dockerfile{
-		Directives:  make([]DfDirective, 0),
-		Path:        path,
-		Filename:    filepath.Base(path),
-		Maintainers: make([]string, 0),
-	}
-
-    content, err := ioutil.ReadFile(path)
-    if err != nil {
-        logrus.Errorf("%s does not exist or it is not a file. %s", dockerfile.Path, err)
-        return nil, &NotDockerfileError{}
+    dockerfile := &Dockerfile{
+        Directives:  make([]DfDirective, 0),
+        Path:        path,
+        Filename:    filepath.Base(path),
+        Maintainers: make([]string, 0),
     }
 
-	dockerfileContent := normalizeContent(string(content))
-	if len(dockerfileContent) == 0 {
-		return nil, &EmptyFileError{}
-	}
-	dockerfileReader := bytes.NewReader([]byte(dockerfileContent))
-	vistor := NewDockerfileVisitor(dockerfile)
-	parsedLines, err := parser.Parse(dockerfileReader)
-	if err != nil {
-		return nil, &EmptyFileError{}
-	}
+    content, err := os.ReadFile(path)
+    if err != nil {
+        return nil, fmt.Errorf("read dockerfile %q: %w", dockerfile.Path, err)
+    }
+
+    normalized := normalizeContent(string(content))
+    if len(normalized) == 0 {
+        return nil, fmt.Errorf("dockerfile %q is empty after normalization", dockerfile.Path)
+    }
+    reader := strings.NewReader(normalized)
+    vistor := NewDockerfileVisitor(dockerfile)
+    parsedLines, err := parser.Parse(reader)
+    if err != nil {
+        return nil, fmt.Errorf("parse dockerfile %q: %w", dockerfile.Path, err)
+    }
 
 	vistor.VisitDockerfile(parsedLines.AST)
 	return dockerfile, nil
@@ -181,7 +163,7 @@ func (df *Dockerfile) GetMaintainers() string {
 }
 
 func normalizeContent(content string) string {
-	// Perform content normalization and preprocessing
-	dockerfilePreprocessor := parsingutils.NewDockerfilePreprocessor(content)
-	return dockerfilePreprocessor.GetNormalizedContent()
+    // Perform content normalization and preprocessing
+    dockerfilePreprocessor := parsingutils.NewDockerfilePreprocessor(content)
+    return dockerfilePreprocessor.GetNormalizedContent()
 }
