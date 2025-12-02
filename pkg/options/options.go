@@ -155,14 +155,11 @@ type IFIOptions struct {
 }
 
 type Arguments struct {
-	PolicyFile     string
-	Dockerfile     string
-	ParseOnly      bool
-	GenerateReport bool
-	JSONOutfile    string
-	ReportName     string
-	ReportTemplate string
-	Verbose        bool
+    PolicyFile     string
+    Dockerfile     string
+    ParseOnly      bool
+    JSONOutfile    string
+    Verbose        bool
 }
 
 type SummaryStats struct {
