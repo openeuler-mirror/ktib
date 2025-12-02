@@ -12,12 +12,12 @@
 package main
 
 import (
-	"gitee.com/openeuler/ktib/cmd/ktib/app"
-	ktibutils "gitee.com/openeuler/ktib/pkg/utils"
+    "gitee.com/openeuler/ktib/cmd/ktib/app"
+    ktibutils "gitee.com/openeuler/ktib/pkg/utils"
 )
 
 var version = "dev"
 
 func main() {
-	ktibutils.CheckErr(app.Run())
+    ktibutils.CheckErr(app.Run(version))
 }

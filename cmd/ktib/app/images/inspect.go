@@ -15,7 +15,6 @@ package images
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 
 	"gitee.com/openeuler/ktib/pkg/imagemanager"
