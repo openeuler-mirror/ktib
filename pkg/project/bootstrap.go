@@ -20,7 +20,7 @@ import (
 
 	"gitee.com/openeuler/ktib/pkg/templates"
 	"github.com/sirupsen/logrus"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 var yumConfig = "/etc/yum.conf"

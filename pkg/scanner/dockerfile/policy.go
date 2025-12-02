@@ -16,7 +16,7 @@ import (
 	"os"
 
 	"github.com/sirupsen/logrus"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 type Policy struct {
@@ -89,13 +89,13 @@ func (p *Policy) initRules() error {
 		logrus.Errorf("Failed to parse %s: %v", p.PolicyFile, err)
 		return errors.New("invalid yaml file")
 	}
-	policies, ok := policyRules["policy"].(map[interface{}]interface{})
+	policies, ok := policyRules["policy"].(map[string]interface{})
 	if !ok {
 		logrus.Error("Invalid policy file format: missing 'policy' section")
 		return errors.New("invalid policy file format")
 	}
 
-	if enforceRegistries, ok := policies["enforce_authorized_registries"].(map[interface{}]interface{}); ok {
+	if enforceRegistries, ok := policies["enforce_authorized_registries"].(map[string]interface{}); ok {
 		if enabled, ok := enforceRegistries["enabled"].(bool); ok {
 			registries, ok := enforceRegistries["registries"]
 			if ok {
@@ -108,7 +108,7 @@ func (p *Policy) initRules() error {
 		}
 	}
 
-	if forbidTags, ok := policies["forbid_floating_tags"].(map[interface{}]interface{}); ok {
+	if forbidTags, ok := policies["forbid_floating_tags"].(map[string]interface{}); ok {
 		if enabled, ok := forbidTags["enabled"].(bool); ok && enabled {
 			tags, ok := forbidTags["forbidden_tags"]
 			if ok {
@@ -121,26 +121,26 @@ func (p *Policy) initRules() error {
 		}
 	}
 
-	if forbidInsecureRegistries, ok := policies["forbid_insecure_registries"].(map[interface{}]interface{}); ok {
+	if forbidInsecureRegistries, ok := policies["forbid_insecure_registries"].(map[string]interface{}); ok {
 		if enabled, ok := forbidInsecureRegistries["enabled"].(bool); ok && enabled {
 			insecureRegistries := NewForbidInsecureRegistries(enabled)
 			p.PolicyRules = append(p.PolicyRules, insecureRegistries)
 		}
 	}
 
-	if forbidRoot, ok := policies["forbid_root"].(map[interface{}]interface{}); ok {
+	if forbidRoot, ok := policies["forbid_root"].(map[string]interface{}); ok {
 		if enabled, ok := forbidRoot["enabled"].(bool); ok && enabled {
 			p.PolicyRules = append(p.PolicyRules, NewForbidRoot(enabled))
 		}
 	}
 
-	if forbidPrivilegedPorts, ok := policies["forbid_privileged_ports"].(map[interface{}]interface{}); ok {
+	if forbidPrivilegedPorts, ok := policies["forbid_privileged_ports"].(map[string]interface{}); ok {
 		if enabled, ok := forbidPrivilegedPorts["enabled"].(bool); ok && enabled {
 			p.PolicyRules = append(p.PolicyRules, NewForbidPrivilegedPorts(enabled))
 		}
 	}
 
-	if forbidPackages, ok := policies["forbid_packages"].(map[interface{}]interface{}); ok {
+	if forbidPackages, ok := policies["forbid_packages"].(map[string]interface{}); ok {
 		if enabled, ok := forbidPackages["enabled"].(bool); ok && enabled {
 			packages, ok := forbidPackages["forbidden_packages"]
 			if ok {
@@ -152,7 +152,7 @@ func (p *Policy) initRules() error {
 			}
 		}
 	}
-	if forbidSecrets, ok := policies["forbid_secrets"].(map[interface{}]interface{}); ok {
+	if forbidSecrets, ok := policies["forbid_secrets"].(map[string]interface{}); ok {
 		var secretsPatterns []string
 		var allowedPatterns []string
 		if enabled, ok := forbidSecrets["enabled"].(bool); ok && enabled {
