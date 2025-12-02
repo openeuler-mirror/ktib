@@ -43,8 +43,9 @@ example:
 
 func newSubCmdDokcerfile() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "dockerfile-audit",
-		Short: "dockerfile-audit uses its own grammar to parse valid Dockerfiles and deconstruct all directives.",
+		Use:     "dockerfile-audit",
+		Aliases: []string{"df-audit"},
+		Short:   "dockerfile-audit uses its own grammar to parse valid Dockerfiles and deconstruct all directives.",
 		Run: func(cmd *cobra.Command, arg []string) {
 			scanner.RunDockerfileAudit(args)
 		},

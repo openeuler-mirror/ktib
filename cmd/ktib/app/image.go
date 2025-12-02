@@ -17,15 +17,16 @@ import (
 )
 
 func newCmdImage() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "images",
-		Short: "Run this command in order to operate images at local or remote",
-		// TODO 检查container依赖文件，及软件包是否安装
-		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			return nil
-		},
-		Args: cobra.NoArgs,
-	}
+    cmd := &cobra.Command{
+        Use:   "images",
+        Aliases: []string{"i"},
+        Short: "Run this command in order to operate images at local or remote",
+        // TODO 检查container依赖文件，及软件包是否安装
+        PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+            return nil
+        },
+        Args: cobra.NoArgs,
+    }
 	//TODO: 需要补充images save load
 	cmd.AddCommand(
 		imagetool.ImageListCmd(),

@@ -38,9 +38,10 @@ func removeImages(cmd *cobra.Command, imageName []string, op options.RemoveOptio
 func RemoveImagesCmd() *cobra.Command {
 	var op options.RemoveOption
 	cmd := &cobra.Command{
-		Use:   "rmi",
-		Short: "Remove one or more images",
-		Args:  cobra.MinimumNArgs(1),
+		Use:     "rmi",
+		Aliases: []string{"remove"},
+		Short:   "Remove one or more images",
+		Args:    cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) < 1 {
 				return fmt.Errorf("please enter remove images")

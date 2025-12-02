@@ -39,14 +39,15 @@ func imageList(cmd *cobra.Command, args []string, ops options.ImagesOption) erro
 }
 
 func ImageListCmd() *cobra.Command {
-	var op options.ImagesOption
-	cmd := &cobra.Command{
-		Use:   "list",
-		Short: "List images",
-		Args:  cobra.MaximumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return imageList(cmd, args, op)
-		},
+    var op options.ImagesOption
+    cmd := &cobra.Command{
+        Use:   "list",
+        Aliases: []string{"ls"},
+        Short: "List images",
+        Args:  cobra.MaximumNArgs(1),
+        RunE: func(cmd *cobra.Command, args []string) error {
+            return imageList(cmd, args, op)
+        },
 		Example: `ktib images list
 ktib images list [imageName]
 ktib images list --format '{{.ID}} {{.Name}} {{.Size}}'`,
