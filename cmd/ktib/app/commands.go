@@ -90,6 +90,62 @@ func NewCommand(version string) *cobra.Command {
 		// todo: 还没实现
 		newCmdMake(),
 		newCmdVersion(),
+		// 添加补全命令
+		&cobra.Command{
+			Use:   "completion",
+			Short: "Generate shell completion scripts",
+			Long: `Generate shell completion scripts for ktib.
+
+To load completions:
+
+Bash:
+  $ source <(ktib completion bash)
+
+  # To load completions for each session, execute once:
+  # Linux:
+  $ ktib completion bash > /etc/bash_completion.d/ktib
+  # macOS:
+  $ ktib completion bash > /usr/local/etc/bash_completion.d/ktib
+
+Zsh:
+  # If shell completion is not already enabled in your environment,
+  # you will need to enable it.  You can execute the following once:
+  $ echo "autoload -U compinit; compinit" >> ~/.zshrc
+
+  # To load completions for each session, execute once:
+  $ ktib completion zsh > "${fpath[1]}/_ktib"
+
+  # You will need to start a new shell for this setup to take effect.
+
+fish:
+  $ ktib completion fish | source
+
+  # To load completions for each session, execute once:
+  $ ktib completion fish > ~/.config/fish/completions/ktib.fish
+
+PowerShell:
+  PS> ktib completion powershell | Out-String | Invoke-Expression
+
+  # To load completions for every new session, run:
+  PS> ktib completion powershell > ktib.ps1
+  # and source this file from your PowerShell profile.
+`,
+			DisableFlagsInUseLine: true,
+			ValidArgs:             []string{"bash", "zsh", "fish", "powershell"},
+			Args:                  cobra.ExactValidArgs(1),
+			Run: func(cmd *cobra.Command, args []string) {
+				switch args[0] {
+				case "bash":
+					cmd.Root().GenBashCompletion(cmd.OutOrStdout())
+				case "zsh":
+					cmd.Root().GenZshCompletion(cmd.OutOrStdout())
+				case "fish":
+					cmd.Root().GenFishCompletion(cmd.OutOrStdout(), true)
+				case "powershell":
+					cmd.Root().GenPowerShellCompletionWithDesc(cmd.OutOrStdout())
+				}
+			},
+		},
 	)
 	return cmds
 }
