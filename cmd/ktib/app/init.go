@@ -177,6 +177,10 @@ func newSubCmdCleanRootfs() *cobra.Command {
 	var option struct {
 		imageType string
 	}
+
+	// 定义有效的镜像类型
+	validImageTypes := []string{"micro", "minimal", "platform", "init"}
+
 	cmd := &cobra.Command{
 		Use:   "clean-rootfs",
 		Short: "Run this command to clean unnecessary files and packages in rootfs",
@@ -192,8 +196,22 @@ It also performs additional environment configuration operations to optimize the
 
 			boot := project.NewBootstrap(args[0])
 
-			// 如果指定了镜像类型，则设置
+			// 如果指定了镜像类型，则进行校验并设置
 			if option.imageType != "" {
+				// 校验镜像类型
+				valid := false
+				for _, t := range validImageTypes {
+					if option.imageType == t {
+						valid = true
+						break
+					}
+				}
+				if !valid {
+					return fmt.Errorf("无效的镜像类型: %s。有效的类型包括: %s",
+						option.imageType, strings.Join(validImageTypes, ", "))
+				}
+
+				// 设置镜像类型
 				boot.BuildType = option.imageType
 			}
 
@@ -206,10 +224,21 @@ It also performs additional environment configuration operations to optimize the
 			return nil
 		},
 		Args: cobra.MinimumNArgs(1),
+		// 为 clean-rootfs 命令添加路径补全
+		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+			// 返回目录补全
+			return nil, cobra.ShellCompDirectiveFilterDirs
+		},
 	}
 
 	// 确保标志被正确添加到命令的标志集合中
-	cmd.Flags().StringVar(&option.imageType, "type", "", "Type of image (micro, minimal, platform, or init)")
+	cmd.Flags().StringVar(&option.imageType, "type", "",
+		fmt.Sprintf("Type of image (%s)", strings.Join(validImageTypes, ", ")))
+
+	// 为镜像类型标志添加自动补全
+	cmd.RegisterFlagCompletionFunc("type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return validImageTypes, cobra.ShellCompDirectiveDefault
+	})
 
 	return cmd
 }
