@@ -13,11 +13,13 @@ See the Mulan PSL v2 for more details.
 package utils
 
 import (
+	"errors"
 	"fmt"
-	"github.com/containers/buildah/define"
-	"github.com/spf13/cobra"
 	"os"
 	"strings"
+
+	"github.com/containers/buildah/define"
+	"github.com/spf13/cobra"
 )
 
 func IsDir(path string) bool {
@@ -47,6 +49,10 @@ func DefaultFormat() string {
 }
 
 func ValidateFileName(filename string) error {
+	if filename == "" {
+		return errors.New("filename cannot be empty")
+	}
+
 	if strings.Contains(filename, ":") {
 		return fmt.Errorf("invalid filename (should not contain ':') %q", filename)
 	}
