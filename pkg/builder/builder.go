@@ -18,7 +18,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -27,6 +26,7 @@ import (
 	"gitee.com/openeuler/ktib/pkg/options"
 	cpier "github.com/containers/image/v5/copy"
 	v5manifest "github.com/containers/image/v5/manifest"
+
 	//"github.com/containers/image/v5/docker/reference"
 	"github.com/containers/image/v5/signature"
 	"github.com/containers/image/v5/transports/alltransports"
@@ -129,7 +129,7 @@ func FindBuilder(store storage.Store, name string) (*Builder, error) {
 	}
 	statefile := filepath.Join(cdir, stateFile)
 
-	buildstate, err := ioutil.ReadFile(statefile)
+	buildstate, err := os.ReadFile(statefile)
 	if err != nil && os.IsNotExist(err) {
 		return nil, err
 	}
@@ -154,7 +154,7 @@ func FindAllBuilders(store storage.Store) ([]*Builder, error) {
 		if err != nil {
 			return nil, err
 		}
-		buildstate, err := ioutil.ReadFile(filepath.Join(cdir, stateFile))
+		buildstate, err := os.ReadFile(filepath.Join(cdir, stateFile))
 		if err != nil && os.IsNotExist(err) {
 			return nil, err
 		}
@@ -624,7 +624,7 @@ func (b *Builder) SetLabel(containerID string, labels map[string]string) error {
 	configPath := filepath.Join(configDir, "ktib.json")
 
 	// 读取配置文件
-	data, err := ioutil.ReadFile(configPath)
+	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return err
 	}
@@ -650,7 +650,7 @@ func (b *Builder) SetLabel(containerID string, labels map[string]string) error {
 	if err != nil {
 		return err
 	}
-	if err := ioutil.WriteFile(configPath, newData, 0644); err != nil {
+	if err := os.WriteFile(configPath, newData, 0644); err != nil {
 		return err
 	}
 
