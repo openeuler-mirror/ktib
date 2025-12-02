@@ -4,7 +4,8 @@
 kylin trusted image builder
 
 #### Software Architecture
-Software architecture description
+x86_64
+aarch64
 
 #### Installation
 
