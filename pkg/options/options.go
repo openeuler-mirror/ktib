@@ -18,7 +18,6 @@ import (
 )
 
 type Option struct {
-	Driver string
 }
 
 type ImagesOption struct {
@@ -159,7 +158,6 @@ type Arguments struct {
 	PolicyFile     string
 	Dockerfile     string
 	ParseOnly      bool
-	GenerateJSON   bool
 	GenerateReport bool
 	JSONOutfile    string
 	ReportName     string
