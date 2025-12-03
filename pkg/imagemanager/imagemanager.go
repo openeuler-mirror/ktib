@@ -105,9 +105,10 @@ func (im *ImageManager) KtibLogin(ctx context.Context, lops *options.LoginOption
 		AcceptUnspecifiedRegistry: true,
 	}
 	sctx := &types.SystemContext{
-		AuthFilePath:                      loginOps.AuthFile,
-		DockerCertPath:                    loginOps.CertDir,
-		DockerDaemonInsecureSkipTLSVerify: lops.TLSVerify,
+		AuthFilePath: loginOps.AuthFile,
+		DockerCertPath: loginOps.CertDir,
+		// 修复：TLS验证标志语义反转问题：当 lops.TLSVerify 为 true（需要验证）时，跳过验证应为 false
+		DockerDaemonInsecureSkipTLSVerify: !lops.TLSVerify,
 	}
 
 	// 设置 insecure 参数
