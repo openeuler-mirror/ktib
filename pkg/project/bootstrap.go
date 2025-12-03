@@ -80,7 +80,6 @@ func (b *Bootstrap) InitProjectStructure() error {
 
 	// 添加必要的文件
 	b.AddDockerfile()
-	b.AddTestcase()
 	b.AddChangeInfo()
 	b.AddRemoveList()
 	b.AddRemoveMinimalList()
@@ -163,10 +162,6 @@ func (b *Bootstrap) AddDockerfile() {
 	}
 }
 
-func (b *Bootstrap) AddTestcase() {
-	// 在 tests 目录中创建测试用例
-	b.initialize(templates.Testcase, "tests/test.sh", 0755)
-}
 
 func (b *Bootstrap) AddRemoveList() {
 	b.initialize(templates.RemoveList, "files/removelist", 0644)
