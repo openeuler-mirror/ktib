@@ -1,17 +1,22 @@
 package scanner
 
 import (
-    "encoding/json"
-    "os"
-    "path/filepath"
+	"encoding/json"
+	"os"
+	"path/filepath"
 
-    o "gitee.com/openeuler/ktib/pkg/options"
-    "gitee.com/openeuler/ktib/pkg/scanner/dockerfile"
-    "github.com/sirupsen/logrus"
+	o "gitee.com/openeuler/ktib/pkg/options"
+	"gitee.com/openeuler/ktib/pkg/scanner/dockerfile"
+	"github.com/sirupsen/logrus"
 )
 
 func RunDockerfileAudit(args o.Arguments) {
 	filesToProcess := getFilesToProcess(args.Dockerfile)
+	if len(filesToProcess) == 0 {
+		logrus.Info("No Dockerfiles found to process")
+		return
+	}
+
 	if args.ParseOnly {
 		parsedFiles := parse(filesToProcess)
 		if len(parsedFiles) == 0 {
@@ -22,35 +27,40 @@ func RunDockerfileAudit(args o.Arguments) {
 		if err != nil {
 			logrus.Fatal(err)
 		}
-        err = os.WriteFile(args.JSONOutfile, jsonData, 0644)
-        if err != nil {
-            logrus.Fatal(err)
-        }
+		err = os.WriteFile(args.JSONOutfile, jsonData, 0644)
+		if err != nil {
+			logrus.Fatal(err)
+		}
 		logrus.Infof("JSON report generated: %s", args.JSONOutfile)
 		return
 	}
 
 	policy, err := getPolicy(args.PolicyFile)
 	if err != nil {
-		logrus.Fatal("failed to get policy")
+		logrus.Fatalf("Failed to get policy: %v", err)
 	}
+
 	results := audit(filesToProcess, policy)
 	if len(results) == 0 {
-		logrus.Info("No files were processed, reports will be skipped.")
+		logrus.Info("No audit results generated, reports will be skipped.")
 		return
 	}
+
 	outFile, err := os.Create(args.JSONOutfile)
 	if err != nil {
-		logrus.Fatal(err)
+		logrus.Fatalf("Failed to create output file: %v", err)
 	}
 	defer outFile.Close()
+
 	encoder := json.NewEncoder(outFile)
 	encoder.SetIndent("", "  ")
 	encoder.SetEscapeHTML(false)
+
 	if err := encoder.Encode(results); err != nil {
-		logrus.Fatal(err)
+		logrus.Fatalf("Failed to encode JSON: %v", err)
 	}
-	logrus.Infof("JSON report generated: %s", args.JSONOutfile)
+
+	logrus.Infof("JSON audit report generated: %s", args.JSONOutfile)
 }
 
 func getFilesToProcess(argsDockerfile string) []string {
