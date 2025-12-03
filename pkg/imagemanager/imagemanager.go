@@ -45,6 +45,16 @@ type ImageManager struct {
 type Image struct {
 	OriImage storage.Image
 	Size     int64
+
+	// 解析后的名称信息
+	ParsedNames []ParsedImageName
+}
+
+// 解析后的镜像名称结构
+type ParsedImageName struct {
+	Repository string // 仓库名
+	Tag        string // 标签
+	// Digest     string // 摘要
 }
 
 func NewImageManager(store storage.Store) (*ImageManager, error) {
@@ -65,10 +75,12 @@ func (im *ImageManager) ListImage(ops options.ImagesOption, store storage.Store,
 		SetListData: true,
 	}
 	listImagesOptions.Filters = append(listImagesOptions.Filters, "intermediate=false")
+
 	images, err := im.Manager.ListImages(background, nil, listImagesOptions)
 	if err != nil {
 		return nil, err
 	}
+
 	var ktibImages []*Image
 	// 遍历获取到的镜像数据
 	for _, img := range images {
@@ -82,7 +94,7 @@ func (im *ImageManager) ListImage(ops options.ImagesOption, store storage.Store,
 
 		// 创建一个 Image 实例并填充数据
 		ktibImage := &Image{
-			OriImage: *storageImg, //storage.Image 直接赋值
+			OriImage: *storageImg, // storage.Image 直接赋值
 			Size:     size,
 		}
 
