@@ -17,12 +17,9 @@ import (
 )
 
 func Run(version string) error {
-	//A library subroutine needed to run a subprocess.
-	//So reexec.Init() should be called in main()
     if utils.ReexecInit() {
         return nil
     }
-    logging.Setup("", "")
     cmd := NewCommand(version)
     cmd.CompletionOptions.DisableDefaultCmd = true
     return cmd.Execute()
