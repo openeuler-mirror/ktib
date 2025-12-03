@@ -12,32 +12,32 @@
 package builder
 
 import (
-	"bufio"
-	"context"
-	"encoding/json"
-	"errors"
-	"fmt"
-	"io"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"strings"
+    "bufio"
+    "context"
+    "encoding/json"
+    "errors"
+    "fmt"
+    "io"
+    "os"
+    "os/exec"
+    "path/filepath"
+    "strings"
 
-	"gitee.com/openeuler/ktib/pkg/options"
-	cpier "github.com/containers/image/v5/copy"
-	v5manifest "github.com/containers/image/v5/manifest"
+    "gitee.com/openeuler/ktib/pkg/options"
+    cpier "github.com/containers/image/v5/copy"
+    v5manifest "github.com/containers/image/v5/manifest"
 
-	//"github.com/containers/image/v5/docker/reference"
-	"github.com/containers/image/v5/signature"
-	"github.com/containers/image/v5/transports/alltransports"
-	"github.com/containers/image/v5/types"
-	"github.com/containers/storage"
-	"github.com/containers/storage/pkg/archive"
-	"github.com/containers/storage/pkg/ioutils"
-	"github.com/opencontainers/go-digest"
-	v1 "github.com/opencontainers/image-spec/specs-go/v1"
-	"github.com/opencontainers/runtime-tools/generate"
-	"github.com/sirupsen/logrus"
+    //"github.com/containers/image/v5/docker/reference"
+    "github.com/containers/image/v5/signature"
+    "github.com/containers/image/v5/transports/alltransports"
+    "github.com/containers/image/v5/types"
+    "github.com/containers/storage"
+    "github.com/containers/storage/pkg/archive"
+    "github.com/containers/storage/pkg/ioutils"
+    "github.com/opencontainers/go-digest"
+    v1 "github.com/opencontainers/image-spec/specs-go/v1"
+    "github.com/opencontainers/runtime-tools/generate"
+    "github.com/sirupsen/logrus"
 )
 
 const (
@@ -129,7 +129,7 @@ func FindBuilder(store storage.Store, name string) (*Builder, error) {
 	}
 	statefile := filepath.Join(cdir, stateFile)
 
-	buildstate, err := os.ReadFile(statefile)
+    buildstate, err := os.ReadFile(statefile)
 	if err != nil && os.IsNotExist(err) {
 		return nil, err
 	}
@@ -154,7 +154,7 @@ func FindAllBuilders(store storage.Store) ([]*Builder, error) {
 		if err != nil {
 			return nil, err
 		}
-		buildstate, err := os.ReadFile(filepath.Join(cdir, stateFile))
+        buildstate, err := os.ReadFile(filepath.Join(cdir, stateFile))
 		if err != nil && os.IsNotExist(err) {
 			return nil, err
 		}
@@ -630,7 +630,7 @@ func (b *Builder) SetLabel(containerID string, labels map[string]string) error {
 	configPath := filepath.Join(configDir, "ktib.json")
 
 	// 读取配置文件
-	data, err := os.ReadFile(configPath)
+    data, err := os.ReadFile(configPath)
 	if err != nil {
 		return err
 	}
@@ -656,9 +656,9 @@ func (b *Builder) SetLabel(containerID string, labels map[string]string) error {
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(configPath, newData, 0644); err != nil {
-		return err
-	}
+    if err := os.WriteFile(configPath, newData, 0644); err != nil {
+        return err
+    }
 
 	fmt.Printf("成功为容器 %s 设置标签: %v\n", containerID, labels)
 	return nil

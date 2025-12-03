@@ -12,17 +12,16 @@
 package project
 
 import (
-	"archive/tar"
-	"context"
-	"fmt"
-	"io"
-	"io/ioutil"
-	"os"
-	"path/filepath"
+    "archive/tar"
+    "context"
+    "fmt"
+    "io"
+    "os"
+    "path/filepath"
 
-	"gitee.com/openeuler/ktib/pkg/options"
-	"gitee.com/openeuler/ktib/pkg/utils"
-	"github.com/containers/buildah/imagebuildah"
+    "gitee.com/openeuler/ktib/pkg/options"
+    "gitee.com/openeuler/ktib/pkg/utils"
+    "github.com/containers/buildah/imagebuildah"
 )
 
 // BuildImage 方法用于构建容器镜像
@@ -34,7 +33,7 @@ func (b *Bootstrap) BuildImage(imageName, tag string) error {
 	}
 
 	// 创建临时目录用于构建
-	buildDir, err := ioutil.TempDir("", "ktib-build-")
+    buildDir, err := os.MkdirTemp("", "ktib-build-")
 	if err != nil {
 		return fmt.Errorf("创建临时构建目录失败: %v", err)
 	}
@@ -52,47 +51,47 @@ func (b *Bootstrap) BuildImage(imageName, tag string) error {
 ADD rootfs.tar /
 CMD ["/bin/bash"]
 `
-	if err := ioutil.WriteFile(dockerfilePath, []byte(dockerfileContent), 0644); err != nil {
-		return fmt.Errorf("创建 Dockerfile 失败: %v", err)
-	}
+    if err := os.WriteFile(dockerfilePath, []byte(dockerfileContent), 0644); err != nil {
+        return fmt.Errorf("创建 Dockerfile 失败: %v", err)
+    }
 
 	// 复制 files 目录中的文件到构建目录（如果需要）
 	filesDir := filepath.Join(b.DestinationDir, "files")
 	if _, err := os.Stat(filesDir); err == nil {
-		entries, err := ioutil.ReadDir(filesDir)
-		if err != nil {
-			return fmt.Errorf("读取 files 目录失败: %v", err)
-		}
+        entries, err := os.ReadDir(filesDir)
+        if err != nil {
+            return fmt.Errorf("读取 files 目录失败: %v", err)
+        }
 
 		for _, entry := range entries {
 			srcPath := filepath.Join(filesDir, entry.Name())
 			dstPath := filepath.Join(buildDir, entry.Name())
 
-			if entry.IsDir() {
-				// 如果是目录，创建对应的目录
-				if err := os.MkdirAll(dstPath, 0755); err != nil {
-					return fmt.Errorf("创建目录 %s 失败: %v", dstPath, err)
-				}
-			} else {
-				// 如果是文件，复制文件内容
-				srcFile, err := os.Open(srcPath)
-				if err != nil {
-					return fmt.Errorf("打开源文件 %s 失败: %v", srcPath, err)
-				}
-				defer srcFile.Close()
+            if entry.IsDir() {
+                // 如果是目录，创建对应的目录
+                if err := os.MkdirAll(dstPath, 0755); err != nil {
+                    return fmt.Errorf("创建目录 %s 失败: %v", dstPath, err)
+                }
+            } else {
+                // 如果是文件，复制文件内容
+                srcFile, err := os.Open(srcPath)
+                if err != nil {
+                    return fmt.Errorf("打开源文件 %s 失败: %v", srcPath, err)
+                }
+                defer srcFile.Close()
 
-				dstFile, err := os.Create(dstPath)
-				if err != nil {
-					return fmt.Errorf("创建目标文件 %s 失败: %v", dstPath, err)
-				}
-				defer dstFile.Close()
+                dstFile, err := os.Create(dstPath)
+                if err != nil {
+                    return fmt.Errorf("创建目标文件 %s 失败: %v", dstPath, err)
+                }
+                defer dstFile.Close()
 
-				if _, err = io.Copy(dstFile, srcFile); err != nil {
-					return fmt.Errorf("复制文件内容失败: %v", err)
-				}
-			}
-		}
-	}
+                if _, err = io.Copy(dstFile, srcFile); err != nil {
+                    return fmt.Errorf("复制文件内容失败: %v", err)
+                }
+            }
+        }
+    }
 
 	// 使用 ktib 内部构建接口构建镜像
 	imageTag := fmt.Sprintf("%s:%s", imageName, tag)
@@ -225,5 +224,5 @@ func createDefaultDockerfile(projectDir string) error {
 ADD rootfs.tar /
 CMD ["/bin/bash"]
 `
-	return ioutil.WriteFile(dockerfilePath, []byte(content), 0644)
+    return os.WriteFile(dockerfilePath, []byte(content), 0644)
 }

@@ -1,14 +1,13 @@
 package scanner
 
 import (
-	"encoding/json"
-	"io/ioutil"
-	"os"
-	"path/filepath"
+    "encoding/json"
+    "os"
+    "path/filepath"
 
-	o "gitee.com/openeuler/ktib/pkg/options"
-	"gitee.com/openeuler/ktib/pkg/scanner/dockerfile"
-	"github.com/sirupsen/logrus"
+    o "gitee.com/openeuler/ktib/pkg/options"
+    "gitee.com/openeuler/ktib/pkg/scanner/dockerfile"
+    "github.com/sirupsen/logrus"
 )
 
 func RunDockerfileAudit(args o.Arguments) {
@@ -23,10 +22,10 @@ func RunDockerfileAudit(args o.Arguments) {
 		if err != nil {
 			logrus.Fatal(err)
 		}
-		err = ioutil.WriteFile(args.JSONOutfile, jsonData, 0644)
-		if err != nil {
-			logrus.Fatal(err)
-		}
+        err = os.WriteFile(args.JSONOutfile, jsonData, 0644)
+        if err != nil {
+            logrus.Fatal(err)
+        }
 		logrus.Infof("JSON report generated: %s", args.JSONOutfile)
 		return
 	}
