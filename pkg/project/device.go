@@ -1,12 +1,14 @@
 /*
-   Copyright (c) 2023 KylinSoft Co., Ltd.
-   Kylin trusted image builder(ktib) is licensed under Mulan PSL v2.
-   You can use this software according to the terms and conditions of the Mulan PSL v2.
-   You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-   THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING
-   BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-   See the Mulan PSL v2 for more details.
+Copyright (c) 2023 KylinSoft Co., Ltd.
+Kylin trusted image builder(ktib) is licensed under Mulan PSL v2.
+You can use this software according to the terms and conditions of the Mulan PSL v2.
+You may obtain a copy of Mulan PSL v2 at:
+
+	http://license.coscl.org.cn/MulanPSL2
+
+THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING
+BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+See the Mulan PSL v2 for more details.
 */
 package project
 
@@ -47,11 +49,11 @@ func CreateCharDevice(target, name, nodeType string, major, minor uint32, mode o
 	path := fmt.Sprintf("%s/dev/%s", target, name)
 	err := mknod(path, nodeType, major, minor)
 	if err != nil {
-		fmt.Printf("Failed to create device %s: %s\n", name, err)
+		return fmt.Errorf("failed to create device %s: %v", name, err)
 	}
 	err = os.Chmod(path, mode)
 	if err != nil {
-		fmt.Printf("Failed to set mode for device %s: %s\n", name, err)
+		return fmt.Errorf("failed to set mode for device %s: %v", name, err)
 	}
 	return nil
 }
@@ -60,7 +62,7 @@ func CreateFifoDevice(target, name string) error {
 	path := fmt.Sprintf("%s/dev/%s", target, name)
 	err := syscall.Mkfifo(path, 0600)
 	if err != nil {
-		fmt.Printf("Failed to create fifo file initctl: %v", err)
+		return fmt.Errorf("failed to create fifo file initctl: %v", err)
 	}
 	return nil
 }

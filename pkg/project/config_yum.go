@@ -1,12 +1,14 @@
 /*
-   Copyright (c) 2023 KylinSoft Co., Ltd.
-   Kylin trusted image builder(ktib) is licensed under Mulan PSL v2.
-   You can use this software according to the terms and conditions of the Mulan PSL v2.
-   You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-   THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING
-   BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-   See the Mulan PSL v2 for more details.
+Copyright (c) 2023 KylinSoft Co., Ltd.
+Kylin trusted image builder(ktib) is licensed under Mulan PSL v2.
+You can use this software according to the terms and conditions of the Mulan PSL v2.
+You may obtain a copy of Mulan PSL v2 at:
+
+	http://license.coscl.org.cn/MulanPSL2
+
+THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING
+BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+See the Mulan PSL v2 for more details.
 */
 package project
 
@@ -25,10 +27,10 @@ func CheckDnfAndCreateDev(target string) error {
 	// Remove target directory if exists and create new
 	err := os.RemoveAll(target)
 	if err != nil {
-		fmt.Printf("Failed to remove target directory:%v", err)
+		return fmt.Errorf("failed to remove target directory:%v", err)
 	}
 	if err := os.MkdirAll(target+"/dev", 0755); err != nil {
-		fmt.Printf("Failed to create dev directory:%v", err)
+		return fmt.Errorf("failed to create dev directory:%v", err)
 	}
 	return nil
 }
@@ -44,14 +46,14 @@ func CheckVarsFile(target string) error {
 	if _, err := os.Stat("/etc/yum/vars"); err == nil {
 		err := os.MkdirAll(filepath.Join(target, "/etc/yum"), 0755)
 		if err != nil {
-			fmt.Printf("Failed to create yum directory: %v", err)
+			return fmt.Errorf("failed to create yum directory: %v", err)
 		}
 		cmd := exec.Command("cp", "-a", "/etc/yum/vars", filepath.Join(target, "etc/yum/"))
 		if err := cmd.Run(); err != nil {
-			fmt.Printf("Failed to copy /etc/yum/vars:%v", err)
+			return fmt.Errorf("failed to copy /etc/yum/vars:%v", err)
 		}
 	} else if os.IsNotExist(err) {
-		fmt.Printf("/etc/yum/vars directory does not exist :%v", err)
+		return fmt.Errorf("/etc/yum/vars directory does not exist :%v", err)
 	}
 	return nil
 }
