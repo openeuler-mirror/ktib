@@ -29,3 +29,12 @@ build:
 .PHONY: install
 install:
 	go install $(LDFLAGS) ./cmd/ktib
+
+.PHONY: test
+test:
+	go test -v -race ./...
+
+.PHONY: clean
+clean:
+	rm -f ktib
+	go clean
