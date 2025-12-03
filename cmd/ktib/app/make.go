@@ -27,6 +27,8 @@ type makeOption struct {
 	imageName string
 	tag       string
 	init      bool
+	timezone  string
+	locale    string
 }
 
 func runMake(cmd *cobra.Command, args []string, option makeOption) error {
@@ -41,7 +43,7 @@ func runMake(cmd *cobra.Command, args []string, option makeOption) error {
 		}
 		if option.config == "" {
 			option.config = filepath.Join(args[0], "config.yml")
-			if err := runDefaultConfig(option.config); err != nil {
+			if err := runDefaultConfig(option.config, option.timezone, option.locale); err != nil {
 				return err
 			}
 		}
@@ -104,7 +106,13 @@ func newCmdMake() *cobra.Command {
   ktib make --init --type minimal --name myimage --tag latest /path/to/project
 
  # Or build with a specified config
-  ktib make --config config.yml --type minimal --name myimage --tag latest /path/to/project`,
+  ktib make --config config.yml --type minimal --name myimage --tag latest /path/to/project
+
+ # Init and build with custom timezone and locale
+  ktib make --init --timezone "America/New_York" --locale "zh_CN.UTF-8" /path/to/project
+
+ # Init and build with custom timezone only
+  ktib make --init --timezone "Europe/London" /path/to/project`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runMake(cmd, args, options)
 		},
@@ -123,5 +131,9 @@ func newCmdMake() *cobra.Command {
 	})
 	flags.StringVar(&options.imageName, "name", "ktib-image", "name of the container image")
 	flags.StringVar(&options.tag, "tag", "latest", "tag of the container image")
+	// 添加时区选项
+	flags.StringVar(&options.timezone, "timezone", "Asia/Shanghai", "Set the timezone for the configuration (e.g., Asia/Shanghai, America/New_York, Europe/London)")
+	// 添加语言选项
+	flags.StringVar(&options.locale, "locale", "en_US.UTF-8", "Set the locale for the configuration (e.g., en_US.UTF-8, zh_CN.UTF-8, en_GB.UTF-8)")
 	return cmd
 }
