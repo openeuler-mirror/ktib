@@ -111,3 +111,28 @@ ktib project build --name myimage --tag v1.0 /path/to/project
 - 使用 rootfs 和 Dockerfile 构建容器镜像
 - 将 rootfs 打包成可用的容器镜像
 - 生成的镜像可用于容器运行时
+
+## 典型工作流程
+1. **初始化项目：**
+   ```bash
+   ktib project init /path/to/project
+   ```
+
+2. **生成配置：**
+   ```bash
+   ktib project default_config > config.yml
+   ```
+
+3. **构建 rootfs：**
+   ```bash
+   ktib project build-rootfs --config config.yml /path/to/project
+   ```
+
+4. **清理 rootfs：**
+   ```bash
+   ktib project clean-rootfs --type platform /path/to/project
+   ```
+
+5. **构建镜像：**
+   ```bash
+   ktib project build --name myimage --tag latest /path/to/project
