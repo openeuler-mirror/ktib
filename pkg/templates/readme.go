@@ -21,21 +21,28 @@ If you haven't already installed ktib, please refer to the official documentatio
 
 ##### Create a Project
 Use the ktib command to create a new project. You can do this with the following command:
-ktib init /path/to/project my-image
+ktib project init /path/to/project
 
-##### Edit the Dockerfile
-Navigate to the project directory and edit the Dockerfile. Add the necessary packages, dependencies, and configurations according to your requirements. 、
-You can use a text editor to open and modify the Dockerfile.
+##### Configure the Project
+Create a configuration file for your project. You can generate a default configuration with:
+ktib project default_config > config.yml
 
-##### Add Test Cases and Scripts
-Add test cases and script files to the project directory as needed.
+Then edit the configuration file to specify the packages and settings for your image.
 
-##### Build the Image
-Use the ktib command to build your image. The command is as follows:
-待补充
-This command will build an image named my-image based on the Dockerfile in your project directory.
+##### Build RootFS
+Build the root filesystem for your image:
+ktib project build-rootfs --config config.yml /path/to/project
+
+##### Clean RootFS
+Clean unnecessary files and packages from the rootfs to optimize image size:
+ktib project clean-rootfs --type minimal /path/to/project
+
+##### Build the Container Image
+Build the final container image from the rootfs:
+ktib project build --name my-image --tag latest /path/to/project
 
 ##### Verify the Image
-After the build process completes, use Docker commands to verify your image. For example:
+After the build process completes, use container commands to verify your image. For example:
+ktib images list
 docker images
 `
