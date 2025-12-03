@@ -21,12 +21,12 @@ type Option struct {
 }
 
 type ImagesOption struct {
-	Quiet    bool
-	Digests  bool
-	Truncate bool
-	Json     bool
-	Format   string
-	Filter   []string
+	Quiet   bool
+	Digests bool
+	NoTrunc bool
+	Json    bool
+	Format  string
+	Filter  []string
 }
 
 type LoginOption struct {
@@ -155,11 +155,11 @@ type IFIOptions struct {
 }
 
 type Arguments struct {
-    PolicyFile     string
-    Dockerfile     string
-    ParseOnly      bool
-    JSONOutfile    string
-    Verbose        bool
+	PolicyFile  string
+	Dockerfile  string
+	ParseOnly   bool
+	JSONOutfile string
+	Verbose     bool
 }
 
 type SummaryStats struct {

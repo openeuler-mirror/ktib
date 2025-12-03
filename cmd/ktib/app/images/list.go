@@ -54,7 +54,7 @@ ktib images list --format '{{.ID}} {{.Name}} {{.Size}}'`,
 	flag := cmd.Flags()
 	flag.BoolVarP(&op.Quiet, "quiet", "q", false, "Only show numeric IDs")
 	flag.BoolVar(&op.Digests, "digests", false, "show info include digests")
-	flag.BoolVar(&op.Truncate, "no-trunc", false, "show info include images IDs")
+	flag.BoolVar(&op.NoTrunc, "no-trunc", false, "show info include images IDs")
 	flag.BoolVar(&op.Json, "json", false, "output in JSON format")
 	flag.StringVar(&op.Format, "format", "", "output according to the provided format")
 	return cmd
