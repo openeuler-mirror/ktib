@@ -18,6 +18,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -29,6 +30,7 @@ import (
 	"github.com/containers/buildah/define"
 	"github.com/containers/common/pkg/auth"
 	"github.com/containers/common/pkg/report"
+	"github.com/containers/image/v5/docker/reference"
 	auth_config "github.com/containers/image/v5/pkg/docker/config"
 	"github.com/containers/image/v5/types"
 	container "github.com/containers/storage"
@@ -41,12 +43,13 @@ import (
 const unknownState = "<none>"
 
 type imageReport struct {
-	Name     string
-	ID       string
-	Digest   digest.Digest
-	Size     string
-	Created  string
-	TopLayer string
+	Repository string
+	Tag        string
+	ID         string
+	Digest     digest.Digest
+	Size       string
+	Created    string
+	TopLayer   string
 }
 
 type containerReport struct {
@@ -69,6 +72,90 @@ func humanSize(s int64) string {
 	} else {
 		return fmt.Sprintf("%.2fTB", float64(s)/float64(1024*1024*1024*1024))
 	}
+}
+
+// 解析镜像名称的辅助函数
+func parseImageName(fullName string) (repository, tag string) {
+	if fullName == "" {
+		return unknownState, unknownState
+	}
+
+	// 尝试使用标准库解析
+	parsed, err := reference.ParseNormalizedNamed(fullName)
+	if err != nil {
+		// 解析失败，尝试手动解析
+		return manualParseImageName(fullName)
+	}
+
+	// 获取仓库名
+	repository = reference.FamiliarName(parsed)
+
+	// 获取标签
+	if tagged, ok := parsed.(reference.Tagged); ok {
+		tag = tagged.Tag()
+	} else {
+		// 检查是否是摘要引用
+		if digested, ok := parsed.(reference.Digested); ok {
+			digestStr := digested.Digest().String()
+			if len(digestStr) > 12 {
+				tag = digestStr[:12] + "..."
+			} else {
+				tag = digestStr
+			}
+		} else {
+			tag = unknownState
+		}
+	}
+
+	return repository, tag
+}
+
+func manualParseImageName(fullName string) (repository, tag string) {
+	// 处理特殊字符
+	fullName = strings.TrimSpace(fullName)
+	if fullName == "" {
+		return unknownState, unknownState
+	}
+
+	// 处理常见的镜像名称格式
+	// 格式1: registry/repository:tag
+	// 格式2: repository:tag
+	// 格式3: registry:port/repository:tag
+
+	// 查找最后一个 ":"，用于分割标签
+	lastColon := strings.LastIndex(fullName, ":")
+
+	if lastColon <= 0 {
+		// 没有 ":"，只有仓库名
+		return fullName, unknownState
+	}
+
+	// 检查是否可能是端口号（比如 localhost:5000/image）
+	// 检查 ":" 前面是否有数字（简单判断）
+	if lastColon > 0 {
+		// 检查 ":" 前是否是数字（端口号）
+		charBeforeColon := fullName[lastColon-1]
+		if charBeforeColon >= '0' && charBeforeColon <= '9' {
+			// 可能是端口号，尝试找前一个 ":"
+			prevColon := strings.LastIndex(fullName[:lastColon], ":")
+			if prevColon > 0 {
+				repository = fullName[:prevColon]
+				tag = fullName[prevColon+1:]
+				return repository, tag
+			}
+		}
+	}
+
+	// 正常的分割
+	repository = fullName[:lastColon]
+	tag = fullName[lastColon+1:]
+
+	// 如果标签为空
+	if tag == "" {
+		tag = unknownState
+	}
+
+	return repository, tag
 }
 
 func sortImages(imgs []*imagemanager.Image, ops options.ImagesOption) ([]imageReport, error) {
@@ -97,27 +184,37 @@ func sortImages(imgs []*imagemanager.Image, ops options.ImagesOption) ([]imageRe
 		}
 
 		if len(img.OriImage.Names) > 0 {
-			for _, name := range append(img.OriImage.Names, unknownState)[:len(img.OriImage.Names)] {
+			for _, name := range img.OriImage.Names {
+				repository, tag := parseImageName(name)
+
 				imgReport = append(imgReport, imageReport{
-					Name:     name,
-					ID:       imgID,
-					Digest:   img.OriImage.Digest,
-					TopLayer: topLayer,
-					Created:  createdAgo,
-					Size:     humanSize(size),
+					Repository: repository,
+					Tag:        tag,
+					ID:         imgID,
+					Digest:     img.OriImage.Digest,
+					TopLayer:   topLayer,
+					Created:    createdAgo,
+					Size:       humanSize(size),
 				})
 			}
 		} else {
+			// 没有名称的情况
 			imgReport = append(imgReport, imageReport{
-				Name:     unknownState,
-				ID:       imgID,
-				Digest:   img.OriImage.Digest,
-				TopLayer: topLayer,
-				Created:  createdAgo,
-				Size:     humanSize(size),
+				Repository: unknownState,
+				Tag:        unknownState,
+				ID:         imgID,
+				Digest:     img.OriImage.Digest,
+				TopLayer:   topLayer,
+				Created:    createdAgo,
+				Size:       humanSize(size),
 			})
 		}
 	}
+
+	// 按 Repository 排序
+	sort.Slice(imgReport, func(i, j int) bool {
+		return imgReport[i].Repository < imgReport[j].Repository
+	})
 	return imgReport, nil
 }
 
@@ -142,9 +239,9 @@ func sortContainers(containers []container.Container) ([]containerReport, error)
 }
 
 func FormatImages(images []*imagemanager.Image, ops options.ImagesOption) error {
-	//TODO 参考docker以image table format 输出
-	defaultImageTableFormat := "table {{.Name}} {{.ID}}  {{.Size}} {{.TopLayer}}   {{.Created}}"
-	defaultImageTableFormatWithDigest := "table {{.Name}} {{.ID}} {{.Digest}} {{.Size}} {{.TopLayer}} {{.Created}}"
+	// 定义输出格式
+	defaultImageTableFormat := "table {{.Repository}} {{.Tag}} {{.ID}} {{.Size}} {{.Created}}"
+	defaultImageTableFormatWithDigest := "table {{.Repository}} {{.Tag}} {{.ID}} {{.Digest}} {{.Size}} {{.Created}}"
 	defaultQuietFormat := "table {{.ID}}"
 	// defaultImageTableFormatWithDigest = "table {{.Repository}}\t{{.Tag}}\t{{.Digest}}\t{{.ID}}\t{{.CreatedSince}}\t{{.Size}}"
 	// 构造所需的image结构=>sortImage
@@ -153,8 +250,13 @@ func FormatImages(images []*imagemanager.Image, ops options.ImagesOption) error 
 		return err
 	}
 
+	// 定义表头映射
 	headers := report.Headers(imageReport{}, map[string]string{
-		"Name": "Name",
+		"Repository": "REPOSITORY",
+		"Tag":        "TAG",
+		"ID":         "IMAGE ID",
+		"Size":       "SIZE",
+		"Created":    "CREATED",
 	})
 
 	if ops.Quiet {
