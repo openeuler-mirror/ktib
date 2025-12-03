@@ -12,15 +12,14 @@
 package app
 
 import (
-    "fmt"
-    "os"
-    "os/exec"
-    "strings"
+	"fmt"
+	"os"
+	"strings"
 
-    "gitee.com/openeuler/ktib/pkg/project"
-    "github.com/sirupsen/logrus"
-    "github.com/spf13/cobra"
-    //"gopkg.in/yaml.v2"
+	"gitee.com/openeuler/ktib/pkg/project"
+	"github.com/sirupsen/logrus"
+	"github.com/spf13/cobra"
+	//"gopkg.in/yaml.v2"
 )
 
 // InitOption 定义初始化项目的选项
