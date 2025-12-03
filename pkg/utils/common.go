@@ -12,12 +12,14 @@
 package utils
 
 import (
+	"fmt"
+	"syscall"
+
 	"github.com/containers/storage"
 	"github.com/containers/storage/pkg/reexec"
 	"github.com/containers/storage/pkg/unshare"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"syscall"
 )
 
 func ReexecInit() bool {
@@ -34,11 +36,18 @@ func check() {
 func GetStore(c *cobra.Command) (storage.Store, error) {
 	// 下面为获取option默认方法，注意需考虑options其他属性是否是必须的，在下面进行展开
 	options, err := storage.DefaultStoreOptions(unshare.GetRootlessUID() > 0, unshare.GetRootlessUID())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get default store options: %w", err)
+	}
 	// TODO 判断参数common-builders 例如：storage-dirver storage-opt root 后续支持
 
 	// umask check force on 022
 	check()
 	// get store object
 	store, err := storage.GetStore(options)
-	return store, err
+	if err != nil {
+		return nil, fmt.Errorf("failed to get store: %w", err)
+	}
+
+	return store, nil
 }
