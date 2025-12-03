@@ -33,8 +33,9 @@ var PackagesToCheck = []string{"containers-common"}
 // newCmdProject 创建项目主命令
 func newCmdProject() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "project",
-		Short: "Run this command in order to create a base project or app project",
+		Use:     "project",
+		Aliases: []string{"p"},
+		Short:   "Run this command in order to create a base project or app project",
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			return nil
 		},
@@ -60,8 +61,9 @@ func newSubCmdDefaultConfig() *cobra.Command {
 		locale   string
 	}
 	cmd := &cobra.Command{
-		Use:   "default_config",
-		Short: "Run this command in order to generate default config",
+		Use:     "default_config",
+		Aliases: []string{"dc"},
+		Short:   "Run this command in order to generate default config",
 		Example: ` # generate default config example
   ktib project default_config > config.yml
   # generate default config with custom timezone
@@ -153,8 +155,9 @@ func newSubCmdBuildRootfs() *cobra.Command {
 		configFile string
 	}
 	cmd := &cobra.Command{
-		Use:   "build-rootfs",
-		Short: "Run this command to build rootfs for a project",
+		Use:     "build-rootfs",
+		Aliases: []string{"br"},
+		Short:   "Run this command to build rootfs for a project",
 		Long: `Build-rootfs command helps you create a rootfs for your project based on the configuration.
 It requires a config file that specifies the packages and settings for the rootfs.`,
 		Example: ` # Build rootfs for a project
@@ -190,8 +193,9 @@ func newSubCmdCleanRootfs() *cobra.Command {
 	validImageTypes := []string{"micro", "minimal", "platform", "init"}
 
 	cmd := &cobra.Command{
-		Use:   "clean-rootfs",
-		Short: "Run this command to clean unnecessary files and packages in rootfs",
+		Use:     "clean-rootfs",
+		Aliases: []string{"cr"},
+		Short:   "Run this command to clean unnecessary files and packages in rootfs",
 		Long: `Clean-rootfs command helps you remove unnecessary files and packages from your rootfs.
 It also performs additional environment configuration operations to optimize the image size.`,
 		Example: ` # Clean rootfs for a project
