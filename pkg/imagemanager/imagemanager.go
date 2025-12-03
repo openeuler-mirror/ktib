@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+    "time"
 
 	"gitee.com/openeuler/ktib/pkg/options"
 	types2 "gitee.com/openeuler/ktib/pkg/types"
@@ -133,13 +134,19 @@ func (im *ImageManager) Logout(args []string) error {
 }
 
 func (im *ImageManager) Pull(imageName string) error {
-	runtime := im.Manager
-	ctx := context.Background()
-	pullPolicy, err := config.ParsePullPolicy("always")
-	if err != nil {
-		return err
-	}
-	pullOptions := &libimage.PullOptions{}
+    runtime := im.Manager
+    ctx := context.Background()
+    pullPolicy, err := config.ParsePullPolicy("always")
+    if err != nil {
+        return err
+    }
+    pullOptions := &libimage.PullOptions{}
+    // enable progress bars on TTY and set retry defaults
+    pullOptions.Writer = os.Stderr
+    mr := uint(3)
+    pullOptions.MaxRetries = &mr
+    rd := 2 * time.Second
+    pullOptions.RetryDelay = &rd
 
 	// 添加对 SystemContext 的设置
 	if pullOptions.SystemContext == nil {
@@ -171,12 +178,16 @@ func (im *ImageManager) Pull(imageName string) error {
 		}
 	}
 
-	images, err := runtime.Pull(ctx, imageName, pullPolicy, pullOptions)
-	if err != nil {
-		return err
-	}
-	fmt.Printf("%s\n", images[0].ID())
-	return nil
+    // normalize short names to fully-qualified (docker.io/library/...) to avoid short-name resolution
+    if named, nerr := reference.ParseNormalizedNamed(imageName); nerr == nil {
+        imageName = named.String()
+    }
+    images, err := runtime.Pull(ctx, imageName, pullPolicy, pullOptions)
+    if err != nil {
+        return err
+    }
+    fmt.Printf("%s\n", images[0].ID())
+    return nil
 }
 
 func extractRegistryFromImageName(imageName string) string {
@@ -189,12 +200,17 @@ func extractRegistryFromImageName(imageName string) string {
 }
 
 func (im *ImageManager) Push(ctx context.Context, source, destination string, op options.PushOption) (*options.ImagePushReport, error) {
-	runtime := im.Manager
-	pushOptions := &libimage.PushOptions{}
-	pushOptions.Password = op.Password
-	pushOptions.Username = op.Username
-	pushOptions.SignBy = op.SignBy
-	pushOptions.Writer = os.Stderr
+    runtime := im.Manager
+    pushOptions := &libimage.PushOptions{}
+    pushOptions.Password = op.Password
+    pushOptions.Username = op.Username
+    pushOptions.SignBy = op.SignBy
+    pushOptions.Writer = os.Stderr
+    // enable progress bars on TTY and set retry defaults
+    mr := uint(3)
+    pushOptions.MaxRetries = &mr
+    rd := 2 * time.Second
+    pushOptions.RetryDelay = &rd
 
 	// 添加对 SystemContext 的设置
 	if pushOptions.SystemContext == nil {
@@ -231,7 +247,14 @@ func (im *ImageManager) Push(ctx context.Context, source, destination string, op
 		}
 	}
 
-	pushedManifestBytes, pushErr := runtime.Push(context.Background(), source, destination, pushOptions)
+    // normalize short names to fully-qualified to avoid short-name resolution
+    if sn, nerr := reference.ParseNormalizedNamed(source); nerr == nil {
+        source = sn.String()
+    }
+    if dn, nerr := reference.ParseNormalizedNamed(destination); nerr == nil {
+        destination = dn.String()
+    }
+    pushedManifestBytes, pushErr := runtime.Push(context.Background(), source, destination, pushOptions)
 	if pushErr == nil {
 		manifestDigest, err := manifest.Digest(pushedManifestBytes)
 		if err != nil {
@@ -459,7 +482,12 @@ func (im *ImageManager) ManifestPush(background context.Context, name string, de
 	pushOptions.Password = op.Password
 	pushOptions.Username = op.Username
 	pushOptions.SignBy = op.SignBy
-	pushOptions.Writer = os.Stderr
+    pushOptions.Writer = os.Stderr
+    // enable progress bars on TTY and set retry defaults
+    mr := uint(3)
+    pushOptions.MaxRetries = &mr
+    rd := 2 * time.Second
+    pushOptions.RetryDelay = &rd
 	var manifestType string
 	if op.Format != "" {
 		switch op.Format {
@@ -509,7 +537,11 @@ func (im *ImageManager) ManifestPush(background context.Context, name string, de
 
 	pushOptions.ManifestMIMEType = manifestType
 
-	manDigest, err := manifestList.Push(background, destination, pushOptions)
+    // normalize destination short name
+    if dn, nerr := reference.ParseNormalizedNamed(destination); nerr == nil {
+        destination = dn.String()
+    }
+    manDigest, err := manifestList.Push(background, destination, pushOptions)
 	if err != nil {
 		return "", err
 	}
