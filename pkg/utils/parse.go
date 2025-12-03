@@ -71,19 +71,29 @@ func humanSize(s int64) string {
 	}
 }
 
-func sortImages(imgs []*imagemanager.Image) ([]imageReport, error) {
+func sortImages(imgs []*imagemanager.Image, ops options.ImagesOption) ([]imageReport, error) {
 	var imgReport []imageReport
+
 	for _, img := range imgs {
 		size := img.Size
 		createdAgo := units.HumanDuration(time.Since(img.OriImage.Created)) + " ago"
+
 		topLayer := img.OriImage.TopLayer
 		if len(topLayer) > 10 {
 			topLayer = topLayer[:10]
 		}
 
 		imgID := img.OriImage.ID
-		if len(imgID) > 10 {
-			imgID = imgID[:10]
+		if !ops.NoTrunc {
+			// NoTrunc=false（默认）：截断到10位
+			if len(imgID) > 10 {
+				imgID = imgID[:10]
+			}
+		} else {
+			// NoTrunc=true：截断到12位
+			if len(imgID) > 12 {
+				imgID = imgID[:12]
+			}
 		}
 
 		if len(img.OriImage.Names) > 0 {
@@ -138,13 +148,15 @@ func FormatImages(images []*imagemanager.Image, ops options.ImagesOption) error 
 	defaultQuietFormat := "table {{.ID}}"
 	// defaultImageTableFormatWithDigest = "table {{.Repository}}\t{{.Tag}}\t{{.Digest}}\t{{.ID}}\t{{.CreatedSince}}\t{{.Size}}"
 	// 构造所需的image结构=>sortImage
-	imagesReport, err := sortImages(images)
+	imagesReport, err := sortImages(images, ops)
 	if err != nil {
 		return err
 	}
+
 	headers := report.Headers(imageReport{}, map[string]string{
 		"Name": "Name",
 	})
+
 	if ops.Quiet {
 		defaultImageTableFormat = defaultQuietFormat
 	} else if ops.Digests {
@@ -152,22 +164,26 @@ func FormatImages(images []*imagemanager.Image, ops options.ImagesOption) error 
 	} else if ops.Format != "" {
 		defaultImageTableFormat = "table " + ops.Format
 	}
+
 	formater, err := report.New(os.Stdout, "format").Parse(report.OriginPodman, defaultImageTableFormat)
 	if err != nil {
 		return err
 	}
+
 	defer func() {
 		err = formater.Flush()
 		if err != nil {
 			logrus.Error(err)
 		}
 	}()
+
 	if !ops.Quiet {
 		err = formater.Execute(headers)
 		if err != nil {
 			return err
 		}
 	}
+
 	err = formater.Execute(imagesReport)
 	if err != nil {
 		return err
