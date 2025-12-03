@@ -43,7 +43,7 @@ func runMake(cmd *cobra.Command, args []string, option makeOption) error {
 		}
 		if option.config == "" {
 			option.config = filepath.Join(args[0], "config.yml")
-			if err := runDefaultConfig(option.config, option.timezone, option.locale); err != nil {
+			if err := runDefaultConfig(option.config, option.timezone, option.locale, option.imageType); err != nil {
 				return err
 			}
 		}
