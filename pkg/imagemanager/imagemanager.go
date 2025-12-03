@@ -114,7 +114,7 @@ func (im *ImageManager) KtibLogin(ctx context.Context, lops *options.LoginOption
 		sctx.DockerInsecureSkipTLSVerify = types.OptionalBoolTrue
 	}
 
-	setRegistriesConfPath(sctx)
+	SetRegistriesConfPath(sctx)
 	loginOps.GetLoginSet = getLoginSet
 	return auth.Login(ctx, sctx, loginOps, args)
 }
@@ -145,7 +145,7 @@ func (im *ImageManager) Pull(imageName string) error {
 	if pullOptions.SystemContext == nil {
 		pullOptions.SystemContext = &types.SystemContext{}
 	}
-	setRegistriesConfPath(pullOptions.SystemContext)
+	SetRegistriesConfPath(pullOptions.SystemContext)
 
 	// 获取已登录的认证信息
 	credentials, err := auth_config.GetAllCredentials(pullOptions.SystemContext)
@@ -200,7 +200,7 @@ func (im *ImageManager) Push(ctx context.Context, source, destination string, op
 	if pushOptions.SystemContext == nil {
 		pushOptions.SystemContext = &types.SystemContext{}
 	}
-	setRegistriesConfPath(pushOptions.SystemContext)
+	SetRegistriesConfPath(pushOptions.SystemContext)
 
 	// 如果用户明确设置了insecure参数，优先使用用户设置
 	if op.Insecure {
@@ -311,7 +311,7 @@ func (im *ImageManager) Tag(store storage.Store, args []string) error {
 	return nil
 }
 
-func setRegistriesConfPath(systemContext *types.SystemContext) {
+func SetRegistriesConfPath(systemContext *types.SystemContext) {
 	if systemContext.SystemRegistriesConfPath != "" {
 		return
 	}
@@ -387,7 +387,7 @@ func (im *ImageManager) ManifestCreate(ctx context.Context, name string, images 
 	}
 
 	sysCtx := &types.SystemContext{}
-	setRegistriesConfPath(sysCtx)
+	SetRegistriesConfPath(sysCtx)
 	// 添加凭据匹配逻辑
 	allCreds, err := auth_config.GetAllCredentials(sysCtx)
 	if err == nil {
@@ -476,7 +476,7 @@ func (im *ImageManager) ManifestPush(background context.Context, name string, de
 	if pushOptions.SystemContext == nil {
 		pushOptions.SystemContext = &types.SystemContext{}
 	}
-	setRegistriesConfPath(pushOptions.SystemContext)
+	SetRegistriesConfPath(pushOptions.SystemContext)
 
 	// 如果用户明确设置了insecure参数，优先使用用户设置
 	if op.Insecure {
@@ -528,7 +528,7 @@ func (im *ImageManager) ManifestAdd(background context.Context, manifestName str
 
 	// 添加对 SystemContext 的设置
 	sysCtx := &types.SystemContext{}
-	setRegistriesConfPath(sysCtx)
+	SetRegistriesConfPath(sysCtx)
 
 	// 获取已登录的认证信息
 	credentials, err := auth_config.GetAllCredentials(sysCtx)

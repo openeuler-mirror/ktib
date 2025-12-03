@@ -338,7 +338,7 @@ func ParseBuildOptions(cmd *cobra.Command, flags *options.BuildOptions, contextD
 	}
 
 	// 设置 registries.conf 路径
-	setRegistriesConfPath(opts.SystemContext)
+	imagemanager.SetRegistriesConfPath(opts.SystemContext)
 
 	// 获取已登录的认证信息
 	credentials, err := auth_config.GetAllCredentials(opts.SystemContext)
@@ -374,20 +374,6 @@ func ParseBuildOptions(cmd *cobra.Command, flags *options.BuildOptions, contextD
 		}
 	}
 	return &opts, nil
-}
-
-func setRegistriesConfPath(systemContext *types.SystemContext) {
-	if systemContext.SystemRegistriesConfPath != "" {
-		return
-	}
-	if envOverride, ok := os.LookupEnv("CONTAINERS_REGISTRIES_CONF"); ok {
-		systemContext.SystemRegistriesConfPath = envOverride
-		return
-	}
-	if envOverride, ok := os.LookupEnv("REGISTRIES_CONFIG_PATH"); ok {
-		systemContext.SystemRegistriesConfPath = envOverride
-		return
-	}
 }
 
 func ResolveDockerfiles(op *options.BuildOptions, args []string) ([]string, string, error) {
