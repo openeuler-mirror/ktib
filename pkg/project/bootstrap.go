@@ -81,7 +81,6 @@ func (b *Bootstrap) InitProjectStructure() error {
 	// 添加必要的文件
 	b.AddDockerfile()
 	b.AddChangeInfo()
-	b.AddRemoveList()
 	b.AddRemoveMinimalList()
 	b.AddUnmaskService()
 	return nil
@@ -162,11 +161,6 @@ func (b *Bootstrap) AddDockerfile() {
 	}
 }
 
-
-func (b *Bootstrap) AddRemoveList() {
-	b.initialize(templates.RemoveList, "files/removelist", 0644)
-}
-
 func (b *Bootstrap) AddRemoveMinimalList() {
 	b.initialize(templates.RemoveMinimalList, "files/removeminimallist", 0644)
 }
@@ -211,11 +205,10 @@ func (b *Bootstrap) CleanRootfs() error {
 	}
 
 	// 1. 移除不必要的包
-	removeListPath := filepath.Join(b.DestinationDir, "files", "removelist")
 	removeMinimalListPath := filepath.Join(b.DestinationDir, "files", "removeminimallist")
 
 	fmt.Printf("正在移除不必要的软件包，镜像类型: %s\n", b.BuildType)
-	if err := RemoveUnnecessaryPackages(target, b.BuildType, removeListPath, removeMinimalListPath); err != nil {
+	if err := RemoveUnnecessaryPackages(target, b.BuildType, removeMinimalListPath); err != nil {
 		fmt.Printf("警告: 移除不必要的软件包失败: %v\n", err)
 	}
 	// 2. 移除不必要的文件
