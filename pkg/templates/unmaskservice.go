@@ -30,12 +30,14 @@ rm -rf /etc/systemd/system/sysinit.target.wants/systemd-timesyncd.service
 rm -rf /etc/systemd/system/getty.target.wants/getty@tty1.service
 
 
-# Disable service
-systemctl disable system-getty.slice
-
-systemctl disable systemd-networkd.socket  systemd-networkd
-
-systemctl disable systemd-hostnamed.service
+# Disable service (guarded when systemctl is available)
+if command -v systemctl >/dev/null 2>&1; then
+  systemctl disable system-getty.slice || true
+  systemctl disable systemd-networkd.socket systemd-networkd || true
+  systemctl disable systemd-hostnamed.service || true
+else
+  echo "systemctl 未找到，跳过 systemd 服务禁用步骤"
+fi
 
 # rm systemd drop file
 rm -f /lib/systemd/system/multi-user.target.wants/*

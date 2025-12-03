@@ -235,7 +235,7 @@ func CleanupRootfsPath(target string) error {
 
 // 添加以下函数来移除不必要的包
 // 修改函数，接受文件路径参数
-func RemoveUnnecessaryPackages(target string, imageType string, removeListPath, removeMinimalListPath string) error {
+func RemoveUnnecessaryPackages(target string, imageType string, removeMinimalListPath string) error {
 	var packagesToRemove []string
 	var err error
 	var data []byte
@@ -251,12 +251,6 @@ func RemoveUnnecessaryPackages(target string, imageType string, removeListPath, 
 		data, err = os.ReadFile(removeMinimalListPath)
 		if err != nil {
 			return fmt.Errorf("无法读取 removeminimallist 文件: %v", err)
-		}
-	} else if imageType != "micro" {
-		// 读取 removelist 文件
-		data, err = os.ReadFile(removeListPath)
-		if err != nil {
-			return fmt.Errorf("无法读取 removelist 文件: %v", err)
 		}
 	} else {
 		// micro 类型不需要移除包
