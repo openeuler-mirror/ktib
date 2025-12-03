@@ -14,7 +14,6 @@ package project
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -56,17 +55,19 @@ func ConfigureRootfs(target string, config Config) error {
 	hostname := config.Network.HOSTNAME
 	networkConfig := fmt.Sprintf("NETWORKING=%s\nHOSTNAME=%s\n", network, hostname)
 	networkFilePath := filepath.Join(target, "/etc/sysconfig/network")
-	err := ioutil.WriteFile(networkFilePath, []byte(networkConfig), 0644)
+	err := os.WriteFile(networkFilePath, []byte(networkConfig), 0644)
 	if err != nil {
-		fmt.Printf("error writing network configuration: %v", err)
+		return fmt.Errorf("error writing network configuration: %v", err)
 	}
 
 	// 设置 DNF infra 变量
 	infraConfig := "container"
 	infraFilePath := filepath.Join(target, "/etc/dnf/vars/infra")
 	// 确保目录存在
-	os.MkdirAll(filepath.Dir(infraFilePath), 0755)
-	err = ioutil.WriteFile(infraFilePath, []byte(infraConfig), 0644)
+	if err := os.MkdirAll(filepath.Dir(infraFilePath), 0755); err != nil {
+		return fmt.Errorf("error creating directory for infra configuration: %v", err)
+	}
+	err = os.WriteFile(infraFilePath, []byte(infraConfig), 0644)
 	if err != nil {
 		return fmt.Errorf("error writing infra configuration: %v", err)
 	}
@@ -75,8 +76,10 @@ func ConfigureRootfs(target string, config Config) error {
 	if config.Locale != "" {
 		localeFilePath := filepath.Join(target, "/etc/rpm/macros.image-language-conf")
 		// 确保目录存在
-		os.MkdirAll(filepath.Dir(localeFilePath), 0755)
-		err = ioutil.WriteFile(localeFilePath, []byte(config.Locale), 0644)
+		if err := os.MkdirAll(filepath.Dir(localeFilePath), 0755); err != nil {
+			return fmt.Errorf("error creating directory for locale configuration: %v", err)
+		}
+		err = os.WriteFile(localeFilePath, []byte(config.Locale), 0644)
 		if err != nil {
 			return fmt.Errorf("error writing language configuration: %v", err)
 		}
@@ -94,9 +97,11 @@ func ConfigureRootfs(target string, config Config) error {
 		}
 
 		// 确保目录存在
-		os.MkdirAll(filepath.Dir(localePath), 0755)
-		if err := ioutil.WriteFile(localePath, []byte(localeValue), 0644); err != nil {
-			fmt.Printf("error writing locale.conf file: %v\n", err)
+		if err := os.MkdirAll(filepath.Dir(localePath), 0755); err != nil {
+			return fmt.Errorf("error creating directory for locale.conf: %v", err)
+		}
+		if err := os.WriteFile(localePath, []byte(localeValue), 0644); err != nil {
+			return fmt.Errorf("error writing locale.conf file: %v", err)
 		}
 	}
 
@@ -107,32 +112,34 @@ func ConfigureRootfs(target string, config Config) error {
 		localtimePath := filepath.Join(target, "/etc/localtime")
 
 		// 确保目标目录存在
-		os.MkdirAll(filepath.Dir(localtimePath), 0755)
+		if err := os.MkdirAll(filepath.Dir(localtimePath), 0755); err != nil {
+			return fmt.Errorf("error creating directory for localtime: %v", err)
+		}
 
 		// 创建软链接
 		cmd := exec.Command("ln", "-sf", timezonePath, localtimePath)
 		if err := cmd.Run(); err != nil {
-			fmt.Printf("error setting timezone: %v\n", err)
+			return fmt.Errorf("error setting timezone: %v", err) // 添加 return
 		}
 
 		// 写入时区信息到 /etc/timezone
 		timezoneFPath := filepath.Join(target, "/etc/timezone")
-		if err := ioutil.WriteFile(timezoneFPath, []byte(config.Timezone), 0644); err != nil {
-			fmt.Printf("error writing timezone file: %v\n", err)
+		if err := os.WriteFile(timezoneFPath, []byte(config.Timezone), 0644); err != nil {
+			return fmt.Errorf("error writing timezone file: %v", err)
 		}
 	}
 
 	// force each container to have a unique machine-id
 	machineId := ""
 	machineIDFilePath := filepath.Join(target, "/etc/machine-id")
-	err = ioutil.WriteFile(machineIDFilePath, []byte(machineId), 0644)
+	err = os.WriteFile(machineIDFilePath, []byte(machineId), 0644)
 	if err != nil {
 		return fmt.Errorf("error writing machine-id file: %v", err)
 	}
 
 	// 复制bash配置文件并设置bash历史
 	if err := addCommandToScriptAndRun(target, config); err != nil {
-		return fmt.Errorf("Error add command to script and run: %v\n", err)
+		return fmt.Errorf("error add command to script and run: %v", err)
 	}
 	return nil
 }
@@ -146,7 +153,7 @@ func addCommandToScriptAndRun(target string, config Config) error {
 
 	// 创建空的bash历史文件
 	historyPath := filepath.Join(target, "root", ".bash_history")
-	if err := ioutil.WriteFile(historyPath, []byte(""), 0644); err != nil {
+	if err := os.WriteFile(historyPath, []byte(""), 0644); err != nil {
 		return fmt.Errorf("创建bash历史文件失败: %v", err)
 	}
 
@@ -220,7 +227,7 @@ func CleanupRootfsPath(target string) error {
 	bashHistoryPath := filepath.Join(target, "root/.bash_history")
 	if _, err := os.Stat(bashHistoryPath); !os.IsNotExist(err) {
 		fmt.Printf("清空文件: %s\n", bashHistoryPath)
-		ioutil.WriteFile(bashHistoryPath, []byte(""), 0644)
+		os.WriteFile(bashHistoryPath, []byte(""), 0644)
 	}
 
 	return nil
@@ -241,13 +248,13 @@ func RemoveUnnecessaryPackages(target string, imageType string, removeListPath, 
 	// 根据镜像类型选择要移除的包列表
 	if imageType == "minimal" {
 		// 读取 removeminimallist 文件
-		data, err = ioutil.ReadFile(removeMinimalListPath)
+		data, err = os.ReadFile(removeMinimalListPath)
 		if err != nil {
 			return fmt.Errorf("无法读取 removeminimallist 文件: %v", err)
 		}
 	} else if imageType != "micro" {
 		// 读取 removelist 文件
-		data, err = ioutil.ReadFile(removeListPath)
+		data, err = os.ReadFile(removeListPath)
 		if err != nil {
 			return fmt.Errorf("无法读取 removelist 文件: %v", err)
 		}
@@ -293,7 +300,7 @@ func RemoveUnnecessaryPackages(target string, imageType string, removeListPath, 
 
 	// 使用绝对路径
 	scriptPath := filepath.Join(target, "remove_packages.sh")
-	if err := ioutil.WriteFile(scriptPath, []byte(scriptContent), 0755); err != nil {
+	if err := os.WriteFile(scriptPath, []byte(scriptContent), 0755); err != nil {
 		return fmt.Errorf("无法创建移除软件包脚本: %v", err)
 	}
 
@@ -323,7 +330,7 @@ func UnmaskServices(target string, unmaskServicePath string) error {
 	}
 
 	// 读取 unmaskService 文件
-	data, err := ioutil.ReadFile(unmaskServicePath)
+	data, err := os.ReadFile(unmaskServicePath)
 	if err != nil {
 		return fmt.Errorf("无法读取 unmaskService 文件: %v", err)
 	}
@@ -344,7 +351,7 @@ func UnmaskServices(target string, unmaskServicePath string) error {
 	scriptContent += string(data)
 	scriptContent += "\necho '服务屏蔽解除完成'\n"
 
-	if err := ioutil.WriteFile(scriptPath, []byte(scriptContent), 0755); err != nil {
+	if err := os.WriteFile(scriptPath, []byte(scriptContent), 0755); err != nil {
 		return fmt.Errorf("无法创建解除服务屏蔽脚本: %v", err)
 	}
 
