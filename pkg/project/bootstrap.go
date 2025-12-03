@@ -13,7 +13,6 @@ package project
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"text/template"
@@ -52,41 +51,41 @@ func NewBootstrap(dir string) *Bootstrap {
 
 // InitProjectStructure 初始化项目目录结构
 func (b *Bootstrap) InitProjectStructure() error {
-    // 创建目录结构
-    dirs := []string{
-        filepath.Join(b.DestinationDir, "dockerfile"), // 存放 Dockerfile 的目录
-        filepath.Join(b.DestinationDir, "rootfs"),     // 用于初始化 rootfs 的目录
-        filepath.Join(b.DestinationDir, "files"),      // 存放制作rootfs需要的文件
-        filepath.Join(b.DestinationDir, "tests"),      // 存放测试脚本的目录
-    }
+	// 创建目录结构
+	dirs := []string{
+		filepath.Join(b.DestinationDir, "dockerfile"), // 存放 Dockerfile 的目录
+		filepath.Join(b.DestinationDir, "rootfs"),     // 用于初始化 rootfs 的目录
+		filepath.Join(b.DestinationDir, "files"),      // 存放制作rootfs需要的文件
+		filepath.Join(b.DestinationDir, "tests"),      // 存放测试脚本的目录
+	}
 
-    for _, dir := range dirs {
-        if info, err := os.Stat(dir); err == nil {
-            if !info.IsDir() {
-                bak := dir + ".bak"
-                if err := os.Rename(dir, bak); err != nil {
-                    return fmt.Errorf("存在同名文件 %s，重命名失败: %v", dir, err)
-                }
-            } else {
-                // 已存在目录，继续
-                continue
-            }
-        } else if !os.IsNotExist(err) {
-            return fmt.Errorf("检查目录 %s 失败: %v", dir, err)
-        }
-        if err := os.MkdirAll(dir, 0755); err != nil {
-            return fmt.Errorf("创建目录 %s 失败: %v", dir, err)
-        }
-    }
+	for _, dir := range dirs {
+		if info, err := os.Stat(dir); err == nil {
+			if !info.IsDir() {
+				bak := dir + ".bak"
+				if err := os.Rename(dir, bak); err != nil {
+					return fmt.Errorf("存在同名文件 %s，重命名失败: %v", dir, err)
+				}
+			} else {
+				// 已存在目录，继续
+				continue
+			}
+		} else if !os.IsNotExist(err) {
+			return fmt.Errorf("检查目录 %s 失败: %v", dir, err)
+		}
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return fmt.Errorf("创建目录 %s 失败: %v", dir, err)
+		}
+	}
 
-    // 添加必要的文件
-    b.AddDockerfile()
-    b.AddTestcase()
-    b.AddChangeInfo()
-    b.AddRemoveList()
-    b.AddRemoveMinimalList()
-    b.AddUnmaskService()
-    return nil
+	// 添加必要的文件
+	b.AddDockerfile()
+	b.AddTestcase()
+	b.AddChangeInfo()
+	b.AddRemoveList()
+	b.AddRemoveMinimalList()
+	b.AddUnmaskService()
+	return nil
 }
 
 // InitWorkDir 初始化工作目录
@@ -125,7 +124,7 @@ func (b *Bootstrap) BuildRootfs(configFile string) error {
 	}
 
 	// 读取配置文件
-	data, err := ioutil.ReadFile(configFile)
+	data, err := os.ReadFile(configFile)
 	if err != nil {
 		return fmt.Errorf("读取配置文件失败: %v", err)
 	}

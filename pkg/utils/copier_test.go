@@ -12,15 +12,14 @@
 package utils
 
 import (
-	"archive/tar"
-	"archive/zip"
-	"bytes"
-	"compress/gzip"
-	"io/ioutil"
-	"os"
-	"strings"
-	"testing"
-	"time"
+    "archive/tar"
+    "archive/zip"
+    "bytes"
+    "compress/gzip"
+    "os"
+    "strings"
+    "testing"
+    "time"
 )
 
 func TestArchiveUncompress(t *testing.T) {
@@ -55,7 +54,7 @@ func TestArchiveUncompress(t *testing.T) {
 
 				// Write zip file to disk
 				tmpFile := "test.zip"
-				ioutil.WriteFile(tmpFile, buf.Bytes(), 0644)
+                os.WriteFile(tmpFile, buf.Bytes(), 0644)
 				return tmpFile
 			},
 			teardownFunc: func(src string) {
@@ -116,7 +115,7 @@ func TestArchiveUncompress(t *testing.T) {
 
 				// Write zip file to disk
 				tmpFile := "test.zip"
-				ioutil.WriteFile(tmpFile, buf.Bytes(), 0644)
+                os.WriteFile(tmpFile, buf.Bytes(), 0644)
 				return tmpFile
 			},
 			teardownFunc: func(src string) {
@@ -131,9 +130,9 @@ func TestArchiveUncompress(t *testing.T) {
 			expectedMsg: "mkdir /invalid/path: no such file or directory",
 			setupFunc: func() string {
 				// Create a simple text file
-				ioutil.WriteFile("test.txt", []byte("Test content"), 0644)
-				return "test.txt"
-			},
+                os.WriteFile("test.txt", []byte("Test content"), 0644)
+                return "test.txt"
+            },
 			teardownFunc: func(src string) {
 				os.Remove(src)
 			},
