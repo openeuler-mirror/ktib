@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	"gitee.com/openeuler/ktib/pkg/project"
+	"gitee.com/openeuler/ktib/pkg/utils"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -38,6 +39,12 @@ func runMake(cmd *cobra.Command, args []string, option makeOption) error {
 	}
 	if option.init {
 		boot := project.NewBootstrap(args[0])
+		if option.imageType != "" {
+			if !utils.IsValidImageType(option.imageType) {
+				return fmt.Errorf("无效的镜像类型: %s。有效的类型包括: %s", option.imageType, strings.Join(utils.ValidImageTypes, ", "))
+			}
+			boot.BuildType = option.imageType
+		}
 		if err := boot.InitProjectStructure(); err != nil {
 			return err
 		}
@@ -51,20 +58,10 @@ func runMake(cmd *cobra.Command, args []string, option makeOption) error {
 	if option.config == "" {
 		return fmt.Errorf("when building rootfs, you need to specify the --config")
 	}
-
-	validImageTypes := []string{"micro", "minimal", "platform", "init"}
-
 	boot := project.NewBootstrap(args[0])
 	if option.imageType != "" {
-		valid := false
-		for _, t := range validImageTypes {
-			if option.imageType == t {
-				valid = true
-				break
-			}
-		}
-		if !valid {
-			return fmt.Errorf("无效的镜像类型: %s。有效的类型包括: %s", option.imageType, strings.Join(validImageTypes, ", "))
+		if !utils.IsValidImageType(option.imageType) {
+			return fmt.Errorf("无效的镜像类型: %s。有效的类型包括: %s", option.imageType, strings.Join(utils.ValidImageTypes, ", "))
 		}
 		boot.BuildType = option.imageType
 	}
@@ -127,7 +124,7 @@ func newCmdMake() *cobra.Command {
 	flags.BoolVar(&options.init, "init", false, "init project structure before build; generate default config when not set")
 	flags.StringVar(&options.imageType, "type", "platform", "Type of image (micro|minimal|platform|init)")
 	cmd.RegisterFlagCompletionFunc("type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		return []string{"micro", "minimal", "platform", "init"}, cobra.ShellCompDirectiveDefault
+		return utils.ValidImageTypes, cobra.ShellCompDirectiveDefault
 	})
 	flags.StringVar(&options.imageName, "name", "ktib-image", "name of the container image")
 	flags.StringVar(&options.tag, "tag", "latest", "tag of the container image")

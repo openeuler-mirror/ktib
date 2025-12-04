@@ -46,7 +46,7 @@ type Config struct {
 
 // NewBootstrap 创建新的Bootstrap实例
 func NewBootstrap(dir string) *Bootstrap {
-	return &Bootstrap{DestinationDir: dir, BuildType: "baseimage"}
+	return &Bootstrap{DestinationDir: dir, BuildType: "platform"}
 }
 
 // InitProjectStructure 初始化项目目录结构
@@ -168,8 +168,10 @@ func (b *Bootstrap) AddDockerfile() {
 	os.MkdirAll(dockerfilePath, 0755)
 
 	// 根据构建类型选择不同的 Dockerfile 模板
-	if b.BuildType == "baseimage" {
+	if b.BuildType == "platform" || b.BuildType == "minimal" || b.BuildType == "micro" {
 		b.initialize(templates.BaseImageDockerfile, "dockerfile/Dockerfile", 0755)
+	} else if b.BuildType == "init" {
+		b.initialize(templates.InitImageDockerfile, "dockerfile/Dockerfile", 0755)
 	} else {
 		b.initialize(templates.Dockerfile, "dockerfile/Dockerfile", 0755)
 	}
@@ -228,6 +230,11 @@ func (b *Bootstrap) CleanRootfs() error {
 	// 2. 移除不必要的文件
 	if err := RemoveUnnecessaryFiles(target); err != nil {
 		fmt.Printf("移除不必要的文件失败: %v\n", err)
+	}
+
+	// 3. 配置pip并删除pycache
+	if err := ConfigurePipAndRemovePycache(target, b.BuildType); err != nil {
+		fmt.Printf("警告: 配置pip或删除pycache失败: %v\n", err)
 	}
 
 	// 2. 解除服务屏蔽

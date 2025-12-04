@@ -18,6 +18,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"gitee.com/openeuler/ktib/pkg/templates"
 )
 
 var unnecessaryFiles = []string{
@@ -364,5 +366,28 @@ func UnmaskServices(target string, unmaskServicePath string) error {
 		return fmt.Errorf("执行解除服务屏蔽脚本失败: %v", err)
 	}
 
+	return nil
+}
+
+func ConfigurePipAndRemovePycache(target string, imageType string) error {
+	if imageType == "micro" || imageType == "minimal" {
+		return nil
+	}
+	if os.Geteuid() != 0 {
+		return fmt.Errorf("需要root权限执行chroot命令")
+	}
+	scriptPath := filepath.Join(target, "configure_python.sh")
+	scriptContent := templates.PythonConfigureScript
+	if err := os.WriteFile(scriptPath, []byte(scriptContent), 0755); err != nil {
+		return fmt.Errorf("无法创建Python配置脚本: %v", err)
+	}
+	cmd := exec.Command("chroot", target, "/configure_python.sh")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	err := cmd.Run()
+	os.Remove(scriptPath)
+	if err != nil {
+		return fmt.Errorf("执行Python配置脚本失败: %v", err)
+	}
 	return nil
 }

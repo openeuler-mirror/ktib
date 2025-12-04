@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	"gitee.com/openeuler/ktib/pkg/project"
+	"gitee.com/openeuler/ktib/pkg/utils"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	//"gopkg.in/yaml.v2"
@@ -201,16 +202,27 @@ func newSubCmdInit() *cobra.Command {
 	var option InitOption
 	cmd := &cobra.Command{
 		Use:   "init",
-		Short: "Run this command in order to init a project structure",
-		Long: `Init command helps you create an empty project with specified options. 
-It creates the necessary directory structure and files to kickstart your project.`,
-		Example: ` # Create a project structure
-  ktib project init /path/to/project`,
+		Short: "Initialize an image project directory structure",
+		Long:  "Init creates the directory skeleton (dockerfile/, rootfs/, files/, tests/) and lays down default templates like Dockerfile, README, removeminimallist and unmaskService.",
+		Example: ` # Create a new project skeleton
+  ktib project init /path/to/project
+
+ # Init with type and write a default config file
+  ktib project init --type init /path/to/project
+
+ # Build rootfs using the generated config
+  ktib project build-rootfs --config /path/to/project/config.yml /path/to/project`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runInit(cmd, args, option)
 		},
 		Args: cobra.MinimumNArgs(1),
 	}
+	types := utils.ValidImageTypes
+	flags := cmd.Flags()
+	flags.StringVar(&option.BuildType, "type", "platform", "Type of image ("+strings.Join(types, ", ")+")")
+	cmd.RegisterFlagCompletionFunc("type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return types, cobra.ShellCompDirectiveDefault
+	})
 	return cmd
 }
 
@@ -222,11 +234,18 @@ func runInit(c *cobra.Command, args []string, option InitOption) error {
 	}
 	boot := project.NewBootstrap(args[0])
 
+	if option.BuildType != "" {
+		validTypes := utils.ValidImageTypes
+		if !utils.IsValidImageType(option.BuildType) {
+			return fmt.Errorf("无效的镜像类型: %s。有效的类型包括: %s", option.BuildType, strings.Join(validTypes, ", "))
+		}
+		boot.BuildType = option.BuildType
+	}
+
 	// 使用新的方法初始化项目结构
 	if err := boot.InitProjectStructure(); err != nil {
 		return err
 	}
-
 	return nil
 }
 
@@ -238,11 +257,13 @@ func newSubCmdBuildRootfs() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "build-rootfs",
 		Aliases: []string{"br"},
-		Short:   "Run this command to build rootfs for a project",
-		Long: `Build-rootfs command helps you create a rootfs for your project based on the configuration.
-It requires a config file that specifies the packages and settings for the rootfs.`,
+		Short:   "Build rootfs according to the given config.yml",
+		Long:    "Build-rootfs installs packages into the project rootfs using yum/dnf with nodocs, sets network/locale/timezone and initializes machine-id. A config file is required.",
 		Example: ` # Build rootfs for a project
-  ktib project build-rootfs --config config.yml /path/to/project`,
+  ktib project build-rootfs --config /path/to/project/config.yml /path/to/project
+
+ # Generate a default config first
+  ktib project default_config > /path/to/project/config.yml`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) < 1 {
 				logrus.Println("The number of parameters passed in is incorrect")
@@ -270,17 +291,18 @@ func newSubCmdCleanRootfs() *cobra.Command {
 		imageType string
 	}
 
-	// 定义有效的镜像类型
-	validImageTypes := []string{"micro", "minimal", "platform", "init"}
+	validImageTypes := utils.ValidImageTypes
 
 	cmd := &cobra.Command{
 		Use:     "clean-rootfs",
 		Aliases: []string{"cr"},
-		Short:   "Run this command to clean unnecessary files and packages in rootfs",
-		Long: `Clean-rootfs command helps you remove unnecessary files and packages from your rootfs.
-It also performs additional environment configuration operations to optimize the image size.`,
-		Example: ` # Clean rootfs for a project
-  ktib project clean-rootfs --type minimal /path/to/project`,
+		Short:   "Clean rootfs by removing files, optional packages, and unmasking services",
+		Long:    "Clean-rootfs removes locales/docs/caches/logs/tmp, optionally removes packages per type (e.g., minimal), unmask services, and performs final cleanup. Use --type to apply type-specific rules.",
+		Example: ` # Clean rootfs with minimal rules
+  ktib project clean-rootfs --type minimal /path/to/project
+
+ # Clean rootfs for init/platform types
+  ktib project clean-rootfs --type init /path/to/project`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) < 1 {
 				logrus.Println("The number of parameters passed in is incorrect")
@@ -291,20 +313,10 @@ It also performs additional environment configuration operations to optimize the
 
 			// 如果指定了镜像类型，则进行校验并设置
 			if option.imageType != "" {
-				// 校验镜像类型
-				valid := false
-				for _, t := range validImageTypes {
-					if option.imageType == t {
-						valid = true
-						break
-					}
-				}
-				if !valid {
+				if !utils.IsValidImageType(option.imageType) {
 					return fmt.Errorf("无效的镜像类型: %s。有效的类型包括: %s",
 						option.imageType, strings.Join(validImageTypes, ", "))
 				}
-
-				// 设置镜像类型
 				boot.BuildType = option.imageType
 			}
 
@@ -344,11 +356,13 @@ func newSubCmdBuild() *cobra.Command {
 	}
 	cmd := &cobra.Command{
 		Use:   "build",
-		Short: "Run this command to build a container image from rootfs",
-		Long: `Build command helps you create a container image using the rootfs and Dockerfile.
-It packages the rootfs into a container image that can be used with container runtimes.`,
+		Short: "Build the container image from the prepared rootfs",
+		Long:  "Build packages rootfs.tar, resolves Dockerfile (prefers project/dockerfile/Dockerfile) and uses buildah to produce the image with the given name:tag.",
 		Example: ` # Build container image for a project
-  ktib project build --name myimage --tag latest /path/to/project`,
+  ktib project build --name myimage --tag latest /path/to/project
+
+ # Build with defaults
+  ktib project build /path/to/project`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) < 1 {
 				logrus.Println("The number of parameters passed in is incorrect")

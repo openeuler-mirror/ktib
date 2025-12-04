@@ -49,3 +49,10 @@ FROM scratch
 ADD rootfs.tar /
 CMD ["/bin/bash"]
 `
+
+// InitImageDockerfile 是用于构建 init 镜像的 Dockerfile 模板
+const InitImageDockerfile = `# {{.ImageName}} init 镜像
+FROM scratch
+ADD rootfs.tar /
+CMD ["/sbin/init"]
+`
