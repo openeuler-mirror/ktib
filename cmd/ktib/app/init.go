@@ -58,9 +58,14 @@ func newCmdProject() *cobra.Command {
 // newSubCmdDefaultConfig 创建生成默认配置的子命令
 func newSubCmdDefaultConfig() *cobra.Command {
 	var option struct {
-		timezone string
-		locale   string
+		timezone  string
+		locale    string
+		imageType string
 	}
+
+	// 定义有效的镜像类型
+	validImageTypes := []string{"micro", "minimal", "platform", "init"}
+
 	cmd := &cobra.Command{
 		Use:     "default_config",
 		Aliases: []string{"dc"},
@@ -71,14 +76,33 @@ func newSubCmdDefaultConfig() *cobra.Command {
   ktib project default_config --timezone "America/New_York" > config.yml
   # generate default config with custom locale
   ktib project default_config --locale "zh_CN.UTF-8" > config.yml
-  # generate default config with both custom timezone and locale
-  ktib project default_config --timezone "Europe/London" --locale "en_GB.UTF-8" > config.yml`,
+  # generate default config with custom type
+  ktib project default_config --type minimal > config.yml
+  # generate default config with all custom options
+  ktib project default_config --timezone "Europe/London" --locale "en_GB.UTF-8" --type platform > config.yml`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			outputFileName := cmd.OutOrStdout().(*os.File).Name()
 			if outputFileName == "" {
 				outputFileName = "config.yml"
 			}
-			return runDefaultConfig(outputFileName, option.timezone, option.locale)
+
+			// 如果指定了镜像类型，则进行校验
+			if option.imageType != "" {
+				// 校验镜像类型
+				valid := false
+				for _, t := range validImageTypes {
+					if option.imageType == t {
+						valid = true
+						break
+					}
+				}
+				if !valid {
+					return fmt.Errorf("无效的镜像类型: %s。有效的类型包括: %s",
+						option.imageType, strings.Join(validImageTypes, ", "))
+				}
+			}
+
+			return runDefaultConfig(outputFileName, option.timezone, option.locale, option.imageType)
 		},
 		Args: cobra.NoArgs,
 	}
@@ -87,33 +111,89 @@ func newSubCmdDefaultConfig() *cobra.Command {
 	cmd.Flags().StringVar(&option.timezone, "timezone", "Asia/Shanghai", "Set the timezone for the configuration (e.g., Asia/Shanghai, America/New_York, Europe/London)")
 	// 添加语言选项
 	cmd.Flags().StringVar(&option.locale, "locale", "en_US.UTF-8", "Set the locale for the configuration (e.g., en_US.UTF-8, zh_CN.UTF-8, en_GB.UTF-8)")
+	// 添加类型选项
+	cmd.Flags().StringVar(&option.imageType, "type", "",
+		fmt.Sprintf("Type of image (%s)", strings.Join(validImageTypes, ", ")))
+
+	// 为镜像类型标志添加自动补全
+	cmd.RegisterFlagCompletionFunc("type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return validImageTypes, cobra.ShellCompDirectiveDefault
+	})
+
 	return cmd
 }
 
 // runDefaultConfig 执行生成默认配置的操作
-func runDefaultConfig(outputFileName, timezone, locale string) error {
+func runDefaultConfig(outputFileName, timezone, locale, imageType string) error {
+	// 根据类型获取对应的软件包列表
+	packages := getPackagesByType(imageType)
+
 	yamlContent := fmt.Sprintf(`packages:
   install_pkgs:
-    - yum
-    - iproute
-    - vim-minimal
-    - procps-ng
-    - passwd
-    # 可以添加更多软件包
-    # - package1
-    # - package2
+%s
 network: 
     networking: yes
     hostname: localhost.localdomain
 locale: "%%_install_langs %s"
 timezone: "%s"
-`, locale, timezone)
+`, packages, locale, timezone)
 	data := []byte(yamlContent)
 	err := os.WriteFile(outputFileName, data, 0644)
 	if err != nil {
 		return fmt.Errorf("failed to write config file %s: %v", outputFileName, err)
 	}
 	return nil
+}
+
+// getPackagesByType 根据类型返回对应的软件包列表（yaml内容格式）
+func getPackagesByType(imageType string) string {
+	var packages []string
+
+	switch imageType {
+	case "init":
+		// init类型：包含包管理器、大部分基础工具和 systemd 调试工具
+		packages = []string{
+			"yum",
+			"vim-minimal",
+			"dbus-daemon",
+			"kbd",
+			"util-linux",
+		}
+	case "platform":
+		// platform类型：适用于传统业务场景，包含包管理器和大部分基础工具的镜像
+		packages = []string{
+			"yum",
+			"vim-minimal",
+			"shadow",
+		}
+	case "minimal":
+		// minimal类型：最小化安装，只包含必要的基础包,不包含 Python
+		packages = []string{
+			"microdnf",
+			"vim-minimal",
+		}
+	case "micro":
+		// micro类型：极简安装，只包含最核心的包
+		packages = []string{
+			"coreutils",
+		}
+	default:
+		// 默认使用platform类型的包列表
+		packages = []string{
+			"yum",
+			"vim-minimal",
+			"shadow",
+		}
+	}
+
+	// 将包列表格式化为YAML格式
+	var packagesYAML string
+	for _, pkg := range packages {
+		packagesYAML += fmt.Sprintf("    - %s\n", pkg)
+	}
+	packagesYAML += "    # 可以添加更多软件包\n    # - package1\n    # - package2"
+
+	return packagesYAML
 }
 
 // newSubCmdInit 创建初始化项目结构的子命令
