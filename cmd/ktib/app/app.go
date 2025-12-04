@@ -12,15 +12,14 @@
 package app
 
 import (
-    "gitee.com/openeuler/ktib/pkg/utils"
-    "gitee.com/openeuler/ktib/pkg/logging"
+	"gitee.com/openeuler/ktib/pkg/utils"
 )
 
 func Run(version string) error {
-    if utils.ReexecInit() {
-        return nil
-    }
-    cmd := NewCommand(version)
-    cmd.CompletionOptions.DisableDefaultCmd = true
-    return cmd.Execute()
+	if utils.ReexecInit() {
+		return nil
+	}
+	cmd := NewCommand(version)
+	cmd.CompletionOptions.DisableDefaultCmd = true
+	return cmd.Execute()
 }

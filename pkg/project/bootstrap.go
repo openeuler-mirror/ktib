@@ -99,7 +99,10 @@ func (b *Bootstrap) InitWorkDir(types, config string) {
 
 // BuildRootfs 构建rootfs
 func (b *Bootstrap) BuildRootfs(configFile string) error {
-	target, _ := filepath.Abs(filepath.Join(b.DestinationDir, "rootfs"))
+	target, err := filepath.Abs(filepath.Join(b.DestinationDir, "rootfs"))
+	if err != nil {
+		return fmt.Errorf("获取绝对路径失败: %v", err)
+	}
 
 	// 检查dnf并创建dev目录
 	if err := CheckDnfAndCreateDev(target); err != nil {
@@ -109,10 +112,17 @@ func (b *Bootstrap) BuildRootfs(configFile string) error {
 	// 创建字符设备和FIFO设备
 	devices := DefaultDevices()
 	for _, dev := range devices {
-		if dev.Type == "c" {
-			CreateCharDevice(target, dev.Name, dev.Type, dev.Major, dev.Minor, dev.Mode)
-		} else if dev.Type == "fifo" {
-			CreateFifoDevice(target, dev.Name)
+		switch dev.Type {
+		case "c": // 字符设备
+			if err := CreateCharDevice(target, dev.Name, dev.Type, dev.Major, dev.Minor, dev.Mode); err != nil {
+				return fmt.Errorf("创建字符设备 %s 失败: %v", dev.Name, err)
+			}
+		case "fifo": // FIFO设备
+			if err := CreateFifoDevice(target, dev.Name); err != nil {
+				return fmt.Errorf("创建FIFO设备 %s 失败: %v", dev.Name, err)
+			}
+		default:
+			return fmt.Errorf("未知设备类型: %s", dev.Type)
 		}
 	}
 
@@ -124,19 +134,23 @@ func (b *Bootstrap) BuildRootfs(configFile string) error {
 	// 读取配置文件
 	data, err := os.ReadFile(configFile)
 	if err != nil {
-		return fmt.Errorf("读取配置文件失败: %v", err)
+		return fmt.Errorf("读取配置文件 %s 失败: %v", configFile, err)
 	}
 
 	// 解析YAML配置
 	var config Config
 	if err := yaml.Unmarshal(data, &config); err != nil {
-		return fmt.Errorf("解析YAML失败: %v", err)
+		return fmt.Errorf("解析YAML配置失败: %v", err)
 	}
 
 	// 安装软件包
 	packages := config.Packages.InstallPkgs
-	if err := InstallPackages(yumConfig, target, packages...); err != nil {
-		return fmt.Errorf("安装软件包失败: %v", err)
+	if len(packages) == 0 {
+		fmt.Println("警告: 未指定要安装的软件包")
+	} else {
+		if err := InstallPackages(yumConfig, target, packages...); err != nil {
+			return fmt.Errorf("安装软件包失败: %v", err)
+		}
 	}
 
 	// 配置rootfs
