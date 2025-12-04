@@ -80,7 +80,9 @@ func newSubCmdAnnotate() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "annotate",
 		Short: "Add or update information about an entry in a manifest list or image index",
-		Args:  cobra.RangeArgs(1, 2),
+		Long: `Add or update information about a specific entry in a manifest list or image index.
+		IMAGE_DIGEST must be the digest of an existing entry in the manifest list.`,
+		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return annotate(cmd, args, maOptions)
 		},
