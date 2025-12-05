@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
-    "time"
+	"time"
 
 	"gitee.com/openeuler/ktib/pkg/options"
 	types2 "gitee.com/openeuler/ktib/pkg/types"
@@ -117,7 +117,7 @@ func (im *ImageManager) KtibLogin(ctx context.Context, lops *options.LoginOption
 		AcceptUnspecifiedRegistry: true,
 	}
 	sctx := &types.SystemContext{
-		AuthFilePath: loginOps.AuthFile,
+		AuthFilePath:   loginOps.AuthFile,
 		DockerCertPath: loginOps.CertDir,
 		// 修复：TLS验证标志语义反转问题：当 lops.TLSVerify 为 true（需要验证）时，跳过验证应为 false
 		DockerDaemonInsecureSkipTLSVerify: !lops.TLSVerify,
@@ -147,19 +147,19 @@ func (im *ImageManager) Logout(args []string) error {
 }
 
 func (im *ImageManager) Pull(imageName string) error {
-    runtime := im.Manager
-    ctx := context.Background()
-    pullPolicy, err := config.ParsePullPolicy("always")
-    if err != nil {
-        return err
-    }
-    pullOptions := &libimage.PullOptions{}
-    // enable progress bars on TTY and set retry defaults
-    pullOptions.Writer = os.Stderr
-    mr := uint(3)
-    pullOptions.MaxRetries = &mr
-    rd := 2 * time.Second
-    pullOptions.RetryDelay = &rd
+	runtime := im.Manager
+	ctx := context.Background()
+	pullPolicy, err := config.ParsePullPolicy("always")
+	if err != nil {
+		return err
+	}
+	pullOptions := &libimage.PullOptions{}
+	// enable progress bars on TTY and set retry defaults
+	pullOptions.Writer = os.Stderr
+	mr := uint(3)
+	pullOptions.MaxRetries = &mr
+	rd := 2 * time.Second
+	pullOptions.RetryDelay = &rd
 
 	// 添加对 SystemContext 的设置
 	if pullOptions.SystemContext == nil {
@@ -191,16 +191,16 @@ func (im *ImageManager) Pull(imageName string) error {
 		}
 	}
 
-    // normalize short names to fully-qualified (docker.io/library/...) to avoid short-name resolution
-    if named, nerr := reference.ParseNormalizedNamed(imageName); nerr == nil {
-        imageName = named.String()
-    }
-    images, err := runtime.Pull(ctx, imageName, pullPolicy, pullOptions)
-    if err != nil {
-        return err
-    }
-    fmt.Printf("%s\n", images[0].ID())
-    return nil
+	// normalize short names to fully-qualified (docker.io/library/...) to avoid short-name resolution
+	if named, nerr := reference.ParseNormalizedNamed(imageName); nerr == nil {
+		imageName = named.String()
+	}
+	images, err := runtime.Pull(ctx, imageName, pullPolicy, pullOptions)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("%s\n", images[0].ID())
+	return nil
 }
 
 func extractRegistryFromImageName(imageName string) string {
@@ -213,17 +213,17 @@ func extractRegistryFromImageName(imageName string) string {
 }
 
 func (im *ImageManager) Push(ctx context.Context, source, destination string, op options.PushOption) (*options.ImagePushReport, error) {
-    runtime := im.Manager
-    pushOptions := &libimage.PushOptions{}
-    pushOptions.Password = op.Password
-    pushOptions.Username = op.Username
-    pushOptions.SignBy = op.SignBy
-    pushOptions.Writer = os.Stderr
-    // enable progress bars on TTY and set retry defaults
-    mr := uint(3)
-    pushOptions.MaxRetries = &mr
-    rd := 2 * time.Second
-    pushOptions.RetryDelay = &rd
+	runtime := im.Manager
+	pushOptions := &libimage.PushOptions{}
+	pushOptions.Password = op.Password
+	pushOptions.Username = op.Username
+	pushOptions.SignBy = op.SignBy
+	pushOptions.Writer = os.Stderr
+	// enable progress bars on TTY and set retry defaults
+	mr := uint(3)
+	pushOptions.MaxRetries = &mr
+	rd := 2 * time.Second
+	pushOptions.RetryDelay = &rd
 
 	// 添加对 SystemContext 的设置
 	if pushOptions.SystemContext == nil {
@@ -260,14 +260,14 @@ func (im *ImageManager) Push(ctx context.Context, source, destination string, op
 		}
 	}
 
-    // normalize short names to fully-qualified to avoid short-name resolution
-    if sn, nerr := reference.ParseNormalizedNamed(source); nerr == nil {
-        source = sn.String()
-    }
-    if dn, nerr := reference.ParseNormalizedNamed(destination); nerr == nil {
-        destination = dn.String()
-    }
-    pushedManifestBytes, pushErr := runtime.Push(context.Background(), source, destination, pushOptions)
+	// normalize short names to fully-qualified to avoid short-name resolution
+	if sn, nerr := reference.ParseNormalizedNamed(source); nerr == nil {
+		source = sn.String()
+	}
+	if dn, nerr := reference.ParseNormalizedNamed(destination); nerr == nil {
+		destination = dn.String()
+	}
+	pushedManifestBytes, pushErr := runtime.Push(context.Background(), source, destination, pushOptions)
 	if pushErr == nil {
 		manifestDigest, err := manifest.Digest(pushedManifestBytes)
 		if err != nil {
@@ -287,30 +287,60 @@ func (im *ImageManager) Push(ctx context.Context, source, destination string, op
 
 func (im *ImageManager) Remove(store storage.Store, images []string, op options.RemoveOption) error {
 	var allErrors []error
-	for i, img := range images {
-		// If more than one tag exists for the image, the Untag operation is performed
-		names, err := store.Names(img)
-		if err != nil {
-			logrus.Debugf("Failed to get names for image %s: %v", img, err)
-			allErrors = append(allErrors, err)
-			continue
-		}
-		im, err := store.Image(img)
-		if err != nil {
-			logrus.Errorf("No such image: %s", img)
-			continue
-		}
-		if len(names) > 1 {
-			if err := store.RemoveNames(img, images[i:i+1]); err != nil {
-				logrus.Errorf("Untaged %s failed.", img)
+	for _, arg := range images {
+		targetID := arg
+		removeName := ""
+
+		// resolve name/tag to normalized form if it's not an ID
+		if !store.Exists(targetID) {
+			if named, err := reference.ParseNormalizedNamed(arg); err == nil {
+				removeName = named.String()
+				// lookup image by name via libimage runtime to get ID
+				li, _, lerr := im.Manager.LookupImage(removeName, nil)
+				if lerr != nil {
+					allErrors = append(allErrors, lerr)
+					logrus.Errorf("no such image by name: %s", arg)
+					continue
+				}
+				targetID = li.ID()
+			} else {
+				// not an ID and cannot be parsed as name
+				allErrors = append(allErrors, err)
+				logrus.Errorf("invalid image reference: %s", arg)
+				continue
 			}
-			logrus.Infof("Untagged: %s", img)
+		}
+
+		names, nerr := store.Names(targetID)
+		if nerr != nil {
+			allErrors = append(allErrors, nerr)
+			logrus.Debugf("failed to get names for image %s: %v", targetID, nerr)
 			continue
 		}
-		_, err = store.DeleteImage(im.ID, true)
-		if err != nil {
-			allErrors = append(allErrors, err)
-			logrus.Error(fmt.Sprintf("unable to remove repository reference '%s': %s", img, err))
+
+		// if user passed a name and image has multiple names, untag just that name
+		if removeName != "" && len(names) > 1 {
+			// normalize to ensure the stored name matches
+			if err := store.RemoveNames(targetID, []string{removeName}); err != nil {
+				allErrors = append(allErrors, err)
+				logrus.Errorf("untag %s failed: %v", removeName, err)
+				continue
+			}
+			logrus.Infof("Untagged: %s", removeName)
+			continue
+		}
+
+		// otherwise delete the whole image by ID
+		si, ierr := store.Image(targetID)
+		if ierr != nil {
+			allErrors = append(allErrors, ierr)
+			logrus.Errorf("no such image: %s", arg)
+			continue
+		}
+		if _, derr := store.DeleteImage(si.ID, true); derr != nil {
+			allErrors = append(allErrors, derr)
+			logrus.Error(fmt.Sprintf("unable to remove image '%s': %s", arg, derr))
+			continue
 		}
 	}
 	if len(allErrors) > 0 {
@@ -495,12 +525,12 @@ func (im *ImageManager) ManifestPush(background context.Context, name string, de
 	pushOptions.Password = op.Password
 	pushOptions.Username = op.Username
 	pushOptions.SignBy = op.SignBy
-    pushOptions.Writer = os.Stderr
-    // enable progress bars on TTY and set retry defaults
-    mr := uint(3)
-    pushOptions.MaxRetries = &mr
-    rd := 2 * time.Second
-    pushOptions.RetryDelay = &rd
+	pushOptions.Writer = os.Stderr
+	// enable progress bars on TTY and set retry defaults
+	mr := uint(3)
+	pushOptions.MaxRetries = &mr
+	rd := 2 * time.Second
+	pushOptions.RetryDelay = &rd
 	var manifestType string
 	if op.Format != "" {
 		switch op.Format {
@@ -550,11 +580,11 @@ func (im *ImageManager) ManifestPush(background context.Context, name string, de
 
 	pushOptions.ManifestMIMEType = manifestType
 
-    // normalize destination short name
-    if dn, nerr := reference.ParseNormalizedNamed(destination); nerr == nil {
-        destination = dn.String()
-    }
-    manDigest, err := manifestList.Push(background, destination, pushOptions)
+	// normalize destination short name
+	if dn, nerr := reference.ParseNormalizedNamed(destination); nerr == nil {
+		destination = dn.String()
+	}
+	manDigest, err := manifestList.Push(background, destination, pushOptions)
 	if err != nil {
 		return "", err
 	}
