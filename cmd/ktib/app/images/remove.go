@@ -49,7 +49,7 @@ func RemoveImagesCmd() *cobra.Command {
 			return removeImages(cmd, args, op)
 		},
 	}
-	flags := cmd.Flags()
-	flags.BoolVarP(&op.Force, "force", "f", false, "Force will remove all builders from the local storage.")
+    flags := cmd.Flags()
+    flags.BoolVarP(&op.Force, "force", "f", false, "Force remove images")
 	return cmd
 }
