@@ -21,13 +21,13 @@ func newCmdImage() *cobra.Command {
         Use:   "images",
         Aliases: []string{"i"},
         Short: "Run this command in order to operate images at local or remote",
-        // TODO 检查container依赖文件，及软件包是否安装
+        // TODO Check container dependency files, and whether software packages are installed
         PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
             return nil
         },
         Args: cobra.NoArgs,
     }
-	//TODO: 需要补充images save load
+	//TODO: Need to add images save load
 	cmd.AddCommand(
 		imagetool.ImageListCmd(),
 		imagetool.LoginCmd(),

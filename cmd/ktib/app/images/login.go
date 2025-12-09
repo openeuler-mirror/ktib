@@ -55,7 +55,7 @@ Options:
 	flags.StringVarP(&op.Username, "username", "u", "", "Username")
 	flags.BoolVarP(&op.TLSVerify, "tls-verify", "", false, "Require HTTPS and verify certificates when contacting registries")
 	flags.BoolVar(&op.GetLoginSet, "get-login", false, "Return the current login user for the registry")
-	flags.BoolVar(&op.Insecure, "insecure", false, "允许不安全的 HTTP 连接或带有无效证书的 HTTPS 连接")
+	flags.BoolVar(&op.Insecure, "insecure", false, "Allow insecure HTTP connections or HTTPS connections with invalid certificates")
 	return cmd
 }
 

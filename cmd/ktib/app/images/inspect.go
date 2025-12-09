@@ -46,19 +46,19 @@ func imageInspect(cmd *cobra.Command, args []string, op options.ImagesOption) er
 		return err
 	}
 
-	// 调用 Inspect 方法获取镜像数据
+	// Call the Inspect method to get image data
 	imageData, err := imageManager.Inspect(context.Background(), args[0])
 	if err != nil {
 		return err
 	}
 
-	// 将镜像数据转换为 JSON 并格式化输出
+	// Convert image data to JSON and format the output
 	jsonData, err := json.MarshalIndent(imageData, "", "    ")
 	if err != nil {
 		return err
 	}
 
-	// 输出格式化后的 JSON 数据
+	// Output the formatted JSON data
 	fmt.Println(string(jsonData))
 	return nil
 }

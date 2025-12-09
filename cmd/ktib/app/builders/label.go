@@ -49,7 +49,7 @@ func label(cmd *cobra.Command, args []string, op options.IFIOptions) error {
         return fmt.Errorf("Not found the %s builder", args[0])
     }
 	containerId := args[0]
-	// 将 args[1] 解析为 map[string]string
+	// Parse args[1] into map[string]string
 	labels, err := parseLabels(args[1])
 	if err != nil {
 		return err
