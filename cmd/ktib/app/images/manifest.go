@@ -133,7 +133,7 @@ func newSubCmdPush() *cobra.Command {
 		},
 	}
 	flags := cmd.Flags()
-	// todo：根据image push的参数来，后续可以连着push的参数一起补全
+	// todo：based on image push parameters, they can be completed together with the push parameters later
 	flags.StringVar(&pushOptions.SignBy, "sign-by", "", "sign the image using a GPG key with the specified `FINGERPRINT`")
 	flags.StringVar(&pushOptions.Username, "username", "", "The username to use for authentication.")
 	flags.StringVar(&pushOptions.Password, "password", "", "The password to use for authentication.")
@@ -142,7 +142,7 @@ func newSubCmdPush() *cobra.Command {
 	return cmd
 }
 
-// 辅助函数，用于获取 store 和 imageManager 实例
+// Helper function to get store and imageManager instances
 func getImageManager(cmd *cobra.Command) (*imagemanager.ImageManager, error) {
 	store, err := utils.GetStore(cmd)
 	if err != nil {
@@ -151,7 +151,7 @@ func getImageManager(cmd *cobra.Command) (*imagemanager.ImageManager, error) {
 	return imagemanager.NewImageManager(store)
 }
 
-// 用于解析 --annotation 参数
+// Used to parse the --annotation parameter
 func parseAnnotations(annotations []string) (map[string]string, error) {
 	parsedAnnotations := make(map[string]string)
 	for _, annotation := range annotations {
@@ -164,7 +164,7 @@ func parseAnnotations(annotations []string) (map[string]string, error) {
 	return parsedAnnotations, nil
 }
 
-// 用于验证字符串参数
+// Used to validate string arguments
 func validateNonEmpty(param, name string) error {
 	if param == "" {
 		return fmt.Errorf(`invalid %s "%s"`, name, param)

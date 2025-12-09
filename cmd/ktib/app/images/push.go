@@ -38,7 +38,7 @@ func push(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	// 显示推送后的摘要信息
+	// Display summary information after push
 	if report != nil && report.ManifestDigest != "" {
 		fmt.Printf("%s\n", report.ManifestDigest)
 	}
@@ -56,6 +56,6 @@ func PushCmd() *cobra.Command {
 	flags.StringVar(&op.SignBy, "sign-by", "", "If non-empty, asks for a signature to be added during the copy, and specifies a key ID.")
 	flags.StringVar(&op.Password, "password", "", "The password to use for authentication.")
 	flags.StringVar(&op.Username, "username", "", "The username to use for authentication.")
-	flags.BoolVar(&op.Insecure, "insecure", false, "允许不安全的 HTTP 连接或 HTTPS 连接（跳过 TLS 验证）")
+	flags.BoolVar(&op.Insecure, "insecure", false, "Allow insecure HTTP connections or HTTPS connections (skip TLS verification)")
 	return cmd
 }

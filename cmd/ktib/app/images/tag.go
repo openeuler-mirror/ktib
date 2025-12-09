@@ -19,7 +19,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// TODO: 有bug，执行ktib images tag image tagimage 后无报错；执行ktib images list查看只能看到tag后的名字tagimage，查看不到原镜像。
+// TODO: There is a bug, after executing ktib images tag image tagimage there is no error; executing ktib images list only shows the tagged name tagimage, the original image is not visible.
 func tag(cmd *cobra.Command, args []string) error {
 	if len(args) < 2 {
 		err := errors.New("requires exactly 2 arguments")

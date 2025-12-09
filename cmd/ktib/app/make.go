@@ -41,7 +41,7 @@ func runMake(cmd *cobra.Command, args []string, option makeOption) error {
 		boot := project.NewBootstrap(args[0])
 		if option.imageType != "" {
 			if !utils.IsValidImageType(option.imageType) {
-				return fmt.Errorf("无效的镜像类型: %s。有效的类型包括: %s", option.imageType, strings.Join(utils.ValidImageTypes, ", "))
+				return fmt.Errorf("invalid image type: %s. Valid types include: %s", option.imageType, strings.Join(utils.ValidImageTypes, ", "))
 			}
 			boot.BuildType = option.imageType
 		}
@@ -61,7 +61,7 @@ func runMake(cmd *cobra.Command, args []string, option makeOption) error {
 	boot := project.NewBootstrap(args[0])
 	if option.imageType != "" {
 		if !utils.IsValidImageType(option.imageType) {
-			return fmt.Errorf("无效的镜像类型: %s。有效的类型包括: %s", option.imageType, strings.Join(utils.ValidImageTypes, ", "))
+			return fmt.Errorf("invalid image type: %s. Valid types include: %s", option.imageType, strings.Join(utils.ValidImageTypes, ", "))
 		}
 		boot.BuildType = option.imageType
 	}
@@ -128,9 +128,9 @@ func newCmdMake() *cobra.Command {
 	})
 	flags.StringVar(&options.imageName, "name", "ktib-image", "name of the container image")
 	flags.StringVar(&options.tag, "tag", "latest", "tag of the container image")
-	// 添加时区选项
+	// Add timezone option
 	flags.StringVar(&options.timezone, "timezone", "Asia/Shanghai", "Set the timezone for the configuration (e.g., Asia/Shanghai, America/New_York, Europe/London)")
-	// 添加语言选项
+	// Add locale option
 	flags.StringVar(&options.locale, "locale", "en_US.UTF-8", "Set the locale for the configuration (e.g., en_US.UTF-8, zh_CN.UTF-8, en_GB.UTF-8)")
 	return cmd
 }

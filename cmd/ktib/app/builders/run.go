@@ -44,7 +44,7 @@ func RUN(cmd *cobra.Command, args []string, option options.RUNOption) error {
 
 func RUNCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "run [builderID/builderName] [命令] [参数...]",
+		Use:     "run [builderID/builderName] [command] [arguments...]",
 		Short:   "Run commands in a new builder",
 		Aliases: []string{"run-builder"},
 		Args:    cobra.MinimumNArgs(2),

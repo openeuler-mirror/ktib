@@ -23,16 +23,16 @@ import (
 	//"gopkg.in/yaml.v2"
 )
 
-// InitOption 定义初始化项目的选项
+// InitOption defines options for initializing a project
 type InitOption struct {
 	BuildType  string
 	configFile string
 }
 
-// PackagesToCheck 定义需要检查的软件包列表
+// PackagesToCheck defines the list of packages that need to be checked
 var PackagesToCheck = []string{"containers-common"}
 
-// newCmdProject 创建项目主命令
+// newCmdProject creates the main project command
 func newCmdProject() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "project",
@@ -56,7 +56,7 @@ func newCmdProject() *cobra.Command {
 	return cmd
 }
 
-// newSubCmdDefaultConfig 创建生成默认配置的子命令
+// newSubCmdDefaultConfig creates the subcommand for generating default configuration
 func newSubCmdDefaultConfig() *cobra.Command {
 	var option struct {
 		timezone  string
@@ -64,7 +64,7 @@ func newSubCmdDefaultConfig() *cobra.Command {
 		imageType string
 	}
 
-	// 定义有效的镜像类型
+	// Define valid image types
 	validImageTypes := []string{"micro", "minimal", "platform", "init"}
 
 	cmd := &cobra.Command{
@@ -87,9 +87,9 @@ func newSubCmdDefaultConfig() *cobra.Command {
 				outputFileName = "config.yml"
 			}
 
-			// 如果指定了镜像类型，则进行校验
+			// If image type is specified, perform validation
 			if option.imageType != "" {
-				// 校验镜像类型
+				// Validate image type
 				valid := false
 				for _, t := range validImageTypes {
 					if option.imageType == t {
@@ -98,7 +98,7 @@ func newSubCmdDefaultConfig() *cobra.Command {
 					}
 				}
 				if !valid {
-					return fmt.Errorf("无效的镜像类型: %s。有效的类型包括: %s",
+					return fmt.Errorf("invalid image type: %s。Valid types include: %s",
 						option.imageType, strings.Join(validImageTypes, ", "))
 				}
 			}
@@ -108,15 +108,15 @@ func newSubCmdDefaultConfig() *cobra.Command {
 		Args: cobra.NoArgs,
 	}
 	cmd.SetOut(os.Stdout)
-	// 添加时区选项
+	// Add timezone option
 	cmd.Flags().StringVar(&option.timezone, "timezone", "Asia/Shanghai", "Set the timezone for the configuration (e.g., Asia/Shanghai, America/New_York, Europe/London)")
-	// 添加语言选项
+	// Add locale option
 	cmd.Flags().StringVar(&option.locale, "locale", "en_US.UTF-8", "Set the locale for the configuration (e.g., en_US.UTF-8, zh_CN.UTF-8, en_GB.UTF-8)")
-	// 添加类型选项
+	// Add type option
 	cmd.Flags().StringVar(&option.imageType, "type", "",
 		fmt.Sprintf("Type of image (%s)", strings.Join(validImageTypes, ", ")))
 
-	// 为镜像类型标志添加自动补全
+	// Add auto-completion for image type flag
 	cmd.RegisterFlagCompletionFunc("type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return validImageTypes, cobra.ShellCompDirectiveDefault
 	})
@@ -124,9 +124,9 @@ func newSubCmdDefaultConfig() *cobra.Command {
 	return cmd
 }
 
-// runDefaultConfig 执行生成默认配置的操作
+// runDefaultConfig executes the operation to generate the default configuration
 func runDefaultConfig(outputFileName, timezone, locale, imageType string) error {
-	// 根据类型获取对应的软件包列表
+	// Get the corresponding package list based on the type
 	packages := getPackagesByType(imageType)
 
 	yamlContent := fmt.Sprintf(`packages:
@@ -146,13 +146,13 @@ timezone: "%s"
 	return nil
 }
 
-// getPackagesByType 根据类型返回对应的软件包列表（yaml内容格式）
+// getPackagesByType returns the corresponding package list based on the type (in YAML content format)
 func getPackagesByType(imageType string) string {
 	var packages []string
 
 	switch imageType {
 	case "init":
-		// init类型：包含包管理器、大部分基础工具和 systemd 调试工具
+		// init type: includes package manager, most basic tools, and systemd debugging tools
 		packages = []string{
 			"yum",
 			"vim-minimal",
@@ -161,25 +161,25 @@ func getPackagesByType(imageType string) string {
 			"util-linux",
 		}
 	case "platform":
-		// platform类型：适用于传统业务场景，包含包管理器和大部分基础工具的镜像
+		// platform type: suitable for traditional business scenarios, includes package manager and most basic tools image
 		packages = []string{
 			"yum",
 			"vim-minimal",
 			"shadow",
 		}
 	case "minimal":
-		// minimal类型：最小化安装，只包含必要的基础包,不包含 Python
+		// minimal type: minimal installation, includes only necessary basic packages, does not include Python
 		packages = []string{
 			"microdnf",
 			"vim-minimal",
 		}
 	case "micro":
-		// micro类型：极简安装，只包含最核心的包
+		// micro type: ultra-minimal installation, includes only the most core packages
 		packages = []string{
 			"coreutils",
 		}
 	default:
-		// 默认使用platform类型的包列表
+		// Default to using the package list for platform type
 		packages = []string{
 			"yum",
 			"vim-minimal",
@@ -187,17 +187,17 @@ func getPackagesByType(imageType string) string {
 		}
 	}
 
-	// 将包列表格式化为YAML格式
+	// Format the package list into YAML format
 	var packagesYAML string
 	for _, pkg := range packages {
 		packagesYAML += fmt.Sprintf("    - %s\n", pkg)
 	}
-	packagesYAML += "    # 可以添加更多软件包\n    # - package1\n    # - package2"
+	packagesYAML += "    # You can add more packages\n    # - package1\n    # - package2"
 
 	return packagesYAML
 }
 
-// newSubCmdInit 创建初始化项目结构的子命令
+// newSubCmdInit creates the subcommand for initializing the project structure
 func newSubCmdInit() *cobra.Command {
 	var option InitOption
 	cmd := &cobra.Command{
@@ -226,7 +226,7 @@ func newSubCmdInit() *cobra.Command {
 	return cmd
 }
 
-// runInit 执行初始化项目结构的操作
+// runInit executes the operation to initialize the project structure
 func runInit(c *cobra.Command, args []string, option InitOption) error {
 	if len(args) < 1 {
 		logrus.Println("The number of parameters passed in is incorrect")
@@ -237,19 +237,19 @@ func runInit(c *cobra.Command, args []string, option InitOption) error {
 	if option.BuildType != "" {
 		validTypes := utils.ValidImageTypes
 		if !utils.IsValidImageType(option.BuildType) {
-			return fmt.Errorf("无效的镜像类型: %s。有效的类型包括: %s", option.BuildType, strings.Join(validTypes, ", "))
+			return fmt.Errorf("invalid image type: %s. Valid types include: %s", option.BuildType, strings.Join(validTypes, ", "))
 		}
 		boot.BuildType = option.BuildType
 	}
 
-	// 使用新的方法初始化项目结构
+	// Use the new method to initialize the project structure
 	if err := boot.InitProjectStructure(); err != nil {
 		return err
 	}
 	return nil
 }
 
-// newSubCmdBuildRootfs 创建构建rootfs的子命令
+// newSubCmdBuildRootfs creates the subcommand for building rootfs
 func newSubCmdBuildRootfs() *cobra.Command {
 	var option struct {
 		configFile string
@@ -273,7 +273,7 @@ func newSubCmdBuildRootfs() *cobra.Command {
 				return fmt.Errorf("when building rootfs, you need to specify the --config")
 			}
 
-			// 执行 rootfs 构建
+			// Execute rootfs build
 			boot := project.NewBootstrap(args[0])
 			return boot.BuildRootfs(option.configFile)
 		},
@@ -285,7 +285,7 @@ func newSubCmdBuildRootfs() *cobra.Command {
 	return cmd
 }
 
-// newSubCmdCleanRootfs 创建清理rootfs的子命令
+// newSubCmdCleanRootfs creates the subcommand for cleaning rootfs
 func newSubCmdCleanRootfs() *cobra.Command {
 	var option struct {
 		imageType string
@@ -311,16 +311,16 @@ func newSubCmdCleanRootfs() *cobra.Command {
 
 			boot := project.NewBootstrap(args[0])
 
-			// 如果指定了镜像类型，则进行校验并设置
+			// If image type is specified, perform validation and set it
 			if option.imageType != "" {
 				if !utils.IsValidImageType(option.imageType) {
-					return fmt.Errorf("无效的镜像类型: %s。有效的类型包括: %s",
+					return fmt.Errorf("invalid image type: %s. Valid types include: %s",
 						option.imageType, strings.Join(validImageTypes, ", "))
 				}
 				boot.BuildType = option.imageType
 			}
 
-			// 执行清理操作
+			// Execute the cleanup operation
 			if err := boot.CleanRootfs(); err != nil {
 				return fmt.Errorf("failed to clean rootfs: %v", err)
 			}
@@ -329,18 +329,18 @@ func newSubCmdCleanRootfs() *cobra.Command {
 			return nil
 		},
 		Args: cobra.MinimumNArgs(1),
-		// 为 clean-rootfs 命令添加路径补全
+		// Add path completion for the clean-rootfs command
 		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-			// 返回目录补全
+			// Return directory completion
 			return nil, cobra.ShellCompDirectiveFilterDirs
 		},
 	}
 
-	// 确保标志被正确添加到命令的标志集合中
+	// Ensure flags are correctly added to the command's flag set
 	cmd.Flags().StringVar(&option.imageType, "type", "",
 		fmt.Sprintf("Type of image (%s)", strings.Join(validImageTypes, ", ")))
 
-	// 为镜像类型标志添加自动补全
+	// Add auto-completion for image type flag
 	cmd.RegisterFlagCompletionFunc("type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return validImageTypes, cobra.ShellCompDirectiveDefault
 	})
@@ -348,7 +348,7 @@ func newSubCmdCleanRootfs() *cobra.Command {
 	return cmd
 }
 
-// newSubCmdBuild 创建构建容器镜像的子命令
+// newSubCmdBuild creates the subcommand for building a container image
 func newSubCmdBuild() *cobra.Command {
 	var option struct {
 		imageName string
@@ -369,7 +369,7 @@ func newSubCmdBuild() *cobra.Command {
 				return cmd.Help()
 			}
 
-			// 执行镜像构建
+			// Execute image build
 			boot := project.NewBootstrap(args[0])
 			return boot.BuildImage(option.imageName, option.tag)
 		},

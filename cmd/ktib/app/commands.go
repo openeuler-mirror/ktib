@@ -88,10 +88,10 @@ Kylin Trusted Image Builder (ktib)
 		newCmdScan(),
 		newCmdImage(),
 		newCmdBuilder(),
-		// todo: 还没实现
+		// todo: Not implemented yet
 		newCmdMake(),
 		newCmdVersion(),
-		// 添加补全命令
+		// Add completion command
 		&cobra.Command{
 			Use:   "completion",
 			Short: "Generate shell completion scripts",
