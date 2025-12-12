@@ -67,8 +67,8 @@ func add(cmd *cobra.Command, name, destination string, source []string) error {
 }
 
 func tail(a []string) []string {
-	if len(a) >= 2 {
-		return []string(a)[1:]
+	if len(a) == 0 {
+		return []string{}
 	}
-	return []string{}
+	return a[1:]
 }
