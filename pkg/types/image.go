@@ -44,12 +44,12 @@ type JsonBuilder struct {
 }
 
 func MergeAnnotations(preferred map[string]string, aux []string) (map[string]string, error) {
-	// 如果 aux 列表不为空，处理附加注释
+	// If the aux list is not empty, process auxiliary annotations
 	if len(aux) != 0 {
-		// 创建一个新的映射来存储附加注释
+		// Create a new map to store auxiliary annotations
 		auxAnnotations := make(map[string]string)
 		for _, annotationSpec := range aux {
-			// 分割注释字符串为键值对
+			// Split the annotation string into key-value pairs
 			key, val, hasVal := strings.Cut(annotationSpec, "=")
 			if !hasVal {
 				return nil, fmt.Errorf("no value given for annotation %q", key)
@@ -57,13 +57,13 @@ func MergeAnnotations(preferred map[string]string, aux []string) (map[string]str
 			auxAnnotations[key] = val
 		}
 
-		// 如果 preferred 为空，初始化为一个新的映射
+		// If preferred is nil, initialize it as a new map
 		if preferred == nil {
 			preferred = make(map[string]string)
 		}
 
-		// 合并 auxAnnotations 和 preferred 映射
-		// 克隆 preferred 映射，以免修改原始映射
+		// Merge auxAnnotations and preferred map
+		// Clone the preferred map to avoid modifying the original map
 		merged := make(map[string]string, len(preferred)+len(auxAnnotations))
 		for k, v := range preferred {
 			merged[k] = v

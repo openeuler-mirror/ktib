@@ -46,15 +46,15 @@ type Image struct {
 	OriImage storage.Image
 	Size     int64
 
-	// 解析后的名称信息
+	// Parsed name information
 	ParsedNames []ParsedImageName
 }
 
-// 解析后的镜像名称结构
+// Parsed image name structure
 type ParsedImageName struct {
-	Repository string // 仓库名
-	Tag        string // 标签
-	// Digest     string // 摘要
+	Repository string // Repository name
+	Tag        string // Tag
+	// Digest     string // Digest
 }
 
 func NewImageManager(store storage.Store) (*ImageManager, error) {
@@ -82,9 +82,9 @@ func (im *ImageManager) ListImage(ops options.ImagesOption, store storage.Store,
 	}
 
 	var ktibImages []*Image
-	// 遍历获取到的镜像数据
+	// Iterate over the fetched image data
 	for _, img := range images {
-		// 从存储中获取镜像的实际数据
+		// Get the actual image data from the store
 		storageImg := img.StorageImage()
 
 		size, err := store.ImageSize(img.ID())
@@ -92,9 +92,9 @@ func (im *ImageManager) ListImage(ops options.ImagesOption, store storage.Store,
 			return nil, err
 		}
 
-		// 创建一个 Image 实例并填充数据
+		// Create an Image instance and populate the data
 		ktibImage := &Image{
-			OriImage: *storageImg, // storage.Image 直接赋值
+			OriImage: *storageImg, // storage.Image direct assignment
 			Size:     size,
 		}
 
@@ -119,11 +119,11 @@ func (im *ImageManager) KtibLogin(ctx context.Context, lops *options.LoginOption
 	sctx := &types.SystemContext{
 		AuthFilePath:   loginOps.AuthFile,
 		DockerCertPath: loginOps.CertDir,
-		// 修复：TLS验证标志语义反转问题：当 lops.TLSVerify 为 true（需要验证）时，跳过验证应为 false
+		// Fix: TLS verification flag semantic reversal issue: when lops.TLSVerify is true (verification required), skip verification should be false
 		DockerDaemonInsecureSkipTLSVerify: !lops.TLSVerify,
 	}
 
-	// 设置 insecure 参数
+	// Set insecure parameter
 	if lops.Insecure {
 		sctx.DockerInsecureSkipTLSVerify = types.OptionalBoolTrue
 	}
@@ -161,19 +161,19 @@ func (im *ImageManager) Pull(imageName string) error {
 	rd := 2 * time.Second
 	pullOptions.RetryDelay = &rd
 
-	// 添加对 SystemContext 的设置
+	// Add settings for SystemContext
 	if pullOptions.SystemContext == nil {
 		pullOptions.SystemContext = &types.SystemContext{}
 	}
 	SetRegistriesConfPath(pullOptions.SystemContext)
 
-	// 获取已登录的认证信息
+	// Get logged-in authentication information
 	credentials, err := auth_config.GetAllCredentials(pullOptions.SystemContext)
 	if err != nil || len(credentials) == 0 {
-		// 没有认证信息时，使用默认的TLS验证设置
+		// Use default TLS verification setting when no authentication information is present
 		pullOptions.InsecureSkipTLSVerify = types.OptionalBoolFalse
 	} else {
-		// 有认证信息时，检查镜像仓库是否匹配
+		// If authentication information is present, check if the image registry matches
 		imageRegistry := extractRegistryFromImageName(imageName)
 		matchFound := false
 		if imageRegistry != "" {
@@ -183,10 +183,10 @@ func (im *ImageManager) Pull(imageName string) error {
 		}
 
 		if matchFound {
-			// 镜像来源于已登录的镜像仓库
+			// Image is from a logged-in registry
 			pullOptions.InsecureSkipTLSVerify = types.OptionalBoolTrue
 		} else {
-			// 镜像不来源于已登录的镜像仓库
+			// Image is not from a logged-in registry
 			pullOptions.InsecureSkipTLSVerify = types.OptionalBoolFalse
 		}
 	}
@@ -204,7 +204,7 @@ func (im *ImageManager) Pull(imageName string) error {
 }
 
 func extractRegistryFromImageName(imageName string) string {
-	// 解析镜像名称
+	// Parse image name
 	ref, err := reference.ParseNormalizedNamed(imageName)
 	if err != nil {
 		return ""
@@ -225,23 +225,23 @@ func (im *ImageManager) Push(ctx context.Context, source, destination string, op
 	rd := 2 * time.Second
 	pushOptions.RetryDelay = &rd
 
-	// 添加对 SystemContext 的设置
+	// Add settings for SystemContext
 	if pushOptions.SystemContext == nil {
 		pushOptions.SystemContext = &types.SystemContext{}
 	}
 	SetRegistriesConfPath(pushOptions.SystemContext)
 
-	// 如果用户明确设置了insecure参数，优先使用用户设置
+	// If the user explicitly set the insecure parameter, prioritize the user setting
 	if op.Insecure {
 		pushOptions.InsecureSkipTLSVerify = types.OptionalBoolTrue
 	} else {
-		// 获取已登录的认证信息
+		// Get logged-in authentication information
 		credentials, err := auth_config.GetAllCredentials(pushOptions.SystemContext)
 		if err != nil || len(credentials) == 0 {
-			// 没有认证信息时，使用默认的TLS验证设置
+			// Use default TLS verification setting when no authentication information is present
 			pushOptions.InsecureSkipTLSVerify = types.OptionalBoolFalse
 		} else {
-			// 有认证信息时，检查目标仓库是否匹配
+			// If authentication information is present, check if the destination registry matches
 			destinationRegistry := extractRegistryFromImageName(destination)
 			matchFound := false
 			if destinationRegistry != "" {
@@ -251,10 +251,10 @@ func (im *ImageManager) Push(ctx context.Context, source, destination string, op
 			}
 
 			if matchFound {
-				// 目标仓库是已登录的镜像仓库
+				// Destination repository is a logged-in registry
 				pushOptions.InsecureSkipTLSVerify = types.OptionalBoolTrue
 			} else {
-				// 目标仓库不是已登录的镜像仓库
+				// Destination repository is not a logged-in registry
 				pushOptions.InsecureSkipTLSVerify = types.OptionalBoolFalse
 			}
 		}
@@ -393,7 +393,7 @@ func SetRegistriesConfPath(systemContext *types.SystemContext) {
 
 func (im *ImageManager) SaveImage(ctx context.Context, op options.SaveOption, tags []string, name string) error {
 	saveOptions := &libimage.SaveOptions{}
-	// 理论上saveOptions的如下标签应该基于saveOptions赋值，但是目前save不支持这些flags，所以先置为默认值
+	// In theory, the following tags for saveOptions should be assigned based on saveOptions, but currently save does not support these flags, so they are set to default values for now
 	saveOptions.RemoveSignatures = true
 	saveOptions.DirForceCompress = false
 	saveOptions.OciAcceptUncompressedLayers = false
@@ -411,7 +411,7 @@ func (im *ImageManager) SaveImage(ctx context.Context, op options.SaveOption, ta
 
 func (im *ImageManager) LoadImage(background context.Context, op options.LoadOption) (*options.ImageLoadReport, error) {
 	loadOptions := &libimage.LoadOptions{}
-	// 理论上应该从load的options里面赋值，但是目前不支持这些参数，暂时写成默认的
+	// In theory, it should be assigned from the load options, but currently these parameters are not supported, so they are temporarily written as defaults
 	loadOptions.SignaturePolicyPath = ""
 	loadOptions.Writer = os.Stderr
 
@@ -454,7 +454,7 @@ func (im *ImageManager) ManifestCreate(ctx context.Context, name string, images 
 
 	sysCtx := &types.SystemContext{}
 	SetRegistriesConfPath(sysCtx)
-	// 添加凭据匹配逻辑
+	// Add credential matching logic
 	allCreds, err := auth_config.GetAllCredentials(sysCtx)
 	if err == nil {
 		for _, image := range images {
@@ -508,7 +508,7 @@ func (im *ImageManager) ManifestPush(background context.Context, name string, de
 	}
 	pushOptions := &libimage.ManifestListPushOptions{}
 	compressionLevel := 0
-	// todo：以下参数暂不支持，赋为默认值，后续按实际情况补充参数
+	// todo：The following parameters are currently unsupported and set to default values. They will be supplemented later as needed
 	pushOptions.AuthFilePath = auth.GetDefaultAuthFile()
 	pushOptions.CertDirPath = ""
 	pushOptions.ImageListSelection = cp.CopyAllImages
@@ -521,7 +521,7 @@ func (im *ImageManager) ManifestPush(background context.Context, name string, de
 	pushOptions.AddCompression = []string{}
 	pushOptions.ForceCompressionFormat = false
 
-	// 已支持参数赋值
+	// Supported parameter assignment
 	pushOptions.Password = op.Password
 	pushOptions.Username = op.Username
 	pushOptions.SignBy = op.SignBy
@@ -543,23 +543,23 @@ func (im *ImageManager) ManifestPush(background context.Context, name string, de
 		}
 	}
 
-	// 添加对 SystemContext 的设置
+	// Add settings for SystemContext
 	if pushOptions.SystemContext == nil {
 		pushOptions.SystemContext = &types.SystemContext{}
 	}
 	SetRegistriesConfPath(pushOptions.SystemContext)
 
-	// 如果用户明确设置了insecure参数，优先使用用户设置
+	// If the user explicitly set the insecure parameter, prioritize the user setting
 	if op.Insecure {
 		pushOptions.InsecureSkipTLSVerify = types.OptionalBoolTrue
 	} else {
-		// 获取已登录的认证信息
+		// Get logged-in authentication information
 		credentials, err := auth_config.GetAllCredentials(pushOptions.SystemContext)
 		if err != nil || len(credentials) == 0 {
-			// 没有认证信息时，使用默认的TLS验证设置
+			// Use default TLS verification setting when no authentication information is present
 			pushOptions.InsecureSkipTLSVerify = types.OptionalBoolFalse
 		} else {
-			// 有认证信息时，检查目标仓库是否匹配
+			// If authentication information is present, check if the destination registry matches
 			destinationRegistry := extractRegistryFromImageName(destination)
 			matchFound := false
 			if destinationRegistry != "" {
@@ -569,10 +569,10 @@ func (im *ImageManager) ManifestPush(background context.Context, name string, de
 			}
 
 			if matchFound {
-				// 目标仓库是已登录的镜像仓库
+				// Destination repository is a logged-in registry
 				pushOptions.InsecureSkipTLSVerify = types.OptionalBoolTrue
 			} else {
-				// 目标仓库不是已登录的镜像仓库
+				// Destination repository is not a logged-in registry
 				pushOptions.InsecureSkipTLSVerify = types.OptionalBoolFalse
 			}
 		}
@@ -601,15 +601,15 @@ func (im *ImageManager) ManifestAdd(background context.Context, manifestName str
 		return "", err
 	}
 
-	// 添加对 SystemContext 的设置
+	// Add settings for SystemContext
 	sysCtx := &types.SystemContext{}
 	SetRegistriesConfPath(sysCtx)
 
-	// 获取已登录的认证信息
+	// Get logged-in authentication information
 	credentials, err := auth_config.GetAllCredentials(sysCtx)
 	insecureSkipTLS := types.OptionalBoolFalse
 	if err == nil && len(credentials) > 0 {
-		// 有认证信息时，检查所有镜像的仓库是否匹配
+		// If authentication information is present, check if the registry of all images matches
 		matchFound := false
 		for _, image := range images {
 			imageRegistry := extractRegistryFromImageName(image)
@@ -622,12 +622,12 @@ func (im *ImageManager) ManifestAdd(background context.Context, manifestName str
 		}
 
 		if matchFound {
-			// 至少有一个镜像来源于已登录的镜像仓库
+			// At least one image is from a logged-in registry
 			insecureSkipTLS = types.OptionalBoolTrue
 		}
 	}
 
-	// 如果用户明确设置了insecure参数，优先使用用户设置
+	// If the user explicitly set the insecure parameter, prioritize the user setting
 	if opts.Insecure {
 		insecureSkipTLS = types.OptionalBoolTrue
 	}
@@ -708,19 +708,19 @@ func Join(base map[string]string, override map[string]string) map[string]string 
 }
 
 func (im *ImageManager) Inspect(ctx context.Context, name string) (*libimage.ImageData, error) {
-	// 查找镜像，注意这里需要接收三个返回值：image, resolvedName, err
+	// Look up the image, note that three return values are required here: image, resolvedName, err
 	image, _, err := im.Manager.LookupImage(name, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	// 设置检查选项，包括计算镜像大小和父镜像
+	// Set inspect options, including calculating image size and parent image
 	inspectOptions := &libimage.InspectOptions{
 		WithSize:   true,
 		WithParent: true,
 	}
 
-	// 调用 libimage 的 Inspect 方法获取镜像数据
+	// Call libimage's Inspect method to get image data
 	imageData, err := image.Inspect(ctx, inspectOptions)
 	if err != nil {
 		return nil, err

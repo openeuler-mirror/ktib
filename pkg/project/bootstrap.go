@@ -24,14 +24,14 @@ import (
 
 var yumConfig = "/etc/yum.conf"
 
-// Bootstrap 定义项目引导结构
+// Bootstrap defines the project bootstrap structure
 type Bootstrap struct {
-	DestinationDir string // 目标目录
-	ImageName      string // 镜像名称
-	BuildType      string // 构建类型
+	DestinationDir string // Destination directory
+	ImageName      string // Image name
+	BuildType      string // Build type
 }
 
-// Config 定义配置文件结构
+// Config defines the configuration file structure
 type Config struct {
 	Packages struct {
 		InstallPkgs []string `yaml:"install_pkgs"`
@@ -41,22 +41,22 @@ type Config struct {
 		HOSTNAME   string `yaml:"hostname"`
 	} `yaml:"network"`
 	Locale   string `yaml:"locale"`
-	Timezone string `yaml:"timezone"` // 时区配置
+	Timezone string `yaml:"timezone"` // Timezone configuration
 }
 
-// NewBootstrap 创建新的Bootstrap实例
+// NewBootstrap creates a new Bootstrap instance
 func NewBootstrap(dir string) *Bootstrap {
 	return &Bootstrap{DestinationDir: dir, BuildType: "platform"}
 }
 
-// InitProjectStructure 初始化项目目录结构
+// InitProjectStructure initializes the project directory structure
 func (b *Bootstrap) InitProjectStructure() error {
-	// 创建目录结构
+	// Create directory structure
 	dirs := []string{
-		filepath.Join(b.DestinationDir, "dockerfile"), // 存放 Dockerfile 的目录
-		filepath.Join(b.DestinationDir, "rootfs"),     // 用于初始化 rootfs 的目录
-		filepath.Join(b.DestinationDir, "files"),      // 存放制作rootfs需要的文件
-		filepath.Join(b.DestinationDir, "tests"),      // 存放测试脚本的目录
+		filepath.Join(b.DestinationDir, "dockerfile"), // Directory for storing the Dockerfile
+		filepath.Join(b.DestinationDir, "rootfs"),     // Directory for initializing the rootfs
+		filepath.Join(b.DestinationDir, "files"),      // Directory for storing files needed to create rootfs
+		filepath.Join(b.DestinationDir, "tests"),      // Directory for storing test scripts
 	}
 
 	for _, dir := range dirs {
@@ -64,21 +64,21 @@ func (b *Bootstrap) InitProjectStructure() error {
 			if !info.IsDir() {
 				bak := dir + ".bak"
 				if err := os.Rename(dir, bak); err != nil {
-					return fmt.Errorf("存在同名文件 %s，重命名失败: %v", dir, err)
+					return fmt.Errorf("file with the same name exists %s, failed to rename: %v", dir, err)
 				}
 			} else {
-				// 已存在目录，继续
+				// Directory already exists, continue
 				continue
 			}
 		} else if !os.IsNotExist(err) {
-			return fmt.Errorf("检查目录 %s 失败: %v", dir, err)
+			return fmt.Errorf("failed to check directory %s: %v", dir, err)
 		}
 		if err := os.MkdirAll(dir, 0755); err != nil {
-			return fmt.Errorf("创建目录 %s 失败: %v", dir, err)
+			return fmt.Errorf("failed to create directory %s: %v", dir, err)
 		}
 	}
 
-	// 添加必要的文件
+	// Add necessary files
 	b.AddDockerfile()
 	b.AddChangeInfo()
 	b.AddRemoveMinimalList()
@@ -86,7 +86,7 @@ func (b *Bootstrap) InitProjectStructure() error {
 	return nil
 }
 
-// InitWorkDir 初始化工作目录
+// InitWorkDir initializes the working directory
 func (b *Bootstrap) InitWorkDir(types, config string) {
 	baseDir := filepath.Join(b.DestinationDir, "init")
 
@@ -97,77 +97,77 @@ func (b *Bootstrap) InitWorkDir(types, config string) {
 	}
 }
 
-// BuildRootfs 构建rootfs
+// BuildRootfs builds the rootfs
 func (b *Bootstrap) BuildRootfs(configFile string) error {
 	target, err := filepath.Abs(filepath.Join(b.DestinationDir, "rootfs"))
 	if err != nil {
-		return fmt.Errorf("获取绝对路径失败: %v", err)
+		return fmt.Errorf("failed to get absolute path: %v", err)
 	}
 
-	// 检查dnf并创建dev目录
+	// Check dnf and create dev directory
 	if err := CheckDnfAndCreateDev(target); err != nil {
-		return fmt.Errorf("检查dnf并创建dev目录失败: %v", err)
+		return fmt.Errorf("failed to check dnf and create dev directory: %v", err)
 	}
 
-	// 创建字符设备和FIFO设备
+	// Create character and FIFO devices
 	devices := DefaultDevices()
 	for _, dev := range devices {
 		switch dev.Type {
-		case "c": // 字符设备
+		case "c": // Character device
 			if err := CreateCharDevice(target, dev.Name, dev.Type, dev.Major, dev.Minor, dev.Mode); err != nil {
-				return fmt.Errorf("创建字符设备 %s 失败: %v", dev.Name, err)
+				return fmt.Errorf("failed to create character device %s: %v", dev.Name, err)
 			}
-		case "fifo": // FIFO设备
+		case "fifo": // FIFO device
 			if err := CreateFifoDevice(target, dev.Name); err != nil {
-				return fmt.Errorf("创建FIFO设备 %s 失败: %v", dev.Name, err)
+				return fmt.Errorf("failed to create FIFO device %s: %v", dev.Name, err)
 			}
 		default:
-			return fmt.Errorf("未知设备类型: %s", dev.Type)
+			return fmt.Errorf("unknown device type: %s", dev.Type)
 		}
 	}
 
-	// 检查yum/vars目录是否存在
+	// Check if yum/vars directory exists
 	if err := CheckVarsFile(target); err != nil {
-		return fmt.Errorf("检查yum/vars目录失败: %v", err)
+		return fmt.Errorf("failed to check yum/vars directory: %v", err)
 	}
 
-	// 读取配置文件
+	// Read configuration file
 	data, err := os.ReadFile(configFile)
 	if err != nil {
-		return fmt.Errorf("读取配置文件 %s 失败: %v", configFile, err)
+		return fmt.Errorf("failed to read configuration file %s: %v", configFile, err)
 	}
 
-	// 解析YAML配置
+	// Parse YAML configuration
 	var config Config
 	if err := yaml.Unmarshal(data, &config); err != nil {
-		return fmt.Errorf("解析YAML配置失败: %v", err)
+		return fmt.Errorf("failed to parse YAML configuration: %v", err)
 	}
 
-	// 安装软件包
+	// Install packages
 	packages := config.Packages.InstallPkgs
 	if len(packages) == 0 {
-		fmt.Println("警告: 未指定要安装的软件包")
+		fmt.Println("Warning: No packages specified for installation")
 	} else {
 		if err := InstallPackages(yumConfig, target, packages...); err != nil {
-			return fmt.Errorf("安装软件包失败: %v", err)
+			return fmt.Errorf("failed to install packages: %v", err)
 		}
 	}
 
-	// 配置rootfs
+	// Configure rootfs
 	if err := ConfigureRootfs(target, config); err != nil {
-		return fmt.Errorf("配置系统失败: %v", err)
+		return fmt.Errorf("failed to configure system: %v", err)
 	}
 
-	fmt.Println("rootfs 构建完成，请运行 'ktib project clean-rootfs' 命令清理不必要的文件和软件包")
+	fmt.Println("rootfs build complete, please run 'ktib project clean-rootfs' to clean unnecessary files and packages")
 	return nil
 }
 
 func (b *Bootstrap) AddDockerfile() {
-	// 在 dockerfile 目录中创建 Dockerfile
+	// Create Dockerfile in the dockerfile directory
 	dockerfilePath := filepath.Join(b.DestinationDir, "dockerfile")
 	os.MkdirAll(dockerfilePath, 0755)
 
-	// 根据构建类型选择不同的 Dockerfile 模板
+	// Select different Dockerfile templates based on the build type
 	if b.BuildType == "platform" || b.BuildType == "minimal" || b.BuildType == "micro" {
 		b.initialize(templates.BaseImageDockerfile, "dockerfile/Dockerfile", 0755)
 	} else if b.BuildType == "init" {
@@ -186,7 +186,7 @@ func (b *Bootstrap) AddUnmaskService() {
 }
 
 func (b *Bootstrap) AddChangeInfo() {
-	// 在项目根目录创建 README 文件
+	// Create README file in the project root directory
 	b.initialize(templates.README, "README.md", 0644)
 }
 
@@ -211,45 +211,45 @@ func (b *Bootstrap) initialize(t string, file string, perm os.FileMode) {
 	}
 }
 
-// CleanRootfs 方法用于清理 rootfs 中不必要的文件和软件包
+// CleanRootfs method is used to clean unnecessary files and packages in the rootfs
 func (b *Bootstrap) CleanRootfs() error {
 	target, _ := filepath.Abs(filepath.Join(b.DestinationDir, "rootfs"))
 
-	// 检查rootfs目录是否存在
+	// Check if the rootfs directory exists
 	if _, err := os.Stat(target); os.IsNotExist(err) {
-		return fmt.Errorf("rootfs 目录不存在，请先运行 'ktib project build-rootfs' 命令")
+		return fmt.Errorf("rootfs directory does not exist, please run 'ktib project build-rootfs' first")
 	}
 
-	// 1. 移除不必要的包
+	// 1. Remove unnecessary packages
 	removeMinimalListPath := filepath.Join(b.DestinationDir, "files", "removeminimallist")
 
-	fmt.Printf("正在移除不必要的软件包，镜像类型: %s\n", b.BuildType)
+	fmt.Printf("Removing unnecessary packages, image type: %s\n", b.BuildType)
 	if err := RemoveUnnecessaryPackages(target, b.BuildType, removeMinimalListPath); err != nil {
-		fmt.Printf("警告: 移除不必要的软件包失败: %v\n", err)
+		fmt.Printf("Warning: Failed to remove unnecessary packages: %v\n", err)
 	}
-	// 2. 移除不必要的文件
+	// 2. Remove unnecessary files
 	if err := RemoveUnnecessaryFiles(target); err != nil {
-		fmt.Printf("移除不必要的文件失败: %v\n", err)
+		fmt.Printf("Failed to remove unnecessary files: %v\n", err)
 	}
 
-	// 3. 配置pip并删除pycache
+	// 3. Configure pip and remove pycache
 	if err := ConfigurePipAndRemovePycache(target, b.BuildType); err != nil {
-		fmt.Printf("警告: 配置pip或删除pycache失败: %v\n", err)
+		fmt.Printf("Warning: Failed to configure pip or remove pycache: %v\n", err)
 	}
 
-	// 2. 解除服务屏蔽
+	// 4. Unmask services
 	unmaskServicePath := filepath.Join(b.DestinationDir, "files", "unmaskService")
-	fmt.Println("正在解除服务屏蔽")
+	fmt.Println("Unmasking services")
 	if err := UnmaskServices(target, unmaskServicePath); err != nil {
-		fmt.Printf("警告: 解除服务屏蔽失败: %v\n", err)
+		fmt.Printf("Warning: Failed to unmask services: %v\n", err)
 	}
 
-	// 3. 完整清理文件系统
-	fmt.Println("正在清理文件系统")
+	// 5. Complete filesystem cleanup
+	fmt.Println("Cleaning up filesystem")
 	if err := CleanupRootfsPath(target); err != nil {
-		fmt.Printf("警告: 清理文件系统失败: %v\n", err)
+		fmt.Printf("Warning: Failed to clean up filesystem: %v\n", err)
 	}
 
-	fmt.Println("rootfs 清理完成")
+	fmt.Println("rootfs cleanup complete")
 	return nil
 }

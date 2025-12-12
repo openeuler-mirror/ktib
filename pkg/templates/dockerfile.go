@@ -43,15 +43,15 @@ USER 1001
 # CMD ["/usr/bin/xxx"]
 `
 
-// BaseImageDockerfile 是用于构建基础镜像的 Dockerfile 模板
-const BaseImageDockerfile = `# {{.ImageName}} 基础镜像
+// BaseImageDockerfile is the Dockerfile template used to build base images
+const BaseImageDockerfile = `# {{.ImageName}} Base Image
 FROM scratch
 ADD rootfs.tar /
 CMD ["/bin/bash"]
 `
 
-// InitImageDockerfile 是用于构建 init 镜像的 Dockerfile 模板
-const InitImageDockerfile = `# {{.ImageName}} init 镜像
+// InitImageDockerfile is the Dockerfile template used to build init images
+const InitImageDockerfile = `# {{.ImageName}} Init Image
 FROM scratch
 ADD rootfs.tar /
 CMD ["/sbin/init"]

@@ -74,27 +74,27 @@ func humanSize(s int64) string {
 	}
 }
 
-// 解析镜像名称的辅助函数
+// Helper function to parse image name
 func parseImageName(fullName string) (repository, tag string) {
 	if fullName == "" {
 		return unknownState, unknownState
 	}
 
-	// 尝试使用标准库解析
+	// Try to parse using the standard library
 	parsed, err := reference.ParseNormalizedNamed(fullName)
 	if err != nil {
-		// 解析失败，尝试手动解析
+		// Parsing failed, try manual parsing
 		return manualParseImageName(fullName)
 	}
 
-	// 获取仓库名
+	// Get repository name
 	repository = reference.FamiliarName(parsed)
 
-	// 获取标签
+	// Get tag
 	if tagged, ok := parsed.(reference.Tagged); ok {
 		tag = tagged.Tag()
 	} else {
-		// 检查是否是摘要引用
+		// Check if it is a digest reference
 		if digested, ok := parsed.(reference.Digested); ok {
 			digestStr := digested.Digest().String()
 			if len(digestStr) > 12 {
@@ -111,32 +111,32 @@ func parseImageName(fullName string) (repository, tag string) {
 }
 
 func manualParseImageName(fullName string) (repository, tag string) {
-	// 处理特殊字符
+	// Handle special characters
 	fullName = strings.TrimSpace(fullName)
 	if fullName == "" {
 		return unknownState, unknownState
 	}
 
-	// 处理常见的镜像名称格式
-	// 格式1: registry/repository:tag
-	// 格式2: repository:tag
-	// 格式3: registry:port/repository:tag
+	// Handle common image name formats
+	// Format 1: registry/repository:tag
+	// Format 2: repository:tag
+	// Format 3: registry:port/repository:tag
 
-	// 查找最后一个 ":"，用于分割标签
+	// Find the last ":" to split the tag
 	lastColon := strings.LastIndex(fullName, ":")
 
 	if lastColon <= 0 {
-		// 没有 ":"，只有仓库名
+		// No ":", only repository name
 		return fullName, unknownState
 	}
 
-	// 检查是否可能是端口号（比如 localhost:5000/image）
-	// 检查 ":" 前面是否有数字（简单判断）
+	// Check if it might be a port number (e.g., localhost:5000/image)
+	// Check if there is a digit before ":" (simple check)
 	if lastColon > 0 {
-		// 检查 ":" 前是否是数字（端口号）
+		// Check if the character before ":" is a digit (port number)
 		charBeforeColon := fullName[lastColon-1]
 		if charBeforeColon >= '0' && charBeforeColon <= '9' {
-			// 可能是端口号，尝试找前一个 ":"
+			// Might be a port number, try to find the previous ":"
 			prevColon := strings.LastIndex(fullName[:lastColon], ":")
 			if prevColon > 0 {
 				repository = fullName[:prevColon]
@@ -146,11 +146,11 @@ func manualParseImageName(fullName string) (repository, tag string) {
 		}
 	}
 
-	// 正常的分割
+	// Normal splitting
 	repository = fullName[:lastColon]
 	tag = fullName[lastColon+1:]
 
-	// 如果标签为空
+	// If the tag is empty
 	if tag == "" {
 		tag = unknownState
 	}
@@ -172,12 +172,12 @@ func sortImages(imgs []*imagemanager.Image, ops options.ImagesOption) ([]imageRe
 
 		imgID := img.OriImage.ID
 		if !ops.NoTrunc {
-			// NoTrunc=false（默认）：截断到10位
+			// NoTrunc=false (default): truncate to 10 characters
 			if len(imgID) > 10 {
 				imgID = imgID[:10]
 			}
 		} else {
-			// NoTrunc=true：截断到12位
+			// NoTrunc=true: truncate to 12 characters
 			if len(imgID) > 12 {
 				imgID = imgID[:12]
 			}
@@ -198,7 +198,7 @@ func sortImages(imgs []*imagemanager.Image, ops options.ImagesOption) ([]imageRe
 				})
 			}
 		} else {
-			// 没有名称的情况
+			// Case with no names
 			imgReport = append(imgReport, imageReport{
 				Repository: unknownState,
 				Tag:        unknownState,
@@ -211,7 +211,7 @@ func sortImages(imgs []*imagemanager.Image, ops options.ImagesOption) ([]imageRe
 		}
 	}
 
-	// 按 Repository 排序
+	// Sort by Repository
 	sort.Slice(imgReport, func(i, j int) bool {
 		return imgReport[i].Repository < imgReport[j].Repository
 	})
@@ -239,18 +239,18 @@ func sortContainers(containers []container.Container) ([]containerReport, error)
 }
 
 func FormatImages(images []*imagemanager.Image, ops options.ImagesOption) error {
-	// 定义输出格式
+	// Define output format
 	defaultImageTableFormat := "table {{.Repository}} {{.Tag}} {{.ID}} {{.Size}} {{.Created}}"
 	defaultImageTableFormatWithDigest := "table {{.Repository}} {{.Tag}} {{.ID}} {{.Digest}} {{.Size}} {{.Created}}"
 	defaultQuietFormat := "table {{.ID}}"
 	// defaultImageTableFormatWithDigest = "table {{.Repository}}\t{{.Tag}}\t{{.Digest}}\t{{.ID}}\t{{.CreatedSince}}\t{{.Size}}"
-	// 构造所需的image结构=>sortImage
+	// Construct the required image structure => sortImage
 	imagesReport, err := sortImages(images, ops)
 	if err != nil {
 		return err
 	}
 
-	// 定义表头映射
+	// Define table header mapping
 	headers := report.Headers(imageReport{}, map[string]string{
 		"Repository": "REPOSITORY",
 		"Tag":        "TAG",
@@ -315,7 +315,7 @@ func JsonFormatImages(images []*imagemanager.Image, ops options.ImagesOption) er
 }
 
 func FormatBuilders(containers []container.Container, ops options.BuildersOption) error {
-	// TODO 参考docker输出
+	// TODO Refer to docker output
 	defaultBuilderTableFormat := "table {{.ID}}  {{.Names}} {{.LayerID}} {{.ImageID}}   {{.Created}}"
 	containerReports, err := sortContainers(containers)
 	if err != nil {
@@ -415,7 +415,7 @@ func ParseBuildOptions(cmd *cobra.Command, flags *options.BuildOptions, contextD
 	var uselayers bool
 	uselayers = true
 
-	// 添加build-args处理
+	// Add build-args handling
 	var buildArgs map[string]string
 	if len(flags.BuildArg) > 0 {
 		buildArgs = make(map[string]string)
@@ -443,33 +443,33 @@ func ParseBuildOptions(cmd *cobra.Command, flags *options.BuildOptions, contextD
 		Output:                  output,
 		OutputFormat:            format,
 		Args:                    buildArgs,
-		// 添加 SystemContext 设置
+		// Add SystemContext setting
 		SystemContext: &types.SystemContext{},
 	}
 
-	// 设置认证文件路径，使用已登录的认证信息
+	// Set authentication file path, using logged-in authentication information
 	opts.SystemContext.AuthFilePath = auth.GetDefaultAuthFile()
 
-	// 设置 TLS 验证
+	// Set TLS verification
 	if flags.Insecure {
 		opts.SystemContext.DockerInsecureSkipTLSVerify = types.OptionalBoolTrue
 	}
 
-	// 设置 registries.conf 路径
+	// Set registries.conf path
 	imagemanager.SetRegistriesConfPath(opts.SystemContext)
 
-	// 获取已登录的认证信息
+	// Get logged-in authentication information
 	credentials, err := auth_config.GetAllCredentials(opts.SystemContext)
 	if err != nil || len(credentials) == 0 {
-		// 没有认证信息时，使用默认的TLS验证设置
+		// If there is no authentication information, use the default TLS verification setting
 		opts.SystemContext.DockerInsecureSkipTLSVerify = types.OptionalBoolFalse
 	} else {
-		// 有认证信息时，检查Dockerfile中的镜像仓库是否匹配
+		// If there is authentication information, check if the repositories in the Dockerfile match the logged-in ones
 		matchFound := false
 		for _, dockerfilePath := range dockerfilePaths {
 			repositories, err := ParseDockerfileFromImage(dockerfilePath)
 			if err != nil {
-				continue // 忽略解析错误，继续处理其他Dockerfile
+				continue // Ignore parsing errors, continue processing other Dockerfiles
 			}
 
 			for _, repo := range repositories {
@@ -484,10 +484,10 @@ func ParseBuildOptions(cmd *cobra.Command, flags *options.BuildOptions, contextD
 		}
 
 		if matchFound {
-			// Dockerfile中使用的镜像来源于已登录的镜像仓库
+			// The image used in the Dockerfile comes from a logged-in registry
 			opts.SystemContext.DockerInsecureSkipTLSVerify = types.OptionalBoolTrue
 		} else {
-			// Dockerfile中使用的镜像不来源于已登录的镜像仓库
+			// The image used in the Dockerfile does not come from a logged-in registry
 			opts.SystemContext.DockerInsecureSkipTLSVerify = types.OptionalBoolFalse
 		}
 	}
@@ -497,7 +497,7 @@ func ParseBuildOptions(cmd *cobra.Command, flags *options.BuildOptions, contextD
 func ResolveDockerfiles(op *options.BuildOptions, args []string) ([]string, string, error) {
 	var dockerfiles []string
 
-	// 收集 Dockerfile 路径
+	// Collect Dockerfile paths
 	for _, f := range op.File {
 		if f == "-" {
 			if len(args) == 0 {
@@ -512,7 +512,7 @@ func ResolveDockerfiles(op *options.BuildOptions, args []string) ([]string, stri
 
 	var contextDir string
 	if len(args) > 0 {
-		// 排除 `-`，确保上下文目录是有效的
+		// Exclude `-` to ensure the context directory is valid
 		if args[0] != "-" {
 			absDir, err := filepath.Abs(args[0])
 			if err != nil {
@@ -520,7 +520,7 @@ func ResolveDockerfiles(op *options.BuildOptions, args []string) ([]string, stri
 			}
 			contextDir = absDir
 		} else {
-			// 如果 args 只有 `-`，可以选择使用当前工作目录
+			// If args only contains `-`, choose to use the current working directory
 			var err error
 			contextDir, err = os.Getwd()
 			if err != nil {
@@ -566,12 +566,12 @@ func ResolveDockerfiles(op *options.BuildOptions, args []string) ([]string, stri
 	return dockerfiles, contextDir, nil
 }
 
-// ParseDockerfileFromImage 解析dockerfile，获取FROM的镜像的仓库地址
-// 比如: cr.kylinos.cn/test/myapp:01，获取到cr.kylinos.cn
+// ParseDockerfileFromImage parses the Dockerfile to get the repository addresses of the FROM images
+// For example: cr.kylinos.cn/test/myapp:01, gets cr.kylinos.cn
 func ParseDockerfileFromImage(dockerfilePath string) ([]string, error) {
 	var repositories []string
 
-	// 读取Dockerfile内容
+	// Read Dockerfile content
 	file, err := os.Open(dockerfilePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open dockerfile %s: %w", dockerfilePath, err)
@@ -583,26 +583,26 @@ func ParseDockerfileFromImage(dockerfilePath string) ([]string, error) {
 		return nil, fmt.Errorf("failed to read dockerfile %s: %w", dockerfilePath, err)
 	}
 
-	// 按行分割内容
+	// Split content by line
 	lines := strings.Split(string(content), "\n")
 
 	for _, line := range lines {
-		// 去除前后空格
+		// Trim leading and trailing spaces
 		line = strings.TrimSpace(line)
 
-		// 跳过空行和注释
+		// Skip empty lines and comments
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
 
-		// 检查是否是FROM指令（不区分大小写）
+		// Check if it is a FROM instruction (case-insensitive)
 		if strings.HasPrefix(strings.ToUpper(line), "FROM ") {
-			// 提取FROM后面的镜像名称
+			// Extract the image name after FROM
 			parts := strings.Fields(line)
 			if len(parts) >= 2 {
 				imageName := parts[1]
 
-				// 解析镜像名称，去除tag和digest
+				// Parse the image name to get the repository
 				repository := parseImageRepository(imageName)
 				if repository != "" {
 					repositories = append(repositories, repository)
@@ -614,36 +614,36 @@ func ParseDockerfileFromImage(dockerfilePath string) ([]string, error) {
 	return repositories, nil
 }
 
-// parseImageRepository 从完整的镜像名称中提取仓库地址
-// 例如: cr.kylinos.cn/test/myapp:01 -> cr.kylinos.cn
-// 例如: ubuntu:20.04 -> "" (没有明确的仓库地址)
-// 例如: registry.io:5000/user/app@sha256:abc123 -> registry.io:5000
+// parseImageRepository extracts the repository address from the full image name
+// Example: cr.kylinos.cn/test/myapp:01 -> cr.kylinos.cn
+// Example: ubuntu:20.04 -> "" (no explicit repository address)
+// Example: registry.io:5000/user/app@sha256:abc123 -> registry.io:5000
 func parseImageRepository(imageName string) string {
 	if imageName == "" {
 		return ""
 	}
 
-	// 去除digest部分 (以@开头的部分)
+	// Remove the digest part (the part starting with @)
 	if idx := strings.Index(imageName, "@"); idx != -1 {
 		imageName = imageName[:idx]
 	}
 
-	// 去除tag部分 (最后一个:后面的部分)
+	// Remove the tag part (the part after the last :)
 	if idx := strings.LastIndex(imageName, ":"); idx != -1 {
-		// 检查:后面是否包含/，如果包含则说明这个:是仓库地址的一部分（端口号）
+		// Check if the part after : contains /, if it does, it means this : is part of the repository address (port number)
 		tagPart := imageName[idx+1:]
 		if !strings.Contains(tagPart, "/") {
-			// 这是一个tag，去除它
+			// This is a tag, remove it
 			imageName = imageName[:idx]
 		}
 	}
 
-	// 提取仓库地址部分
-	// 如果镜像名称包含/，则第一个/之前的部分是仓库地址
+	// Extract the repository address part
+	// If the image name contains /, the part before the first / is the repository address
 	if idx := strings.Index(imageName, "/"); idx != -1 {
 		return imageName[:idx]
 	}
 
-	// 如果没有/，没有明确的仓库地址
+	// If there is no /, there is no explicit repository address
 	return ""
 }
