@@ -36,7 +36,7 @@ if command -v systemctl >/dev/null 2>&1; then
   systemctl disable systemd-networkd.socket systemd-networkd || true
   systemctl disable systemd-hostnamed.service || true
 else
-  echo "systemctl 未找到，跳过 systemd 服务禁用步骤"
+  echo "systemctl not found, skipping systemd service disabling step"
 fi
 
 # rm systemd drop file

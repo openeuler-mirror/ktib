@@ -69,7 +69,7 @@ func (v *DockerfileVisitor) VisitDockerfile(visitedChildren *parser.Node) interf
 		if parsedLine.Next != nil {
 			lineContent = parsedLine.Next.Dump()
 		}
-		// 拼接命令类型和内容
+		// Concatenate command type and content
 		fullLine := parsedLine.Value
 		if lineContent != "" {
 			fullLine = parsedLine.Value + " " + lineContent

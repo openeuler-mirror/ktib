@@ -42,7 +42,7 @@ func (auditor *DockerfileAuditor) Audit(path string) (PolicyResult, error) {
 	return policyResult, nil
 }
 
-// ParseOnly 仅对指定的文件路径执行分析操作。
+// ParseOnly executes the analysis operation only on the specified file path.
 func (auditor *DockerfileAuditor) ParseOnly(path string) (ParseResult, error) {
 	dockerfile, err := NewDockerfile(path)
 	if err != nil {

@@ -622,34 +622,34 @@ func (b *Builder) Run(args []string, ops options.RUNOption) error {
 }
 
 func (b *Builder) SetLabel(containerID string, labels map[string]string) error {
-	// 找到容器的配置文件路径
+	// Find the container's configuration file path
 	configDir, err := b.Store.ContainerDirectory(containerID)
 	if err != nil {
 		return err
 	}
 	configPath := filepath.Join(configDir, "ktib.json")
 
-	// 读取配置文件
+	// Read the configuration file
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return err
 	}
 
-	// 解析当前配置
+	// Parse the current configuration
 	var config map[string]interface{}
 	if err := json.Unmarshal(data, &config); err != nil {
 		return err
 	}
 
-	// 更新标签
+	// Update labels
 	if config["Labels"] == nil {
 		config["Labels"] = make(map[string]string)
 	}
-	// 获取现有标签
+	// Get existing labels
 	existingLabels := make(map[string]string)
 
 	if rawLabels, ok := config["Labels"].(map[string]interface{}); ok {
-		// JSON反序列化产生的类型
+		// Type produced by JSON unmarshalling
 		for k, v := range rawLabels {
 			existingLabels[k] = fmt.Sprintf("%v", v)
 		}
@@ -657,15 +657,15 @@ func (b *Builder) SetLabel(containerID string, labels map[string]string) error {
 		existingLabels = stringLabels
 	}
 
-	// 合并新标签
+	// Merge new labels
 	for key, value := range labels {
 		existingLabels[key] = value
 	}
 
-	// 更新配置
+	// Update configuration
 	config["Labels"] = existingLabels
 
-	// 更新配置文件
+	// Update the configuration file
 	newData, err := json.Marshal(config)
 	if err != nil {
 		return err
@@ -674,6 +674,6 @@ func (b *Builder) SetLabel(containerID string, labels map[string]string) error {
 		return err
 	}
 
-	fmt.Printf("成功为容器 %s 设置标签: %v\n", containerID, labels)
+	fmt.Printf("Successfully set labels for container %s: %v\n", containerID, labels)
 	return nil
 }

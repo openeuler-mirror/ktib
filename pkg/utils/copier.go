@@ -23,12 +23,12 @@ import (
 )
 
 func ArchiveUncompress(source, destination string) error {
-	// 检查源文件是否存在
+	// Check if source file exists
 	if _, err := os.Stat(source); os.IsNotExist(err) {
 		return fmt.Errorf("source file '%s' does not exist", source)
 	}
 
-	// 检查是否是压缩文件
+	// Check if it is a compressed file
 	var reader io.Reader
 	file, err := os.Open(source)
 	if err != nil {
@@ -78,23 +78,23 @@ func ArchiveUncompress(source, destination string) error {
 		tarReader := tar.NewReader(gzipReader)
 		reader = tarReader
 	} else {
-		// 如果不是压缩文件，则直接使用原始文件
+		// If it is not a compressed file, use the original file directly
 		reader = file
 	}
 
-	// 创建目标目录（如果不存在）
+	// Create the destination directory (if it does not exist)
 	if err := os.MkdirAll(filepath.Dir(destination), 0755); err != nil {
 		return err
 	}
 
-	// 创建目标文件
+	// Create the destination file
 	destFile, err := os.Create(destination)
 	if err != nil {
 		return err
 	}
 	defer destFile.Close()
 
-	// 复制文件内容
+	// Copy file content
 	writer := bufio.NewWriter(destFile)
 	_, err = io.Copy(writer, reader)
 	if err != nil {

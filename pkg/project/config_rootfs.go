@@ -52,7 +52,7 @@ var unnecessaryFiles = []string{
 }
 
 func ConfigureRootfs(target string, config Config) error {
-	// 配置网络
+	// Configure network
 	network := config.Network.NETWORKING
 	hostname := config.Network.HOSTNAME
 	networkConfig := fmt.Sprintf("NETWORKING=%s\nHOSTNAME=%s\n", network, hostname)
@@ -62,10 +62,10 @@ func ConfigureRootfs(target string, config Config) error {
 		return fmt.Errorf("error writing network configuration: %v", err)
 	}
 
-	// 设置 DNF infra 变量
+	// Set DNF infra variable
 	infraConfig := "container"
 	infraFilePath := filepath.Join(target, "/etc/dnf/vars/infra")
-	// 确保目录存在
+	// Ensure directory exists
 	if err := os.MkdirAll(filepath.Dir(infraFilePath), 0755); err != nil {
 		return fmt.Errorf("error creating directory for infra configuration: %v", err)
 	}
@@ -74,10 +74,10 @@ func ConfigureRootfs(target string, config Config) error {
 		return fmt.Errorf("error writing infra configuration: %v", err)
 	}
 
-	// 配置语言环境
+	// Configure locale environment
 	if config.Locale != "" {
 		localeFilePath := filepath.Join(target, "/etc/rpm/macros.image-language-conf")
-		// 确保目录存在
+		// Ensure directory exists
 		if err := os.MkdirAll(filepath.Dir(localeFilePath), 0755); err != nil {
 			return fmt.Errorf("error creating directory for locale configuration: %v", err)
 		}
@@ -86,19 +86,19 @@ func ConfigureRootfs(target string, config Config) error {
 			return fmt.Errorf("error writing language configuration: %v", err)
 		}
 
-		// 设置系统语言环境
+		// Set system locale environment
 		localePath := filepath.Join(target, "/etc/locale.conf")
-		// 从 config.Locale 中提取语言代码
-		// 假设格式为 "%_install_langs en_US.UTF-8"
+		// Extract locale code from config.Locale
+		// Assuming format is "%_install_langs en_US.UTF-8"
 		localeParts := strings.Split(config.Locale, " ")
 		localeValue := ""
 		if len(localeParts) > 1 {
 			localeValue = fmt.Sprintf("LANG=%s\n", localeParts[len(localeParts)-1])
 		} else {
-			localeValue = "LANG=en_US.UTF-8\n" // 默认值
+			localeValue = "LANG=en_US.UTF-8\n" // Default value
 		}
 
-		// 确保目录存在
+		// Ensure directory exists
 		if err := os.MkdirAll(filepath.Dir(localePath), 0755); err != nil {
 			return fmt.Errorf("error creating directory for locale.conf: %v", err)
 		}
@@ -107,24 +107,24 @@ func ConfigureRootfs(target string, config Config) error {
 		}
 	}
 
-	// 配置时区
+	// Configure timezone
 	if config.Timezone != "" {
-		// 创建 /etc/localtime 软链接指向正确的时区文件
+		// Create /etc/localtime symlink pointing to the correct timezone file
 		timezonePath := filepath.Join("/usr/share/zoneinfo", config.Timezone)
 		localtimePath := filepath.Join(target, "/etc/localtime")
 
-		// 确保目标目录存在
+		// Ensure target directory exists
 		if err := os.MkdirAll(filepath.Dir(localtimePath), 0755); err != nil {
 			return fmt.Errorf("error creating directory for localtime: %v", err)
 		}
 
-		// 创建软链接
+		// Create symlink
 		cmd := exec.Command("ln", "-sf", timezonePath, localtimePath)
 		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("error setting timezone: %v", err) // 添加 return
+			return fmt.Errorf("error setting timezone: %v", err) // Add return
 		}
 
-		// 写入时区信息到 /etc/timezone
+		// Write timezone information to /etc/timezone
 		timezoneFPath := filepath.Join(target, "/etc/timezone")
 		if err := os.WriteFile(timezoneFPath, []byte(config.Timezone), 0644); err != nil {
 			return fmt.Errorf("error writing timezone file: %v", err)
@@ -139,7 +139,7 @@ func ConfigureRootfs(target string, config Config) error {
 		return fmt.Errorf("error writing machine-id file: %v", err)
 	}
 
-	// 复制bash配置文件并设置bash历史
+	// Copy bash configuration file and set bash history
 	if err := addCommandToScriptAndRun(target, config); err != nil {
 		return fmt.Errorf("error add command to script and run: %v", err)
 	}
@@ -147,16 +147,16 @@ func ConfigureRootfs(target string, config Config) error {
 }
 
 func addCommandToScriptAndRun(target string, config Config) error {
-	// 复制bash配置文件
+	// Copy bash configuration files
 	bashCmd := exec.Command("sh", "-c", fmt.Sprintf("cp /etc/skel/.bash* %s/root/", target))
 	if err := bashCmd.Run(); err != nil {
-		return fmt.Errorf("复制bash配置文件失败: %v", err)
+		return fmt.Errorf("failed to copy bash configuration files: %v", err)
 	}
 
-	// 创建空的bash历史文件
+	// Create empty bash history file
 	historyPath := filepath.Join(target, "root", ".bash_history")
 	if err := os.WriteFile(historyPath, []byte(""), 0644); err != nil {
-		return fmt.Errorf("创建bash历史文件失败: %v", err)
+		return fmt.Errorf("failed to create bash history file: %v", err)
 	}
 
 	return nil
@@ -190,78 +190,78 @@ func removeAllFiles(target string, files []string) error {
 	return nil
 }
 
-// 添加以下函数来完善文件清理
+// Add the following function to complete file cleanup
 func CleanupRootfsPath(target string) error {
-	// 1. 清理RPM数据库历史记录
+	// 1. Clean up RPM database history
 	rpmHistoryFiles, err := filepath.Glob(filepath.Join(target, "var/lib/dnf/history.*"))
 	if err == nil && len(rpmHistoryFiles) > 0 {
-		fmt.Println("清理RPM数据库历史记录...")
+		fmt.Println("Cleaning up RPM database history...")
 		for _, file := range rpmHistoryFiles {
 			os.Remove(file)
 		}
 	}
 
-	// 2. 清理临时文件和日志文件
-	fmt.Println("清理临时文件和日志文件...")
+	// 2. Clean up temporary files and log files
+	fmt.Println("Cleaning up temporary files and log files...")
 
 	logDir := filepath.Join(target, "var/log")
 	if _, err := os.Stat(logDir); !os.IsNotExist(err) {
-		fmt.Printf("清空目录: %s\n", logDir)
+		fmt.Printf("Emptying directory: %s\n", logDir)
 		os.RemoveAll(logDir)
 		os.MkdirAll(logDir, 0755)
 	}
 
 	tmpDir := filepath.Join(target, "tmp")
 	if _, err := os.Stat(tmpDir); !os.IsNotExist(err) {
-		fmt.Printf("清空目录: %s\n", tmpDir)
+		fmt.Printf("Emptying directory: %s\n", tmpDir)
 		os.RemoveAll(tmpDir)
 		os.MkdirAll(tmpDir, 0755)
 	}
 
-	// 3. 删除nologin文件
+	// 3. Delete nologin file
 	nologinFile := filepath.Join(target, "run/nologin")
 	if _, err := os.Stat(nologinFile); !os.IsNotExist(err) {
-		fmt.Printf("删除文件: %s\n", nologinFile)
+		fmt.Printf("Deleting file: %s\n", nologinFile)
 		os.Remove(nologinFile)
 	}
 
-	// 4. 清理bash历史
+	// 4. Clean up bash history
 	bashHistoryPath := filepath.Join(target, "root/.bash_history")
 	if _, err := os.Stat(bashHistoryPath); !os.IsNotExist(err) {
-		fmt.Printf("清空文件: %s\n", bashHistoryPath)
+		fmt.Printf("Emptying file: %s\n", bashHistoryPath)
 		os.WriteFile(bashHistoryPath, []byte(""), 0644)
 	}
 
 	return nil
 }
 
-// 添加以下函数来移除不必要的包
-// 修改函数，接受文件路径参数
+// Add the following function to remove unnecessary packages
+// Modify function to accept file path parameter
 func RemoveUnnecessaryPackages(target string, imageType string, removeMinimalListPath string) error {
 	var packagesToRemove []string
 	var err error
 	var data []byte
 
-	// 检查是否有root权限
+	// Check for root privilege
 	if os.Geteuid() != 0 {
-		return fmt.Errorf("需要root权限执行chroot命令")
+		return fmt.Errorf("root privileges are required to execute chroot command")
 	}
 
-	// 根据镜像类型选择要移除的包列表
+	// Select the list of packages to remove based on the image type
 	if imageType == "minimal" {
-		// 读取 removeminimallist 文件
+		// Read removeminimallist file
 		data, err = os.ReadFile(removeMinimalListPath)
 		if err != nil {
-			return fmt.Errorf("无法读取 removeminimallist 文件: %v", err)
+			return fmt.Errorf("unable to read removeminimallist file: %v", err)
 		}
 	} else {
-		// micro 类型不需要移除包
+		// micro type does not require package removal
 		return nil
 	}
 
 	packagesToRemove = strings.Split(string(data), "\n")
 
-	// 检查是否有包需要移除
+	// Check if there are packages to remove
 	hasPackagesToRemove := false
 	for _, pkg := range packagesToRemove {
 		pkg = strings.TrimSpace(pkg)
@@ -272,98 +272,98 @@ func RemoveUnnecessaryPackages(target string, imageType string, removeMinimalLis
 	}
 
 	if !hasPackagesToRemove {
-		fmt.Println("没有需要移除的软件包")
+		fmt.Println("No packages need to be removed")
 		return nil
 	}
 
-	// 创建移除包的脚本
+	// Create the package removal script
 	scriptContent := "#!/bin/bash\n"
-	scriptContent += "set -e\n" // 遇到错误立即退出
-	scriptContent += "echo '开始移除不必要的软件包...'\n"
+	scriptContent += "set -e\n" // Exit immediately if a command exits with a non-zero status
+	scriptContent += "echo 'Starting to remove unnecessary packages...'\n"
 
 	for _, pkg := range packagesToRemove {
 		pkg = strings.TrimSpace(pkg)
 		if pkg != "" && !strings.HasPrefix(pkg, "#") {
-			// 先检查包是否已安装
+			// First check if the package is installed
 			scriptContent += fmt.Sprintf("if rpm -q %s &>/dev/null; then\n", pkg)
-			scriptContent += fmt.Sprintf("  echo '移除软件包: %s'\n", pkg)
-			scriptContent += fmt.Sprintf("  rpm -e --nodeps %s || echo '警告: 无法移除 %s'\n", pkg, pkg)
+			scriptContent += fmt.Sprintf("  echo 'Removing package: %s'\n", pkg)
+			scriptContent += fmt.Sprintf("  rpm -e --nodeps %s || echo 'Warning: failed to remove %s'\n", pkg, pkg)
 			scriptContent += "fi\n"
 		}
 	}
 
-	scriptContent += "echo '软件包移除完成'\n"
+	scriptContent += "echo 'Package removal complete'\n"
 
-	// 使用绝对路径
+	// Use absolute path
 	scriptPath := filepath.Join(target, "remove_packages.sh")
 	if err := os.WriteFile(scriptPath, []byte(scriptContent), 0755); err != nil {
-		return fmt.Errorf("无法创建移除软件包脚本: %v", err)
+		return fmt.Errorf("unable to create package removal script: %v", err)
 	}
 
-	fmt.Println("执行软件包移除脚本...")
+	fmt.Println("Executing package removal script...")
 
-	// 执行脚本
+	// Execute the script
 	cmd := exec.Command("chroot", target, "/remove_packages.sh")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	err = cmd.Run()
 
-	// 清理脚本
+	// Clean up script
 	os.Remove(scriptPath)
 
 	if err != nil {
-		return fmt.Errorf("执行移除软件包脚本失败: %v", err)
+		return fmt.Errorf("failed to execute package removal script: %v", err)
 	}
 
 	return nil
 }
 
-// 修改函数，接受文件路径参数
+// Modify function to accept file path parameter
 func UnmaskServices(target string, unmaskServicePath string) error {
-	// 检查是否有root权限
+	// Check for root privilege
 	if os.Geteuid() != 0 {
-		return fmt.Errorf("需要root权限执行chroot命令")
+		return fmt.Errorf("root privileges are required to execute chroot command")
 	}
 
-	// 读取 unmaskService 文件
+	// Read unmaskService file
 	data, err := os.ReadFile(unmaskServicePath)
 	if err != nil {
-		return fmt.Errorf("无法读取 unmaskService 文件: %v", err)
+		return fmt.Errorf("unable to read unmaskService file: %v", err)
 	}
 
-	// 检查文件内容是否为空
+	// Check if file content is empty
 	if len(strings.TrimSpace(string(data))) == 0 {
-		fmt.Println("unmaskService文件为空，跳过解除服务屏蔽")
+		fmt.Println("unmaskService file is empty, skipping service unmasking")
 		return nil
 	}
 
-	// 创建解除屏蔽服务的脚本
+	// Create the script for unmasking services
 	scriptPath := filepath.Join(target, "unmask_services.sh")
 
-	// 添加脚本头和错误处理
+	// Add script header and error handling
 	scriptContent := "#!/bin/bash\n"
-	scriptContent += "set -e\n" // 遇到错误立即退出
-	scriptContent += "echo '开始解除服务屏蔽...'\n"
+	scriptContent += "set -e\n" // Exit immediately if a command exits with a non-zero status
+	scriptContent += "echo 'Starting to unmask services...'\n"
 	scriptContent += string(data)
-	scriptContent += "\necho '服务屏蔽解除完成'\n"
+	scriptContent += "\necho 'Service unmasking complete'\n"
 
 	if err := os.WriteFile(scriptPath, []byte(scriptContent), 0755); err != nil {
-		return fmt.Errorf("无法创建解除服务屏蔽脚本: %v", err)
+		return fmt.Errorf("unable to create service unmasking script: %v", err)
 	}
 
-	fmt.Println("执行解除服务屏蔽脚本...")
+	fmt.Println("Executing service unmasking script...")
 
-	// 执行脚本
+	// Execute the script
 	cmd := exec.Command("chroot", target, "/unmask_services.sh")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	err = cmd.Run()
 
-	// 清理脚本
+	// Clean up script
 	os.Remove(scriptPath)
 
 	if err != nil {
-		return fmt.Errorf("执行解除服务屏蔽脚本失败: %v", err)
+		return fmt.Errorf("failed to execute service unmasking script: %v", err)
 	}
 
 	return nil
@@ -374,12 +374,12 @@ func ConfigurePipAndRemovePycache(target string, imageType string) error {
 		return nil
 	}
 	if os.Geteuid() != 0 {
-		return fmt.Errorf("需要root权限执行chroot命令")
+		return fmt.Errorf("root privileges are required to execute chroot command")
 	}
 	scriptPath := filepath.Join(target, "configure_python.sh")
 	scriptContent := templates.PythonConfigureScript
 	if err := os.WriteFile(scriptPath, []byte(scriptContent), 0755); err != nil {
-		return fmt.Errorf("无法创建Python配置脚本: %v", err)
+		return fmt.Errorf("unable to create Python configuration script: %v", err)
 	}
 	cmd := exec.Command("chroot", target, "/configure_python.sh")
 	cmd.Stdout = os.Stdout
@@ -387,7 +387,7 @@ func ConfigurePipAndRemovePycache(target string, imageType string) error {
 	err := cmd.Run()
 	os.Remove(scriptPath)
 	if err != nil {
-		return fmt.Errorf("执行Python配置脚本失败: %v", err)
+		return fmt.Errorf("failed to execute Python configuration script: %v", err)
 	}
 	return nil
 }

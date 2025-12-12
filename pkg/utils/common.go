@@ -34,12 +34,12 @@ func check() {
 }
 
 func GetStore(c *cobra.Command) (storage.Store, error) {
-	// 下面为获取option默认方法，注意需考虑options其他属性是否是必须的，在下面进行展开
+	// The following is the default method for obtaining options. Note that other properties of options need to be considered whether they are mandatory, and will be expanded below.
 	options, err := storage.DefaultStoreOptions(unshare.GetRootlessUID() > 0, unshare.GetRootlessUID())
 	if err != nil {
 		return nil, fmt.Errorf("failed to get default store options: %w", err)
 	}
-	// TODO 判断参数common-builders 例如：storage-dirver storage-opt root 后续支持
+	// TODO Determine parameters common-builders e.g. storage-dirver storage-opt root, support later
 
 	// umask check force on 022
 	check()

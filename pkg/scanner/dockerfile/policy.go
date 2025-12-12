@@ -50,10 +50,10 @@ func (p *Policy) EvaluateDockerfile(dockerfileObject Dockerfile) PolicyResult {
 	for _, rule := range p.PolicyRules {
 		testRuleResults := rule.Test(dockerfileObject.GetDirectives())
 		if testRuleResults != nil && len(*testRuleResults) > 0 {
-			// 转换规则类型为字符串
+			// Convert rule type to string
 			for i := range *testRuleResults {
 				(*testRuleResults)[i].Type = rule.GetType()
-				// 检查是否有失败项
+				// Check for failures
 				if (*testRuleResults)[i].Status == "fail" {
 					hasFailures = true
 				}
@@ -62,14 +62,14 @@ func (p *Policy) EvaluateDockerfile(dockerfileObject Dockerfile) PolicyResult {
 		}
 	}
 
-	// 根据是否有失败项决定整体结果
+	// Determine the overall result based on whether there are failures
 	auditOutcome := "pass"
 	if hasFailures {
 		auditOutcome = "fail"
 	}
 
 	return PolicyResult{
-		Tests:        testResults, // 现在包含合规和不合规项
+		Tests:        testResults, // Now includes compliant and non-compliant items
 		Filename:     dockerfileObject.GetFilename(),
 		AuditOutcome: auditOutcome,
 		Maintainers:  dockerfileObject.GetMaintainers(),

@@ -111,7 +111,7 @@ func NewFromDirective(rawContent string) *FromDirective {
     if ref == "" {
         return directive
     }
-    // 处理显式 scheme 的镜像引用
+    // Process image reference with explicit scheme
     if strings.HasPrefix(ref, "http://") || strings.HasPrefix(ref, "https://") {
         if u, err := url.Parse(ref); err == nil {
             directive.Registry = u.Host
@@ -131,7 +131,7 @@ func NewFromDirective(rawContent string) *FromDirective {
         directive.ImageName = nameTag
         directive.ImageTag = "latest"
     }
-    // 提取 registry（无 scheme 情况）
+    // Extract registry (no scheme case)
     if slash := strings.Index(directive.ImageName, "/"); slash != -1 {
         first := strings.Split(directive.ImageName, "/")[0]
         if strings.Contains(first, ".") || strings.Contains(first, ":") {
@@ -339,7 +339,7 @@ func (d *AddDirective) GetType() DockerfileDirectiveType {
 }
 func NewAddDirective(rawContent string) *AddDirective {
 	var chown, source, destination string
-	// 正则匹配一下是否存在chown
+	// Regex match to check for the presence of chown
 	re := regexp.MustCompile(`(?:--chown=(\S+)\s+)?(\S+)\s+(\S+)`)
 	matches := re.FindStringSubmatch(rawContent)
 	if len(matches) == 4 {
@@ -347,7 +347,7 @@ func NewAddDirective(rawContent string) *AddDirective {
 		source = matches[2]
 		destination = matches[3]
 	} else {
-		// 没chown前面是源后面是目标
+		// If no chown, the first is the source and the second is the destination
 		parts := strings.Split(rawContent, " ")
 		if len(parts) >= 2 {
 			source = parts[0]
@@ -432,17 +432,17 @@ func (d *EnvDirective) GetType() DockerfileDirectiveType {
 func NewEnvDirective(rawContent string) *EnvDirective {
 	vars := make(map[string]string)
 
-	// 按空格拆分rawContent以获得单个键值对
+	// Split rawContent by space to get individual key-value pairs
 	parts := strings.Fields(rawContent)
 
 	for _, part := range parts {
-		// 检查零件是否包含“=”，以确定它是键值对还是只是一个键
+		// Check if the part contains "=" to determine if it is a key-value pair or just a key
 		if strings.Contains(part, "=") {
-			// 按“=”分割零件以获得键和值
+			// Split the part by "=" to get the key and value
 			kv := strings.SplitN(part, "=", 2)
 			vars[kv[0]] = kv[1]
 		} else {
-			// 如果没有“=”，如果没有“=”，假设该部分是键，其余部分是值
+			// If there is no "=", assume the first part is the key and the rest is the value
 			key := parts[0]
 			value := strings.Join(parts[1:], " ")
 			vars[key] = value
