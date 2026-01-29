@@ -9,8 +9,7 @@
 
 VERSION := $(shell git describe --tags --always --dirty)
 LDFLAGS := -ldflags "-s -w -X=main.version=$(VERSION)"
-BUILDTAGS := seccomp
-
+BUILDTAGS := seccomp containers_image_openpgp exclude_graphdriver_devicemapper exclude_graphdriver_btrfs
 
 GOPATH := $(shell go env GOPATH)
 GOBIN := $(GOPATH)/bin
@@ -24,7 +23,7 @@ deps:
 
 .PHONY: build
 build:
-	go build $(LDFLAGS) -tags "$(BUILDTAGS)" ./cmd/ktib
+	CGO_ENABLED=0 go build $(LDFLAGS) -tags "$(BUILDTAGS)" ./cmd/ktib
 
 .PHONY: install
 install:
@@ -32,7 +31,7 @@ install:
 
 .PHONY: test
 test:
-	go test -v -race ./...
+	CGO_ENABLED=0 go test -v -tags "containers_image_openpgp exclude_graphdriver_devicemapper exclude_graphdriver_btrfs" ./...
 
 .PHONY: clean
 clean:
