@@ -119,7 +119,7 @@ func ConfigureRootfs(target string, config Config) error {
 		}
 
 		// Create symlink
-		cmd := exec.Command("ln", "-sf", timezonePath, localtimePath)
+		cmd := exec.Command("/usr/bin/ln", "-sf", timezonePath, localtimePath)
 		if err := cmd.Run(); err != nil {
 			return fmt.Errorf("error setting timezone: %v", err) // Add return
 		}
@@ -148,7 +148,7 @@ func ConfigureRootfs(target string, config Config) error {
 
 func addCommandToScriptAndRun(target string, config Config) error {
 	// Copy bash configuration files
-	bashCmd := exec.Command("sh", "-c", fmt.Sprintf("cp /etc/skel/.bash* %s/root/", target))
+	bashCmd := exec.Command("/usr/bin/sh", "-c", fmt.Sprintf("cp /etc/skel/.bash* %s/root/", target))
 	if err := bashCmd.Run(); err != nil {
 		return fmt.Errorf("failed to copy bash configuration files: %v", err)
 	}
@@ -381,7 +381,7 @@ func ConfigurePipAndRemovePycache(target string, imageType string) error {
 	if err := os.WriteFile(scriptPath, []byte(scriptContent), 0755); err != nil {
 		return fmt.Errorf("unable to create Python configuration script: %v", err)
 	}
-	cmd := exec.Command("chroot", target, "/configure_python.sh")
+	cmd := exec.Command("/usr/sbin/chroot", target, "/configure_python.sh")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	err := cmd.Run()

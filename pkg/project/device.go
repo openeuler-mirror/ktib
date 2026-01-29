@@ -68,7 +68,7 @@ func CreateFifoDevice(target, name string) error {
 }
 
 func mknod(path, nodeType string, major, minor uint32) error {
-	cmd := exec.Command("mknod", "-m", "666", path, nodeType, fmt.Sprint(major), fmt.Sprint(minor))
+	cmd := exec.Command("/usr/bin/mknod", "-m", "666", path, nodeType, fmt.Sprint(major), fmt.Sprint(minor))
 	cmd.Stdout = nil
 	cmd.Stderr = nil
 	return cmd.Run()
