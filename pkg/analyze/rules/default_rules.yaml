@@ -1,0 +1,74 @@
+version: "1.1"
+
+strategy:
+  enable_levels: ["SAFE", "STANDARD", "OPTIMIZED", "AGGRESSIVE"]
+
+whitelist:
+  - "/usr/lib/systemd/systemd"
+  - "/lib64/ld-linux-x86-64.so.2"
+
+rules:
+  # --- L1: Safe to Remove ---
+  - id: "RM_PKG_CACHE"
+    match:
+      paths: ["/var/cache/yum", "/var/cache/dnf", "/var/lib/rpm/__db.*", "/var/cache/apt/archives", "/var/lib/apt/lists", "/root/.cache/pip"]
+      type: "dir_tree"
+    level: "SAFE"
+    action: "RUN dnf clean all (or equivalent)"
+    description: "Package manager cache"
+
+  - id: "RM_LOGS_TMP"
+    match:
+      paths: ["/tmp", "/var/tmp", "/var/log"]
+      type: "dir_tree"
+    level: "SAFE"
+    action: "RUN rm -rf /var/log/* /tmp/*"
+    description: "Temporary files and logs"
+
+  # --- L2: Standard Slimming ---
+  - id: "RM_DOCS"
+    match:
+      paths: ["/usr/share/doc", "/usr/share/man", "/usr/share/info", "/usr/share/gtk-doc"]
+      type: "dir_tree"
+    level: "STANDARD"
+    action: "Remove documentation"
+    description: "Documentation and man pages"
+
+  - id: "RM_LOCALE"
+    match:
+      paths: ["/usr/lib/locale", "/usr/share/locale"]
+      type: "dir_tree"
+    level: "STANDARD"
+    action: "Keep only en_US.utf8 and zh_CN.utf8"
+    description: "Unused locales"
+
+  # --- L3: Aggressive Slimming ---
+  - id: "RM_DEV_HEADERS"
+    match:
+      extensions: [".h", ".hpp", ".pc", ".a"]
+      exclude_paths: ["/usr/include/python*"]
+    level: "AGGRESSIVE"
+    action: "Remove development headers"
+    description: "C/C++ development headers and static libs"
+
+  - id: "RM_DEV_TOOLS"
+    match:
+      pkg_names: ["gcc", "make", "cmake", "*-devel"]
+    level: "AGGRESSIVE"
+    action: "Use multi-stage build"
+    description: "Build tools in production image"
+
+  # --- L4: Language Specific ---
+  - id: "RM_PY_CACHE"
+    match:
+      path_globs: ["**/__pycache__", "**/*.pyc"]
+    level: "OPTIMIZED"
+    action: "Remove bytecode cache"
+    description: "Python bytecode cache (safe for serverless)"
+
+  - id: "RM_PY_TESTS"
+    match:
+      path_globs: ["**/site-packages/*/test", "**/site-packages/*/tests"]
+    level: "OPTIMIZED"
+    action: "Remove test directories"
+    description: "Python package tests"
