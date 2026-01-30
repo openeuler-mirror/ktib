@@ -22,6 +22,7 @@ import (
 
 func newCmdAnalyze() *cobra.Command {
 	var outputFormat string
+	var rulesPath string
 	cmd := &cobra.Command{
 		Use:   "analyze <image>",
 		Short: "Analyze an image for bloat and packages",
@@ -32,7 +33,9 @@ func newCmdAnalyze() *cobra.Command {
 			utils.CheckErr(err)
 
 			imageRef := args[0]
-			analyzer := analyze.NewAnalyzer(store, imageRef)
+			analyzer, err := analyze.NewAnalyzer(store, imageRef, rulesPath)
+			utils.CheckErr(err)
+
 			report, err := analyzer.Run(cmd.Context())
 			utils.CheckErr(err)
 
@@ -51,5 +54,6 @@ func newCmdAnalyze() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVarP(&outputFormat, "output", "o", "json", "Output format (json)")
+	cmd.Flags().StringVar(&rulesPath, "rules", "", "Path to custom rules configuration file")
 	return cmd
 }

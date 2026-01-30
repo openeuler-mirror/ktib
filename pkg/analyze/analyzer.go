@@ -27,13 +27,19 @@ import (
 type Analyzer struct {
 	Store    storage.Store
 	ImageRef string
+	Rules    types.Config
 }
 
-func NewAnalyzer(store storage.Store, imageRef string) *Analyzer {
+func NewAnalyzer(store storage.Store, imageRef string, rulesPath string) (*Analyzer, error) {
+	rules, err := LoadRules(rulesPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load rules: %w", err)
+	}
 	return &Analyzer{
 		Store:    store,
 		ImageRef: imageRef,
-	}
+		Rules:    *rules,
+	}, nil
 }
 
 func (a *Analyzer) Run(ctx context.Context) (*types.AnalysisReport, error) {
