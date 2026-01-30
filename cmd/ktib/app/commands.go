@@ -71,7 +71,6 @@ Kylin Trusted Image Builder (ktib)
   # 生成 Shell 自动补全
   ktib completion bash
         `),
-		// TODO Check that docker git is installed in your environment.
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			logging.Setup(logLevel, logFormat)
 			return nil
@@ -81,8 +80,6 @@ Kylin Trusted Image Builder (ktib)
 	cmds.SetVersionTemplate("{{.Version}}\n")
 	cmds.PersistentFlags().StringVar(&logLevel, "log-level", "", "log level: trace|debug|info|warn|error|fatal|panic")
 	cmds.PersistentFlags().StringVar(&logFormat, "log-format", "", "log format: text|json")
-	// TODO init or load config
-	// TODO register all commands
 	cmds.AddCommand(
 		newCmdProject(),
 		newCmdScan(),

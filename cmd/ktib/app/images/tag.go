@@ -19,7 +19,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// TODO: There is a bug, after executing ktib images tag image tagimage there is no error; executing ktib images list only shows the tagged name tagimage, the original image is not visible.
 func tag(cmd *cobra.Command, args []string) error {
 	if len(args) < 2 {
 		err := errors.New("requires exactly 2 arguments")
