@@ -391,7 +391,7 @@ func TestScanPython(t *testing.T) {
 	assert.Equal(t, "Apache-2.0", pkgMap["pkg2"].License)
 }
 
-func TestGenerateRecommendations(t *testing.T) {
+func TestGenerateRecommendations_Legacy(t *testing.T) {
 	analyzer := &Analyzer{}
 
 	fs := types.FilesystemInfo{
@@ -422,8 +422,9 @@ func TestGenerateRecommendations(t *testing.T) {
 	// 3. RM_DEV_TOOLS (gcc, devel)
 	// 4. MERGE_LAYERS (duplicates)
 
-	// Rules are temporarily disabled/empty.
-	assert.Empty(t, recs)
+	// Rules are enabled now, so we expect waste detection to trigger a recommendation.
+	assert.NotEmpty(t, recs)
+	assert.Equal(t, "MERGE_LAYERS", recs[0].Code)
 
 	/*
 		assert.NotEmpty(t, recs)
