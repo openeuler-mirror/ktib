@@ -13,71 +13,89 @@ See the Mulan PSL v2 for more details.
 package dockerfile
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
 func TestNewDockerfile(t *testing.T) {
-	// 测试用例 1: 文件存在且有效的 Dockerfile
-	validDockerfilePath := "testdata/valid_dockerfile1"
-	validDockerfileContent := `
+	// Setup temporary directory
+	tmpDir := t.TempDir()
+
+	tests := []struct {
+		name    string
+		setup   func() string
+		wantErr bool
+		errMsg  string
+		check   func(*Dockerfile)
+	}{
+		{
+			name: "Valid Dockerfile",
+			setup: func() string {
+				content := `
 FROM ubuntu:latest
 LABEL maintainer="John Doe"
 RUN apt-get update && apt-get install -y curl
 `
-	err := os.MkdirAll("testdata", 0755)
-	if err != nil {
-		t.Errorf("创建 testdata 目录时出错: %v", err)
+				path := filepath.Join(tmpDir, "valid_dockerfile")
+				err := os.WriteFile(path, []byte(content), 0644)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return path
+			},
+			wantErr: false,
+			check: func(d *Dockerfile) {
+				if len(d.Directives) != 3 {
+					t.Errorf("expected 3 directives, got %d", len(d.Directives))
+				}
+				if d.GetMaintainers() != "John Doe" {
+					t.Errorf("expected maintainer 'John Doe', got %s", d.GetMaintainers())
+				}
+			},
+		},
+		{
+			name: "Non-existent Dockerfile",
+			setup: func() string {
+				return filepath.Join(tmpDir, "non_existent")
+			},
+			wantErr: true,
+			errMsg:  "read dockerfile",
+		},
+		{
+			name: "Empty Dockerfile",
+			setup: func() string {
+				path := filepath.Join(tmpDir, "empty_dockerfile")
+				err := os.WriteFile(path, []byte{}, 0644)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return path
+			},
+			wantErr: true,
+			errMsg:  "empty",
+		},
 	}
-	err = os.WriteFile(validDockerfilePath, []byte(validDockerfileContent), 0644)
-	if err != nil {
-		t.Errorf("创建有效 Dockerfile 文件时出错: %v", err)
-	}
-	defer os.Remove(validDockerfilePath)
 
-	dockerfile, err := NewDockerfile(validDockerfilePath)
-	if err != nil {
-		t.Errorf("NewDockerfile() 返回了错误: %v", err)
-	}
-
-	if dockerfile.Path != validDockerfilePath {
-		t.Errorf("预期路径为 '%s', 实际为 %s", validDockerfilePath, dockerfile.Path)
-	}
-
-	if dockerfile.Filename != filepath.Base(validDockerfilePath) {
-		t.Errorf("预期文件名为 '%s', 实际为 %s", filepath.Base(validDockerfilePath), dockerfile.Filename)
-	}
-
-	if len(dockerfile.Directives) != 3 {
-		fmt.Println(dockerfile.Directives)
-		t.Errorf("预期指令数为 3, 实际为 %d", len(dockerfile.Directives))
-	}
-
-	if dockerfile.GetMaintainers() != "John Doe" {
-		t.Errorf("预期维护者为 ['John Doe'], 实际为 %v", dockerfile.GetMaintainers())
-	}
-
-	// 测试用例 2: 文件不存在
-	nonExistentDockerfilePath := "testdata/non_existent_dockerfile"
-	_, err = NewDockerfile(nonExistentDockerfilePath)
-	if _, ok := err.(*NotDockerfileError); !ok {
-		t.Errorf("预期返回 NotDockerfileError, 实际返回 %T", err)
-	}
-
-	// 测试用例 3: 文件内容为空
-	emptyDockerfilePath := "testdata/empty_dockerfile"
-	err = os.WriteFile(emptyDockerfilePath, []byte{}, 0644)
-	if err != nil {
-		t.Errorf("创建空 Dockerfile 文件时出错: %v", err)
-	}
-	defer os.Remove(emptyDockerfilePath)
-
-	_, err = NewDockerfile(emptyDockerfilePath)
-	if _, ok := err.(*EmptyFileError); !ok {
-		t.Errorf("预期返回 EmptyFileError, 实际返回 %T", err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := tt.setup()
+			got, err := NewDockerfile(path)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("NewDockerfile() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if tt.wantErr && err != nil && tt.errMsg != "" {
+				if !strings.Contains(err.Error(), tt.errMsg) {
+					t.Errorf("NewDockerfile() error = %v, want error containing %q", err, tt.errMsg)
+				}
+			}
+			if !tt.wantErr && got != nil && tt.check != nil {
+				tt.check(got)
+			}
+		})
 	}
 }
 
@@ -495,6 +513,7 @@ func TestGetMaintainers(t *testing.T) {
 			directives: []DfDirective{
 				&MaintainerDirective{
 					Type:        MAINTAINER,
+					Content:     "MAINTAINER John Doe, Jane Smith",
 					Maintainers: []string{"John Doe", "Jane Smith"},
 				},
 			},

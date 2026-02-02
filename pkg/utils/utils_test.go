@@ -46,6 +46,34 @@ func TestFileExists(t *testing.T) {
 	}
 }
 
+func TestIsDir(t *testing.T) {
+	// Create a temporary file
+	file, err := os.CreateTemp("", "testfile")
+	if err != nil {
+		t.Fatalf("Failed to create temporary file: %v", err)
+	}
+	defer os.Remove(file.Name())
+
+	// Create a temporary directory
+	dir := t.TempDir()
+
+	tests := []struct {
+		path     string
+		expected bool
+	}{
+		{file.Name(), false},    // File is not a directory
+		{dir, true},             // Directory is a directory
+		{"invalid/path", false}, // Invalid path
+	}
+
+	for _, test := range tests {
+		result := IsDir(test.path)
+		if result != test.expected {
+			t.Errorf("IsDir(%q) = %v; want %v", test.path, result, test.expected)
+		}
+	}
+}
+
 func TestDefaultFormat(t *testing.T) {
 	// Save the original environment variable
 	origFormat := os.Getenv("BUILDAH_FORMAT")

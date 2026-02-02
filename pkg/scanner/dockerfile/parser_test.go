@@ -12,9 +12,10 @@
 package dockerfile
 
 import (
-	"github.com/moby/buildkit/frontend/dockerfile/parser"
-	"reflect"
 	"testing"
+
+	"github.com/moby/buildkit/frontend/dockerfile/parser"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNewDockerfileVisitor(t *testing.T) {
@@ -129,21 +130,21 @@ func TestVisitDockerfile(t *testing.T) {
 			},
 			expected: &Dockerfile{
 				Directives: []DfDirective{
-					NewFromDirective("ubuntu:latest"),
-					NewRunDirective("apt-get update && apt-get install -y nginx"),
-					NewLabelDirective("maintainer=\"example user <user@example.com>\""),
-					NewUserDirective("admin"),
-					NewExposeDirective("8080"),
-					NewMaintainerDirective("alice"),
-					NewAddDirective("src /des"),
-					NewCopyDirective("src /des"),
-					NewEnvDirective("version=v0.1"),
-					NewEntrypointDirective("/bin/bash"),
-					NewWorkdirDirective("/root"),
-					NewVolumeDirective("/hostpath"),
-					NewStopsignalDirective("3"),
-					NewArgDirective("arch=x86"),
-					NewCmdDirective("/bin/bash"),
+					NewFromDirective("FROM ubuntu:latest"),
+					NewRunDirective("RUN apt-get update && apt-get install -y nginx"),
+					NewLabelDirective("LABEL maintainer=\"example user <user@example.com>\""),
+					NewUserDirective("USER admin"),
+					NewExposeDirective("EXPOSE 8080"),
+					NewMaintainerDirective("MAINTAINER alice"),
+					NewAddDirective("ADD src /des"),
+					NewCopyDirective("COPY src /des"),
+					NewEnvDirective("ENV version=v0.1"),
+					NewEntrypointDirective("ENTRYPOINT /bin/bash"),
+					NewWorkdirDirective("WORKDIR /root"),
+					NewVolumeDirective("VOLUME /hostpath"),
+					NewStopsignalDirective("STOPSIGNAL 3"),
+					NewArgDirective("ARG arch=x86"),
+					NewCmdDirective("CMD /bin/bash"),
 				},
 			},
 		},
@@ -153,9 +154,7 @@ func TestVisitDockerfile(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			visitor := NewDockerfileVisitor(&Dockerfile{})
 			result := visitor.VisitDockerfile(tt.input).(*Dockerfile)
-			if !reflect.DeepEqual(result, tt.expected) {
-				t.Errorf("VisitDockerfile() returned unexpected result.\nGot: %+v\nExpected: %+v", result, tt.expected)
-			}
+			assert.Equal(t, tt.expected, result)
 		})
 	}
 }

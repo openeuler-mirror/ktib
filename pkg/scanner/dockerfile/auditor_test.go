@@ -74,7 +74,7 @@ func TestParseOnly(t *testing.T) {
 	// 创建测试用的有效 Dockerfile
 	validDockerfilePath := "testdata/valid_dockerfile"
 	validDockerfileContent := `FROM ubuntu:latest
-LABEL maintainer1="John Doe"
+LABEL maintainer="John Doe"
 RUN apt-get update && apt-get install -y curl
 `
 	err := os.MkdirAll("testdata", 0755)

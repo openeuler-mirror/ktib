@@ -63,17 +63,24 @@ func NewDockerfileVisitor(dockerfile *Dockerfile) *DockerfileVisitor {
 }
 
 func (v *DockerfileVisitor) VisitDockerfile(visitedChildren *parser.Node) interface{} {
-    for _, parsedLine := range visitedChildren.Children {
+	for _, parsedLine := range visitedChildren.Children {
 		lineType := parseDirectiveType(parsedLine.Value)
-		var lineContent string
-		if parsedLine.Next != nil {
-			lineContent = parsedLine.Next.Dump()
+		
+		var fullLine string
+		if parsedLine.Original != "" {
+			fullLine = parsedLine.Original
+		} else {
+			var lineContent string
+			if parsedLine.Next != nil {
+				lineContent = parsedLine.Next.Dump()
+			}
+			// Concatenate command type and content
+			fullLine = parsedLine.Value
+			if lineContent != "" {
+				fullLine = parsedLine.Value + " " + lineContent
+			}
 		}
-		// Concatenate command type and content
-		fullLine := parsedLine.Value
-		if lineContent != "" {
-			fullLine = parsedLine.Value + " " + lineContent
-		}
+
 		switch lineType {
 		case FROM:
 			v.Dockerfile.AddDirective(NewFromDirective(fullLine))

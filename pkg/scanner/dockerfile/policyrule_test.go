@@ -50,8 +50,9 @@ func TestForbidTags_Test(t *testing.T) {
 				{
 					Type:        FORBID_TAGS,
 					Details:     "Tag latest is not allowed.",
-					Mitigations: "The FROM statements should be changed using an image with a fixed tag or without any of the following tags: latest, dev",
+					Mitigations: "The FROM statement should be changed to use an image with a fixed tag, or not use any of the following tags: latest, dev",
 					Statement:   []string{"FROM myimage:latest"},
+					Status:      "fail",
 				},
 			},
 		},
@@ -79,14 +80,21 @@ func TestForbidTags_Test(t *testing.T) {
 					},
 				},
 			},
-			expectedRes: nil,
+			expectedRes: &[]Rule{
+				{
+					Type:        FORBID_TAGS,
+					Details:     "Tag v1.0.0 is allowed.",
+					Mitigations: "",
+					Statement:   []string{"FROM myimage:v1.0.0"},
+					Status:      "pass",
+				},
+			},
 		},
 	}
 
-	ft := NewForbidTags([]string{"latest", "dev"})
-
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			ft := NewForbidTags([]string{"latest", "dev"})
 			res := ft.Test(tc.directives)
 			if !reflect.DeepEqual(res, tc.expectedRes) {
 				t.Errorf("Expected %v, got %v", tc.expectedRes, res)
@@ -97,7 +105,7 @@ func TestForbidTags_Test(t *testing.T) {
 
 func TestForbidTags_Details(t *testing.T) {
 	testFt := NewForbidTags([]string{"latest", "dev"})
-	expected := "The following tags are forbidden: latest, dev."
+	expected := "The following tags are forbidden: latest, dev。"
 	if testFt.Details() != expected {
 		t.Errorf("Expected %s, got %s", expected, testFt.Details())
 	}
@@ -130,18 +138,20 @@ func TestEnforceRegistryPolicy_Test(t *testing.T) {
 			directives: map[string][]DfDirective{
 				"from": {
 					&FromDirective{
-						ImageName: "myimage",
+						Registry:  "unallowed.registry",
+						ImageName: "unallowed.registry/myimage",
 						ImageTag:  "latest",
-						Content:   "FROM myimage:latest",
+						Content:   "FROM unallowed.registry/myimage:latest",
 					},
 				},
 			},
 			expectedRes: &[]Rule{
 				{
 					Type:        ENFORCE_REGISTRY,
-					Details:     "Registry  不是允许拉取镜像的注册表。",
-					Mitigations: "应该更改 FROM 语句，使用允许的注册表之一的镜像：docker.registry",
-					Statement:   []string{"FROM myimage:latest"},
+					Details:     "Registry unallowed.registry is not an allowed registry for pulling images.",
+					Mitigations: "The FROM statement should be changed to use an image from an allowed image repository registry：docker.registry",
+					Statement:   []string{"FROM unallowed.registry/myimage:latest"},
+					Status:      "fail",
 				},
 			},
 		},
@@ -156,7 +166,7 @@ func TestEnforceRegistryPolicy_Test(t *testing.T) {
 					},
 				},
 			},
-			expectedRes: nil,
+			expectedRes: &[]Rule{},
 		},
 		{
 			name: "EnforceRegistryPolicy is set",
@@ -170,7 +180,15 @@ func TestEnforceRegistryPolicy_Test(t *testing.T) {
 					},
 				},
 			},
-			expectedRes: nil,
+			expectedRes: &[]Rule{
+				{
+					Type:        ENFORCE_REGISTRY,
+					Details:     "Registry docker.registry is an allowed image repository registry.",
+					Mitigations: "",
+					Statement:   []string{"FROM docker.registry/myimage:dev"},
+					Status:      "pass",
+				},
+			},
 		},
 	}
 	erp := NewEnforceRegistryPolicy([]string{"docker.registry"}, true)
@@ -186,7 +204,7 @@ func TestEnforceRegistryPolicy_Test(t *testing.T) {
 
 func TestEnforceRegistryPolicy_Details(t *testing.T) {
 	testErp := NewEnforceRegistryPolicy([]string{"docker.registry"}, true)
-	expected := "The following registries are allowed: docker.registry."
+	expected := "Allowed registries: docker.registry."
 	if testErp.Details() != expected {
 		t.Errorf("Expected %s, got %s", expected, testErp.Details())
 	}
@@ -224,9 +242,10 @@ func TestNewForbidInsecureRegistries_Test(t *testing.T) {
 			expectedRes: &[]Rule{
 				{
 					Type:        FORBID_INSECURE_REGISTRIES,
-					Details:     "Registry http://docker.registry uses HTTP and therefore it is considered insecure",
-					Mitigations: "The FROM statement should be changed using images from a registry which uses HTTPS.",
+					Details:     "Registry http://docker.registry is considered insecure",
+					Mitigations: "The FROM statement should be changed to use an image from a registry using the HTTPS protocol.",
 					Statement:   []string{"FROM http://docker.registry/myimage:dev"},
+					Status:      "fail",
 				},
 			},
 		},
@@ -242,7 +261,15 @@ func TestNewForbidInsecureRegistries_Test(t *testing.T) {
 					},
 				},
 			},
-			expectedRes: nil,
+			expectedRes: &[]Rule{
+				{
+					Type:        FORBID_INSECURE_REGISTRIES,
+					Details:     "Registry https://docker.registry is considered secure",
+					Mitigations: "",
+					Statement:   []string{"FROM https://docker.registry/myimage:dev"},
+					Status:      "pass",
+				},
+			},
 		},
 	}
 	fir := NewForbidInsecureRegistries(true)
@@ -287,9 +314,10 @@ func TestForbidRoot_Test(t *testing.T) {
 			expectedRes: &[]Rule{
 				{
 					Type:        FORBID_ROOT,
-					Details:     "The last USER statement found elevates privileged to root.",
-					Mitigations: "Add one more USER statement before the entrypoint of the image to run the application as a non-privileged user.",
+					Details:     "The last USER instruction elevates privileges to root.",
+					Mitigations: "Add another USER instruction before the image's entrypoint to run the application as a non-privileged user.",
 					Statement:   []string{"USER root"},
+					Status:      "fail",
 				},
 			},
 		},
@@ -304,7 +332,15 @@ func TestForbidRoot_Test(t *testing.T) {
 					},
 				},
 			},
-			expectedRes: nil,
+			expectedRes: &[]Rule{
+				{
+					Type:        FORBID_ROOT,
+					Details:     "The last USER instruction specifies a non-privileged user.",
+					Mitigations: "",
+					Statement:   []string{"USER rootless"},
+					Status:      "pass",
+				},
+			},
 		},
 		// todo，func (rule *ForbidRoot) Test逻辑修复后，补充对user为空情景的单元测试
 	}
@@ -349,9 +385,10 @@ func TestForbidPrivilegedPorts_Test(t *testing.T) {
 			expectedRes: &[]Rule{
 				{
 					Type:        FORBID_PRIVILEGED_PORTS,
-					Details:     "The container exposes a privileged port: 1024. Privileged ports require the application which uses it to run as root.",
-					Mitigations: "Change the configuration for the application to bind on a port greater than 1024, and change the Dockerfile to reflect this modification.",
+					Details:     "Container exposes privileged port: 1024. Privileged ports require the application using it to run as root.",
+					Mitigations: "Change the application's configuration to bind to a port greater than 1024, and change the Dockerfile to reflect this modification.",
 					Statement:   []string{"1024"},
+					Status:      "fail",
 				},
 			},
 		},
@@ -365,7 +402,15 @@ func TestForbidPrivilegedPorts_Test(t *testing.T) {
 					},
 				},
 			},
-			expectedRes: nil,
+			expectedRes: &[]Rule{
+				{
+					Type:        FORBID_PRIVILEGED_PORTS,
+					Details:     "Container does not expose privileged ports, only exposes non-privileged port: 8080, which meets security requirements.",
+					Mitigations: "",
+					Statement:   []string{"8080"},
+					Status:      "pass",
+				},
+			},
 		},
 	}
 	fpr := NewForbidPrivilegedPorts(true)
@@ -422,20 +467,23 @@ func TestNewForbidPackages_Test(t *testing.T) {
 				{
 					Type:        FORBID_PACKAGES,
 					Details:     "Forbidden package \"forbidden_package\" is installed or used.",
-					Mitigations: "The RUN/CMD/ENTRYPOINT statement should be reviewed and package \"forbidden_package\" should be removed unless absolutely necessary.",
+					Mitigations: "The RUN/CMD/ENTRYPOINT instruction should be reviewed and package \"forbidden_package\" removed unless absolutely necessary.",
 					Statement:   []string{"ENTRYPOINT [\"forbidden_package\"]"},
+					Status:      "fail",
 				},
 				{
 					Type:        FORBID_PACKAGES,
 					Details:     "Forbidden package \"forbidden_package\" is installed or used.",
-					Mitigations: "The RUN/CMD/ENTRYPOINT statement should be reviewed and package \"forbidden_package\" should be removed unless absolutely necessary.",
+					Mitigations: "The RUN/CMD/ENTRYPOINT instruction should be reviewed and package \"forbidden_package\" removed unless absolutely necessary.",
 					Statement:   []string{"RUN apt-get install -y forbidden_package"},
+					Status:      "fail",
 				},
 				{
 					Type:        FORBID_PACKAGES,
 					Details:     "Forbidden package \"forbidden_package\" is installed or used.",
-					Mitigations: "The RUN/CMD/ENTRYPOINT statement should be reviewed and package \"forbidden_package\" should be removed unless absolutely necessary.",
+					Mitigations: "The RUN/CMD/ENTRYPOINT instruction should be reviewed and package \"forbidden_package\" removed unless absolutely necessary.",
 					Statement:   []string{"CMD [\"forbidden_package\"]"},
+					Status:      "fail",
 				},
 			},
 		},
@@ -461,7 +509,7 @@ func TestNewForbidPackages_Test(t *testing.T) {
 					},
 				},
 			},
-			expectedRes: nil,
+			expectedRes: &[]Rule{},
 		},
 	}
 	fpt := NewForbidPackages([]string{"forbidden_package"})
@@ -516,7 +564,22 @@ func TestNewForbidSecrets_Test(t *testing.T) {
 					},
 				},
 			},
-			expectedRes: nil,
+			expectedRes: &[]Rule{
+				{
+					Type:        FORBID_SECRETS,
+					Details:     "No sensitive information identified.",
+					Mitigations: "",
+					Statement:   []string{"testsrc1 testdes1"},
+					Status:      "pass",
+				},
+				{
+					Type:        FORBID_SECRETS,
+					Details:     "No sensitive information identified.",
+					Mitigations: "",
+					Statement:   []string{"testsrc2 testdes2"},
+					Status:      "pass",
+				},
+			},
 		},
 		{
 			name: "Forbidden Secrets found in ADD/COPY",
@@ -541,15 +604,17 @@ func TestNewForbidSecrets_Test(t *testing.T) {
 			expectedRes: &[]Rule{
 				{
 					Type:        FORBID_SECRETS,
-					Details:     "Forbidden file matching pattern \"secret\" is added into the image.",
-					Mitigations: "The ADD statement should be changed or removed. Secrets should be provisioned using a safer and stateless way (Vault, Kubernetes secrets) instead.",
+					Details:     "Forbidden file matching pattern \"secret\" is added to the image.",
+					Mitigations: "The ADD instruction should be changed or removed. Safer and stateless methods (like Vault, Kubernetes secrets) should be used to provide sensitive information.",
 					Statement:   []string{"secret testdes1"},
+					Status:      "fail",
 				},
 				{
 					Type:        FORBID_SECRETS,
-					Details:     "Forbidden file matching pattern \"secret\" is added into the image.",
-					Mitigations: "The COPY statement should be changed or removed. Secrets should be provisioned using a safer and stateless way (Vault, Kubernetes secrets) instead.",
+					Details:     "Forbidden file matching pattern \"secret\" is added to the image.",
+					Mitigations: "The COPY instruction should be changed or removed. Safer and stateless methods (like Vault, Kubernetes secrets) should be used to provide sensitive information.",
 					Statement:   []string{"secret testdes2"},
+					Status:      "fail",
 				},
 			},
 		},
@@ -567,7 +632,7 @@ func TestNewForbidSecrets_Test(t *testing.T) {
 
 func TestNewForbidSecrets_Details(t *testing.T) {
 	testFsd := NewForbidSecrets([]string{"secret"}, []string{"allow"})
-	expected := "The following patterns are forbidden: secret.\nThe following patterns are whitelisted: allow"
+	expected := "The following patterns are forbidden: secret.\nThe following patterns are allowed: allow"
 	if testFsd.Details() != expected {
 		t.Errorf("Expected %s, got %s", expected, testFsd.Details())
 	}

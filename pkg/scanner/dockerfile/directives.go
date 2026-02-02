@@ -12,11 +12,11 @@
 package dockerfile
 
 import (
-    "encoding/json"
-    "fmt"
-    "net/url"
-    "regexp"
-    "strings"
+	"encoding/json"
+	"fmt"
+	"net/url"
+	"regexp"
+	"strings"
 )
 
 type DockerfileDirectiveType int
@@ -89,8 +89,8 @@ func NewFromDirective(rawContent string) *FromDirective {
 		Type:    FROM,
 		Content: rawContent,
 	}
-    content := strings.TrimSpace(strings.TrimPrefix(rawContent, "FROM "))
-    tokens := strings.Fields(content)
+	content := strings.TrimSpace(strings.TrimPrefix(rawContent, "FROM "))
+	tokens := strings.Fields(content)
 	idx := 0
 	if len(tokens) == 0 {
 		return directive
@@ -99,7 +99,7 @@ func NewFromDirective(rawContent string) *FromDirective {
 		directive.Platform = strings.TrimPrefix(tokens[0], "--platform=")
 		idx = 1
 	}
-    base := ""
+	base := ""
 	if idx < len(tokens) {
 		base = tokens[idx]
 		idx = idx + 1
@@ -107,39 +107,39 @@ func NewFromDirective(rawContent string) *FromDirective {
 	if idx+1 < len(tokens) && strings.EqualFold(tokens[idx], "as") {
 		directive.ImageLocalName = strings.Trim(tokens[idx+1], "\"'")
 	}
-    ref := base
-    if ref == "" {
-        return directive
-    }
-    // Process image reference with explicit scheme
-    if strings.HasPrefix(ref, "http://") || strings.HasPrefix(ref, "https://") {
-        if u, err := url.Parse(ref); err == nil {
-            directive.Registry = u.Host
-            path := strings.TrimPrefix(u.Path, "/")
-            ref = path
-        }
-    }
-    if at := strings.Index(ref, "@"); at != -1 {
-        directive.Platform = ref[at+1:]
-        ref = ref[:at]
-    }
-    nameTag := ref
-    if colon := strings.LastIndex(nameTag, ":"); colon != -1 {
-        directive.ImageName = nameTag[:colon]
-        directive.ImageTag = nameTag[colon+1:]
-    } else {
-        directive.ImageName = nameTag
-        directive.ImageTag = "latest"
-    }
-    // Extract registry (no scheme case)
-    if slash := strings.Index(directive.ImageName, "/"); slash != -1 {
-        first := strings.Split(directive.ImageName, "/")[0]
-        if strings.Contains(first, ".") || strings.Contains(first, ":") {
-            directive.Registry = first
-            directive.ImageName = strings.Join(strings.Split(directive.ImageName, "/")[1:], "/")
-        }
-    }
-    return directive
+	ref := base
+	if ref == "" {
+		return directive
+	}
+	// Process image reference with explicit scheme
+	if strings.HasPrefix(ref, "http://") || strings.HasPrefix(ref, "https://") {
+		if u, err := url.Parse(ref); err == nil {
+			directive.Registry = u.Host
+			path := strings.TrimPrefix(u.Path, "/")
+			ref = path
+		}
+	}
+	if at := strings.Index(ref, "@"); at != -1 {
+		directive.Platform = ref[at+1:]
+		ref = ref[:at]
+	}
+	nameTag := ref
+	if colon := strings.LastIndex(nameTag, ":"); colon != -1 {
+		directive.ImageName = nameTag[:colon]
+		directive.ImageTag = nameTag[colon+1:]
+	} else {
+		directive.ImageName = nameTag
+		directive.ImageTag = "latest"
+	}
+	// Extract registry (no scheme case)
+	if slash := strings.Index(directive.ImageName, "/"); slash != -1 {
+		first := strings.Split(directive.ImageName, "/")[0]
+		if strings.Contains(first, ".") || strings.Contains(first, ":") {
+			directive.Registry = first
+			directive.ImageName = strings.Join(strings.Split(directive.ImageName, "/")[1:], "/")
+		}
+	}
+	return directive
 }
 
 type RunDirective struct {
@@ -188,15 +188,20 @@ func (d *LabelDirective) GetType() DockerfileDirectiveType {
 func NewLabelDirective(rawContent string) *LabelDirective {
 	labels := make(map[string]string)
 	content := strings.TrimSpace(strings.TrimPrefix(rawContent, "LABEL "))
-	parts := strings.Fields(content)
-	for _, p := range parts {
-		if strings.Contains(p, "=") {
-			kv := strings.SplitN(p, "=", 2)
-			k := strings.Trim(kv[0], "\"'")
-			v := strings.Trim(kv[1], "\"'")
-			labels[k] = v
+
+	// Regex to match key="value" or key=value, handling spaces in quoted values
+	re := regexp.MustCompile(`([^=\s]+)=(?:"([^"]*)"|(\S+))`)
+	matches := re.FindAllStringSubmatch(content, -1)
+
+	for _, match := range matches {
+		key := match[1]
+		value := match[2]
+		if value == "" {
+			value = match[3]
 		}
+		labels[key] = value
 	}
+
 	return &LabelDirective{
 		Type:    LABEL,
 		Content: rawContent,
@@ -263,23 +268,23 @@ func (d *ExposeDirective) GetType() DockerfileDirectiveType {
 }
 
 func NewExposeDirective(rawContent string) *ExposeDirective {
-    directive := &ExposeDirective{
-        Type:    EXPOSE,
-        Content: rawContent,
-    }
-    s := strings.TrimSpace(strings.TrimPrefix(rawContent, "EXPOSE "))
-    if s != "" {
-        ports := strings.Fields(s)
-        cleaned := make([]string, 0, len(ports))
-        for _, p := range ports {
-            cleaned = append(cleaned, strings.Trim(p, "\"'"))
-        }
-        directive.Ports = cleaned
-    }
-    if len(directive.Ports) > 0 {
-        directive.Content = "EXPOSE " + strings.Join(directive.Ports, " ")
-    }
-    return directive
+	directive := &ExposeDirective{
+		Type:    EXPOSE,
+		Content: rawContent,
+	}
+	s := strings.TrimSpace(strings.TrimPrefix(rawContent, "EXPOSE "))
+	if s != "" {
+		ports := strings.Fields(s)
+		cleaned := make([]string, 0, len(ports))
+		for _, p := range ports {
+			cleaned = append(cleaned, strings.Trim(p, "\"'"))
+		}
+		directive.Ports = cleaned
+	}
+	if len(directive.Ports) > 0 {
+		directive.Content = "EXPOSE " + strings.Join(directive.Ports, " ")
+	}
+	return directive
 }
 
 type MaintainerDirective struct {
@@ -338,17 +343,27 @@ func (d *AddDirective) GetType() DockerfileDirectiveType {
 	return d.Type
 }
 func NewAddDirective(rawContent string) *AddDirective {
-	var chown, source, destination string
-	// Regex match to check for the presence of chown
-	re := regexp.MustCompile(`(?:--chown=(\S+)\s+)?(\S+)\s+(\S+)`)
-	matches := re.FindStringSubmatch(rawContent)
-	if len(matches) == 4 {
-		chown = matches[1]
-		source = matches[2]
-		destination = matches[3]
+	chown := ""
+	source := ""
+	destination := ""
+
+	// Remove directive prefix if present
+	content := rawContent
+	parts := strings.Fields(content)
+	if len(parts) > 0 && strings.EqualFold(parts[0], "ADD") {
+		content = strings.TrimSpace(strings.TrimPrefix(content, parts[0]))
+	}
+
+	// Check if the --chown flag is present
+	if strings.HasPrefix(content, "--chown=") {
+		parts := strings.Fields(content)
+		if len(parts) >= 3 {
+			chown = strings.TrimPrefix(parts[0], "--chown=")
+			source = parts[1]
+			destination = parts[2]
+		}
 	} else {
-		// If no chown, the first is the source and the second is the destination
-		parts := strings.Split(rawContent, " ")
+		parts := strings.Fields(content)
 		if len(parts) >= 2 {
 			source = parts[0]
 			destination = parts[1]
@@ -387,15 +402,27 @@ func (d CopyDirective) Get() map[string]interface{} {
 }
 
 func NewCopyDirective(rawContent string) *CopyDirective {
-	var chown, source, destination string
-	re := regexp.MustCompile(`(?:--chown=(\S+)\s+)?(\S+)\s+(\S+)`)
-	matches := re.FindStringSubmatch(rawContent)
-	if len(matches) == 4 {
-		chown = matches[1]
-		source = matches[2]
-		destination = matches[3]
+	chown := ""
+	source := ""
+	destination := ""
+
+	// Remove directive prefix if present
+	content := rawContent
+	parts := strings.Fields(content)
+	if len(parts) > 0 && strings.EqualFold(parts[0], "COPY") {
+		content = strings.TrimSpace(strings.TrimPrefix(content, parts[0]))
+	}
+
+	// Check if the --chown flag is present
+	if strings.HasPrefix(content, "--chown=") {
+		parts := strings.Fields(content)
+		if len(parts) >= 3 {
+			chown = strings.TrimPrefix(parts[0], "--chown=")
+			source = parts[1]
+			destination = parts[2]
+		}
 	} else {
-		parts := strings.Split(rawContent, " ")
+		parts := strings.Fields(content)
 		if len(parts) >= 2 {
 			source = parts[0]
 			destination = parts[1]
@@ -432,8 +459,15 @@ func (d *EnvDirective) GetType() DockerfileDirectiveType {
 func NewEnvDirective(rawContent string) *EnvDirective {
 	vars := make(map[string]string)
 
-	// Split rawContent by space to get individual key-value pairs
-	parts := strings.Fields(rawContent)
+	// Remove directive prefix if present
+	content := rawContent
+	parts := strings.Fields(content)
+	if len(parts) > 0 && strings.EqualFold(parts[0], "ENV") {
+		content = strings.TrimSpace(strings.TrimPrefix(content, parts[0]))
+	}
+
+	// Split content by space to get individual key-value pairs
+	parts = strings.Fields(content)
 
 	for _, part := range parts {
 		// Check if the part contains "=" to determine if it is a key-value pair or just a key
@@ -443,9 +477,22 @@ func NewEnvDirective(rawContent string) *EnvDirective {
 			vars[kv[0]] = kv[1]
 		} else {
 			// If there is no "=", assume the first part is the key and the rest is the value
-			key := parts[0]
-			value := strings.Join(parts[1:], " ")
-			vars[key] = value
+			// Note: This logic seems to assume "ENV key value" format which handles only ONE pair.
+			// But the loop iterates over parts. "ENV key value" -> parts=["key", "value"].
+			// Loop 1: part="key". No "=". key="key", value="value" (rest of parts).
+			// Loop 2: part="value". No "=". key="value", value="" (rest).
+			// This logic is flawed for "ENV key value".
+			// But for "ENV key=val key2=val2", it works.
+			// Standard "ENV key value" only supports ONE pair.
+			// Standard "ENV key=val ..." supports multiple.
+
+			// If we detected "ENV key value" pattern (no "=" in first part, and parts > 1), handle it and break.
+			if len(parts) >= 2 && !strings.Contains(parts[0], "=") {
+				key := parts[0]
+				value := strings.Join(parts[1:], " ")
+				vars[key] = value
+				break // Only one pair allowed in this format
+			}
 		}
 	}
 
@@ -614,7 +661,13 @@ func (d *StopsignalDirective) GetType() DockerfileDirectiveType {
 }
 
 func NewStopsignalDirective(rawContent string) *StopsignalDirective {
-	parts := strings.Fields(rawContent)
+	content := rawContent
+	parts := strings.Fields(content)
+	if len(parts) > 0 && strings.EqualFold(parts[0], "STOPSIGNAL") {
+		content = strings.TrimSpace(strings.TrimPrefix(content, parts[0]))
+	}
+
+	parts = strings.Fields(content)
 	signal := ""
 	if len(parts) >= 1 {
 		signal = parts[0]
@@ -646,10 +699,15 @@ func (d *ArgDirective) GetType() DockerfileDirectiveType {
 }
 
 func NewArgDirective(rawContent string) *ArgDirective {
+	content := rawContent
+	parts := strings.Fields(content)
+	if len(parts) > 0 && strings.EqualFold(parts[0], "ARG") {
+		content = strings.TrimSpace(strings.TrimPrefix(content, parts[0]))
+	}
 	return &ArgDirective{
 		Type:     ARG,
 		Content:  rawContent,
-		Argument: rawContent,
+		Argument: content,
 	}
 }
 

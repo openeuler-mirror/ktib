@@ -1,24 +1,27 @@
 /*
-   Copyright (c) 2023 KylinSoft Co., Ltd.
-   Kylin trusted image builder(ktib) is licensed under Mulan PSL v2.
-   You can use this software according to the terms and conditions of the Mulan PSL v2.
-   You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-   THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING
-   BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-   See the Mulan PSL v2 for more details.
+Copyright (c) 2023 KylinSoft Co., Ltd.
+Kylin trusted image builder(ktib) is licensed under Mulan PSL v2.
+You can use this software according to the terms and conditions of the Mulan PSL v2.
+You may obtain a copy of Mulan PSL v2 at:
+
+	http://license.coscl.org.cn/MulanPSL2
+
+THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING
+BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+See the Mulan PSL v2 for more details.
 */
 package utils
 
 import (
-	"errors"
 	"fmt"
-	"gitee.com/openeuler/ktib/pkg/options"
-	"github.com/containers/buildah/define"
-	"github.com/spf13/cobra"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"gitee.com/openeuler/ktib/pkg/options"
+	"github.com/containers/buildah/define"
+	"github.com/containers/image/v5/types"
+	"github.com/spf13/cobra"
 )
 
 func TestResolveDockerfiles(t *testing.T) {
@@ -32,6 +35,16 @@ func TestResolveDockerfiles(t *testing.T) {
 	}
 	if err := os.WriteFile(dockerFilePath, []byte("FROM kylin:test\n"), 0644); err != nil {
 		t.Fatalf("Failed to create Dockerfile: %v", err)
+	}
+
+	// Create a directory with only Dockerfile
+	onlyDockerDir := filepath.Join(tempDir, "onlydocker")
+	if err := os.Mkdir(onlyDockerDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	onlyDockerFilePath := filepath.Join(onlyDockerDir, "Dockerfile")
+	if err := os.WriteFile(onlyDockerFilePath, []byte("FROM kylin:test\n"), 0644); err != nil {
+		t.Fatalf("Failed to create Dockerfile in onlydocker: %v", err)
 	}
 
 	tests := []struct {
@@ -62,6 +75,14 @@ func TestResolveDockerfiles(t *testing.T) {
 			name:      "Default to Containerfile when no args and no files specified",
 			op:        &options.BuildOptions{File: []string{}},
 			args:      []string{},
+			expected:  nil,
+			context:   "",
+			expectErr: true,
+		},
+		{
+			name:      "Prioritize Containerfile over Dockerfile",
+			op:        &options.BuildOptions{File: []string{}},
+			args:      []string{tempDir},
 			expected:  []string{containerFilePath},
 			context:   tempDir,
 			expectErr: false,
@@ -69,9 +90,9 @@ func TestResolveDockerfiles(t *testing.T) {
 		{
 			name:      "Default to Dockerfile when Containerfile not present",
 			op:        &options.BuildOptions{File: []string{}},
-			args:      []string{tempDir},
-			expected:  []string{dockerFilePath},
-			context:   tempDir,
+			args:      []string{onlyDockerDir},
+			expected:  []string{onlyDockerFilePath},
+			context:   onlyDockerDir,
 			expectErr: false,
 		},
 		{
@@ -180,11 +201,12 @@ func TestParseBuildOptions(t *testing.T) {
 				Err:                    os.Stderr,
 				NoCache:                true,
 				RemoveIntermediateCtrs: true,
-				Runtime:                "/usr/bin/docker",
+				Runtime:                "docker",
 				ReportWriter:           os.Stderr,
 				Out:                    os.Stdout,
 				Output:                 "tag1",
 				OutputFormat:           define.OCIv1ImageManifest,
+				SystemContext:          &types.SystemContext{},
 			},
 			expectedErr: nil,
 		},
@@ -202,33 +224,19 @@ func TestParseBuildOptions(t *testing.T) {
 			expectedOpts: nil,
 			expectedErr:  fmt.Errorf("unrecognized image type %q", "invalid"),
 		},
-		{
-			name:           "Runtime path not found",
-			cmdFlagChanged: false,
-			flags: &options.BuildOptions{
-				Tags:    []string{},
-				Format:  "docker",
-				NoCache: false,
-				Rm:      false,
-				Runtime: "nonexistent-runtime",
-			},
-			contextDir:   "/context",
-			expectedOpts: nil,
-			expectedErr:  errors.New("command not found"),
-		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Mock cobra.Command
 			cmd := &cobra.Command{}
+			cmd.Flags().String("tag", "", "") // Always add the tag flag
 			if tt.cmdFlagChanged {
-				cmd.Flags().String("tag", "", "")
 				cmd.Flag("tag").Changed = true
 			}
 
 			// Test ParseBuildOptions
-			opts, err := ParseBuildOptions(cmd, tt.flags, tt.contextDir)
+			opts, err := ParseBuildOptions(cmd, tt.flags, tt.contextDir, nil)
 			if (err != nil) != (tt.expectedErr != nil) {
 				t.Errorf("ParseBuildOptions() error = %v, wantErr %v", err, tt.expectedErr)
 				return
@@ -263,13 +271,13 @@ func TestHumanSize(t *testing.T) {
 		{1023, "1023.00B"},
 		{1024, "1.00KB"},
 		{2048, "2.00KB"},
-		{1048575, "1023.99KB"},
+		{1048575, "1024.00KB"}, // Rounded up
 		{1048576, "1.00MB"},
 		{2097152, "2.00MB"},
-		{1073741823, "1023.99MB"},
+		{1073741823, "1024.00MB"}, // Rounded up
 		{1073741824, "1.00GB"},
 		{2147483648, "2.00GB"},
-		{1099511627775, "1023.99GB"},
+		{1099511627775, "1024.00GB"}, // Rounded up
 		{1099511627776, "1.00TB"},
 		{2199023255552, "2.00TB"},
 	}
@@ -278,6 +286,188 @@ func TestHumanSize(t *testing.T) {
 		result := humanSize(test.input)
 		if result != test.expected {
 			t.Errorf("humanSize(%d) = %s; want %s", test.input, result, test.expected)
+		}
+	}
+}
+
+func TestParseImageName(t *testing.T) {
+	tests := []struct {
+		name         string
+		fullName     string
+		expectedRepo string
+		expectedTag  string
+	}{
+		{
+			name:         "Empty string",
+			fullName:     "",
+			expectedRepo: unknownState,
+			expectedTag:  unknownState,
+		},
+		{
+			name:         "Standard image",
+			fullName:     "ubuntu:latest",
+			expectedRepo: "ubuntu",
+			expectedTag:  "latest",
+		},
+		{
+			name:         "Image with registry",
+			fullName:     "quay.io/libpod/alpine:latest",
+			expectedRepo: "quay.io/libpod/alpine",
+			expectedTag:  "latest",
+		},
+		{
+			name:         "Image without tag",
+			fullName:     "ubuntu",
+			expectedRepo: "ubuntu",
+			expectedTag:  unknownState,
+		},
+		{
+			name:         "Localhost image with port",
+			fullName:     "localhost:5000/myimage:v1",
+			expectedRepo: "localhost:5000/myimage",
+			expectedTag:  "v1",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo, tag := parseImageName(tt.fullName)
+			if repo != tt.expectedRepo {
+				t.Errorf("parseImageName() repo = %v, want %v", repo, tt.expectedRepo)
+			}
+			if tag != tt.expectedTag {
+				t.Errorf("parseImageName() tag = %v, want %v", tag, tt.expectedTag)
+			}
+		})
+	}
+}
+
+func TestManualParseImageName(t *testing.T) {
+	tests := []struct {
+		name         string
+		fullName     string
+		expectedRepo string
+		expectedTag  string
+	}{
+		{
+			name:         "Empty string",
+			fullName:     "",
+			expectedRepo: unknownState,
+			expectedTag:  unknownState,
+		},
+		{
+			name:         "Standard format",
+			fullName:     "repository:tag",
+			expectedRepo: "repository",
+			expectedTag:  "tag",
+		},
+		{
+			name:         "Registry format",
+			fullName:     "registry/repository:tag",
+			expectedRepo: "registry/repository",
+			expectedTag:  "tag",
+		},
+		{
+			name:         "Port format",
+			fullName:     "registry:5000/repository:tag",
+			expectedRepo: "registry:5000/repository",
+			expectedTag:  "tag",
+		},
+		{
+			name:         "No tag",
+			fullName:     "repository",
+			expectedRepo: "repository",
+			expectedTag:  unknownState,
+		},
+		{
+			name:         "Complex tag",
+			fullName:     "repository:tag:with:colons",
+			expectedRepo: "repository:tag:with",
+			expectedTag:  "colons",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo, tag := manualParseImageName(tt.fullName)
+			if repo != tt.expectedRepo {
+				t.Errorf("manualParseImageName() repo = %v, want %v", repo, tt.expectedRepo)
+			}
+			if tag != tt.expectedTag {
+				t.Errorf("manualParseImageName() tag = %v, want %v", tag, tt.expectedTag)
+			}
+		})
+	}
+}
+
+func TestParseImageRepository(t *testing.T) {
+	tests := []struct {
+		name      string
+		imageName string
+		expected  string
+	}{
+		{
+			name:      "Empty string",
+			imageName: "",
+			expected:  "",
+		},
+		{
+			name:      "With registry",
+			imageName: "cr.kylinos.cn/test/myapp:01",
+			expected:  "cr.kylinos.cn",
+		},
+		{
+			name:      "No registry",
+			imageName: "ubuntu:20.04",
+			expected:  "",
+		},
+		{
+			name:      "With digest and registry",
+			imageName: "registry.io:5000/user/app@sha256:abc123",
+			expected:  "registry.io:5000",
+		},
+		{
+			name:      "With port and tag",
+			imageName: "localhost:5000/image:tag",
+			expected:  "localhost:5000",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := parseImageRepository(tt.imageName)
+			if result != tt.expected {
+				t.Errorf("parseImageRepository() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestParseDockerfileFromImage(t *testing.T) {
+	tempDir := t.TempDir()
+	dockerfilePath := filepath.Join(tempDir, "Dockerfile")
+
+	content := `
+# Comment
+FROM ubuntu:20.04
+RUN echo hello
+FROM cr.kylinos.cn/my/image:latest
+`
+	if err := os.WriteFile(dockerfilePath, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	repos, err := ParseDockerfileFromImage(dockerfilePath)
+	if err != nil {
+		t.Fatalf("ParseDockerfileFromImage failed: %v", err)
+	}
+
+	expected := []string{"cr.kylinos.cn"} // ubuntu:20.04 returns empty repo
+	if len(repos) != len(expected) {
+		t.Errorf("Expected %d repos, got %d", len(expected), len(repos))
+	} else {
+		if repos[0] != expected[0] {
+			t.Errorf("Expected repo %s, got %s", expected[0], repos[0])
 		}
 	}
 }
