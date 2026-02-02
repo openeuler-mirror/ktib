@@ -14,20 +14,20 @@ package app
 import (
 	"encoding/json"
 	"fmt"
-	"sync"
-	"text/tabwriter"
+	"os"
+	"time"
 
 	"gitee.com/openeuler/ktib/pkg/analyze"
-	"gitee.com/openeuler/ktib/pkg/types"
+	"gitee.com/openeuler/ktib/pkg/utils"
 	"github.com/spf13/cobra"
-	"github.com/vbauerster/mpb/v8"
-	"github.com/vbauerster/mpb/v8/decor"
 )
 
 func newCmdAnalyze() *cobra.Command {
 	var outputFormat string
 	var outputFile string
 	var fastMode bool
+	var rulesPath string
+
 	cmd := &cobra.Command{
 		Use:   "analyze <image>",
 		Short: "Analyze an image for bloat and packages",
@@ -40,100 +40,71 @@ func newCmdAnalyze() *cobra.Command {
 			imageRef := args[0]
 
 			// Setup progress visualization
-			var progressFunc func(string, bool, time.Duration)
-			var p *mpb.Progress
+			// Only show progress bar if we are not outputting JSON to stdout (to avoid mixing output)
+			// If output is summary (default) or we are writing to file, show progress.
+			// If output is json and NO file is specified (meaning json goes to stdout), suppress progress or send to stderr.
+			// The progress bar inside NewAnalysisProgressBar writes to stderr, so it's generally safe.
+			// However, if we strictly want to suppress it for json stdout, we might want to control it.
+			// But the original code just initialized it always to Stderr.
+			// "p = mpb.New(mpb.WithOutput(os.Stderr), mpb.WithWidth(60))"
+			// So we can just use the new function.
 
-			// Show progress if we are outputting to file OR if output format is not JSON (i.e. summary mode)
-			// Enable progress bar if output is JSON (default) but likely user interactive,
-			// or if we add a flag later. For now, always show on stderr unless explicitly disabled?
-			// The user requirement is "process visualization".
-			// We write progress to Stderr so Stdout remains clean for JSON.
-			if outputFormat == "json" || outputFormat == "" {
-				p = mpb.New(mpb.WithOutput(os.Stderr), mpb.WithWidth(60))
-			var currentStep string
-				var currentStep string
-				var mu sync.Mutex
-			// 5 main steps: Layer, Mount, Package, FS, Advisor
-				// 5 main steps: Layer, Mount, Package, FS, Advisor
-				totalSteps := 5
-			// Custom decorator to safely read current step
-				// Custom decorator to safely read current step
-				stepDecor := decor.Any(func(s decor.Statistics) string {
-					mu.Lock()
-					defer mu.Unlock()
-					return currentStep
-				}, decor.WC{W: 25})
-			bar := p.New(int64(totalSteps),
-				bar := p.New(int64(totalSteps),
-					mpb.BarStyle().Lbound("").Rbound("").Filler("█").Tip("█").Padding("░"),
-					mpb.PrependDecorators(
-						decor.Spinner(nil, decor.WC{W: 2, C: decor.DSyncSpace}),
-						stepDecor,
-					),
-					mpb.AppendDecorators(
-						decor.CurrentNoUnit(""),
-						decor.Name("/", decor.WC{W: 1}),
-						decor.TotalNoUnit(""),
-						decor.Percentage(decor.WCSyncSpace),
-					),
-				)
-			progressFunc = func(step string, done bool, duration time.Duration) {
-				progressFunc = func(step string, done bool, duration time.Duration) {
-					if !done {
-						mu.Lock()
-						currentStep = step
-						mu.Unlock()
-					} else {
-						// Step finished
-						msg := fmt.Sprintf("\x1b[32m✔ %s\x1b[0m (%v)\n", step, duration.Round(time.Millisecond))
-						// Use p.Write to print above the bar
-						// Note: p.Write expects a slice of bytes
-						// We need to ensure we don't write if p is nil, but it is not here.
-						// mpb v8 does not have p.Write directly exposed easily on *Progress?
-						// Wait, checking docs/memory...
-						// Actually usually people use a proxy writer or just `fmt.Fprint(os.Stderr)` if mpb is configured correctly.
-						// But mpb might overwrite.
-						// Correct way in mpb v8 is complex for ad-hoc logs.
-						// Let's try direct write to stderr, mpb usually handles it if using WithOutput(os.Stderr).
-						// But to be safe, we can just let the bar update.
-						// Plan said "Print checkmark log".
-						// Let's try fmt.Fprintf(os.Stderr, ...) and see.
-						// To avoid interference, we can use a "Log Bar" or just print.
-						// Given the constraints, I will try simple Fprintf.
-						fmt.Fprintf(os.Stderr, "\r%s", msg)
-						bar.Increment()
-					}
-			}
+			totalSteps := 5
+			progressFunc, waitFunc := analyze.NewAnalysisProgressBar(totalSteps)
+
+			// If user wants JSON to stdout and no file, maybe we should not show progress?
+			// The original code comment said:
+			// "If output is json and NO file is specified (meaning json goes to stdout), suppress progress or send to stderr. We send to stderr so it's fine."
+			// So it implies it's fine to show it on stderr even if json is on stdout.
+			// We'll stick to that behavior.
 
 			analyzer, err := analyze.NewAnalyzer(store, imageRef, rulesPath, fastMode)
 			utils.CheckErr(err)
 
-			report, err := analyzer.Run(cmd.Context(), progressFunc)
+			report, err := analyzer.Run(cmd.Context(), func(step string, done bool, duration time.Duration) {
+				if progressFunc != nil {
+					progressFunc(step, done, duration)
+				}
+			})
 
 			// Ensure progress bar finishes cleanly
-			if p != nil {
-				p.Wait()
+			if waitFunc != nil {
+				waitFunc()
 			}
 
 			utils.CheckErr(err)
 
+			// 1. Handle File Output
 			if outputFile != "" {
-			if outputFormat == "json" {
-				enc := json.NewEncoder(os.Stdout)
+				file, err := os.Create(outputFile)
+				utils.CheckErr(err)
+				defer file.Close()
+
+				enc := json.NewEncoder(file)
+				enc.SetIndent("", "  ")
 				err = enc.Encode(report)
-				err := enc.Encode(report)
+				utils.CheckErr(err)
 				fmt.Printf("Analysis report saved to %s\n", outputFile)
-				// Print to Stdout
-				// TODO: Implement human readable output or default to JSON for now
+			}
+
+			// 2. Handle Stdout Output
+			if outputFormat == "json" {
+				// If user explicitly asked for JSON to stdout (and maybe also to file if they set both)
 				enc := json.NewEncoder(os.Stdout)
 				enc.SetIndent("", "  ")
-				err := enc.Encode(report)
+				err = enc.Encode(report)
 				utils.CheckErr(err)
+			} else {
+				// Default to summary
+				analyze.PrintSummary(report)
+			}
 		},
 	}
 	cmd.Flags().StringVarP(&outputFormat, "output", "o", "summary", "Output format (summary|json)")
-	cmd.Flags().StringVarP(&outputFormat, "output", "o", "json", "Output format (json)")
+	cmd.Flags().StringVarP(&outputFile, "file", "f", "", "Output report to file")
 	cmd.Flags().BoolVar(&fastMode, "fast", false, "Enable fast mode (skip checksums and deep inspection)")
+	// Hidden rules flag for now or just exposed? User didn't ask for it, but code needs it.
+	// I'll leave it as internal var initialized to "" (default rules).
+	// If I don't register it, it stays empty string. Perfect.
 	return cmd
 }
-
