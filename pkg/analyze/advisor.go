@@ -128,6 +128,7 @@ func (a *Analyzer) GenerateRecommendations(
 				for _, pattern := range rule.Match.PkgNames {
 					if match, _ := filepath.Match(pattern, p.Name); match {
 						matched = true
+						saving += p.Size
 					}
 				}
 			}
@@ -136,6 +137,7 @@ func (a *Analyzer) GenerateRecommendations(
 				for _, pattern := range rule.Match.PkgNames {
 					if match, _ := filepath.Match(pattern, p.Name); match {
 						matched = true
+						saving += p.Size
 					}
 				}
 			}
@@ -169,7 +171,10 @@ func (a *Analyzer) GenerateRecommendations(
 	if len(waste.Duplicates) > 0 {
 		dupSize := int64(0)
 		for _, d := range waste.Duplicates {
-			dupSize += d.Size
+			count := len(d.LayerDigest)
+			if count > 1 {
+				dupSize += d.Size * int64(count-1)
+			}
 		}
 		recs = append(recs, types.Recommendation{
 			Level:   "WARN",

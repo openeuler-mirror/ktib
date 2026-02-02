@@ -38,8 +38,13 @@ type layerResult struct {
 	deletedCount    int
 	topFiles        []types.File
 	duplicates      []types.DuplicateFile // Only intra-layer duplicates if any? No, we check inter-layer later.
-	localFileHashes map[string]string     // Path -> Hash
+	localFileHashes map[string]fileMeta   // Path -> Meta
 	err             error
+}
+
+type fileMeta struct {
+	Hash string
+	Size int64
 }
 
 // AnalyzeLayers traverses the image layers to collect statistics and detect redundancy
@@ -97,30 +102,37 @@ func (a *Analyzer) AnalyzeLayers(ctx context.Context) ([]types.LayerInfo, types.
 
 	// Aggregate results sequentially to detect duplicates across layers
 	var layers []types.LayerInfo
-	globalFileHashes := make(map[string]string)
-	var allDuplicates []types.DuplicateFile
+	
+	type fileOccurrence struct {
+		hash    string
+		layerID string
+	}
+	globalFileHashes := make(map[string]fileOccurrence)
+	duplicatesMap := make(map[string]*types.DuplicateFile)
 
 	for i := 0; i < numLayers; i++ {
 		res := results[i]
 
 		// Check for duplicates against previous layers
 		if !a.Fast {
-			for path, hash := range res.localFileHashes {
-				if existingHash, exists := globalFileHashes[path]; exists {
-					if existingHash == hash {
-						allDuplicates = append(allDuplicates, types.DuplicateFile{
-							Path: path,
-							Size: 0, // We need size here. localFileHashes doesn't have it.
-							// Optimization: We can store size in localFileHashes or lookup in topFiles?
-							// Let's modify localFileHashes to store struct? Or just look at res.topFiles (but it's limited to 10).
-							// We need to store all files info if we want accurate duplicate reporting.
-							// But for now, let's just use 0 or try to find it.
-							LayerDigest: []string{res.layerID},
-						})
-						// We need size. Let's fix processLayerTar to return map[string]struct{Hash, Size}
+			for path, meta := range res.localFileHashes {
+				if meta.Size == 0 {
+					continue
+				}
+				if occ, exists := globalFileHashes[path]; exists {
+					if occ.hash == meta.Hash {
+						if df, ok := duplicatesMap[path]; ok {
+							df.LayerDigest = append(df.LayerDigest, res.layerID)
+						} else {
+							duplicatesMap[path] = &types.DuplicateFile{
+								Path:        path,
+								Size:        meta.Size,
+								LayerDigest: []string{occ.layerID, res.layerID},
+							}
+						}
 					}
 				}
-				globalFileHashes[path] = hash
+				globalFileHashes[path] = fileOccurrence{hash: meta.Hash, layerID: res.layerID}
 			}
 		}
 
@@ -133,20 +145,20 @@ func (a *Analyzer) AnalyzeLayers(ctx context.Context) ([]types.LayerInfo, types.
 			TopFiles:         res.topFiles,
 		})
 	}
-
-	// Fix duplicate sizes (iterate to find size? No, too slow).
-	// Let's change localFileHashes to map[string]fileMeta
+	
+	var allDuplicates []types.DuplicateFile
+	for _, df := range duplicatesMap {
+		allDuplicates = append(allDuplicates, *df)
+	}
+	sort.Slice(allDuplicates, func(i, j int) bool {
+		return allDuplicates[i].Path < allDuplicates[j].Path
+	})
 
 	waste := types.WasteDetection{
 		Duplicates: allDuplicates,
 	}
 
 	return layers, waste, nil
-}
-
-type fileMeta struct {
-	Hash string
-	Size int64
 }
 
 func (a *Analyzer) processLayer(ctx context.Context, layerID string, index int) (*layerResult, error) {
@@ -181,14 +193,14 @@ func (a *Analyzer) processLayer(ctx context.Context, layerID string, index int) 
 	}, nil
 }
 
-func processLayerTar(r io.Reader, fast bool) (int64, int, int, []types.File, map[string]string, error) {
+func processLayerTar(r io.Reader, fast bool) (int64, int, int, []types.File, map[string]fileMeta, error) {
 	tr := tar.NewReader(r)
 
 	layerSize := int64(0)
 	addedCount := 0
 	deletedCount := 0
 	var topFiles []types.File
-	localHashes := make(map[string]string)
+	localHashes := make(map[string]fileMeta)
 
 	for {
 		header, err := tr.Next()
@@ -217,7 +229,10 @@ func processLayerTar(r io.Reader, fast bool) (int64, int, int, []types.File, map
 					continue
 				}
 				hash := hex.EncodeToString(hasher.Sum(nil))
-				localHashes[filePath] = hash
+				localHashes[filePath] = fileMeta{
+					Hash: hash,
+					Size: header.Size,
+				}
 			} else {
 				// Skip reading content
 				// tr.Next() will handle skipping
