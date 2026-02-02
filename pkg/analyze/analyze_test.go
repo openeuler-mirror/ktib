@@ -145,15 +145,14 @@ func TestProcessLayerTar_Basic(t *testing.T) {
 	r, err := createTarStream(files)
 	assert.NoError(t, err)
 
-	fileHashes := make(map[string]string)
-	size, added, deleted, topFiles, dups, err := processLayerTar(r, "layer1", fileHashes)
+	size, added, deleted, topFiles, hashes, err := processLayerTar(r, false)
 
 	assert.NoError(t, err)
 	assert.Equal(t, int64(16), size) // 8 + 8
 	assert.Equal(t, 2, added)
 	assert.Equal(t, 0, deleted)
 	assert.Len(t, topFiles, 2)
-	assert.Len(t, dups, 0)
+	assert.Len(t, hashes, 2)
 }
 
 func TestProcessLayerTar_Whiteout(t *testing.T) {
@@ -165,8 +164,7 @@ func TestProcessLayerTar_Whiteout(t *testing.T) {
 	r, err := createTarStream(files)
 	assert.NoError(t, err)
 
-	fileHashes := make(map[string]string)
-	size, added, deleted, _, _, err := processLayerTar(r, "layer2", fileHashes)
+	size, added, deleted, _, _, err := processLayerTar(r, false)
 
 	assert.NoError(t, err)
 	assert.Equal(t, int64(8), size) // Only file1.txt has content
@@ -174,7 +172,7 @@ func TestProcessLayerTar_Whiteout(t *testing.T) {
 	assert.Equal(t, 2, deleted)     // 2 whiteouts
 }
 
-func TestProcessLayerTar_Duplicates(t *testing.T) {
+func TestProcessLayerTar_Hashing(t *testing.T) {
 	// Layer 1
 	files1 := map[string]string{
 		"common.txt": "shared content",
@@ -182,10 +180,11 @@ func TestProcessLayerTar_Duplicates(t *testing.T) {
 	r1, err := createTarStream(files1)
 	assert.NoError(t, err)
 
-	fileHashes := make(map[string]string)
-	_, _, _, _, dups1, err := processLayerTar(r1, "layer1", fileHashes)
+	_, _, _, _, hashes1, err := processLayerTar(r1, false)
 	assert.NoError(t, err)
-	assert.Len(t, dups1, 0)
+	assert.Len(t, hashes1, 1)
+	hash1 := hashes1["/common.txt"]
+	assert.NotEmpty(t, hash1)
 
 	// Layer 2 adds same file
 	files2 := map[string]string{
@@ -195,10 +194,13 @@ func TestProcessLayerTar_Duplicates(t *testing.T) {
 	r2, err := createTarStream(files2)
 	assert.NoError(t, err)
 
-	_, _, _, _, dups2, err := processLayerTar(r2, "layer2", fileHashes)
+	_, _, _, _, hashes2, err := processLayerTar(r2, false)
 	assert.NoError(t, err)
-	assert.Len(t, dups2, 1)
-	assert.Equal(t, "/common.txt", dups2[0].Path)
+	assert.Len(t, hashes2, 2)
+	hash2 := hashes2["/common.txt"]
+
+	// Check that hashes match
+	assert.Equal(t, hash1, hash2)
 }
 
 // Mock execCommand
@@ -470,8 +472,7 @@ func TestProcessLayerTar_OtherTypes(t *testing.T) {
 
 	assert.NoError(t, tw.Close())
 
-	fileHashes := make(map[string]string)
-	size, added, deleted, topFiles, _, err := processLayerTar(&buf, "layerX", fileHashes)
+	size, added, deleted, topFiles, _, err := processLayerTar(&buf, false)
 
 	assert.NoError(t, err)
 	assert.Equal(t, int64(0), size)
@@ -581,8 +582,7 @@ func TestAnalyzeFilesystem_MoreFileTypes(t *testing.T) {
 func TestProcessLayerTar_ReadError(t *testing.T) {
 	// A reader that returns error
 	r := &errorReader{err: fmt.Errorf("read error")}
-	fileHashes := make(map[string]string)
-	_, _, _, _, _, err := processLayerTar(r, "layerX", fileHashes)
+	_, _, _, _, _, err := processLayerTar(r, false)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "error reading tar stream")
 }
