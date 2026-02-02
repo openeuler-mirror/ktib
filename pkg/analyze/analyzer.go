@@ -28,9 +28,10 @@ type Analyzer struct {
 	Store    storage.Store
 	ImageRef string
 	Rules    types.Config
+	Fast     bool
 }
 
-func NewAnalyzer(store storage.Store, imageRef string, rulesPath string) (*Analyzer, error) {
+func NewAnalyzer(store storage.Store, imageRef string, rulesPath string, fast bool) (*Analyzer, error) {
 	rules, err := LoadRules(rulesPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load rules: %w", err)
@@ -39,39 +40,71 @@ func NewAnalyzer(store storage.Store, imageRef string, rulesPath string) (*Analy
 		Store:    store,
 		ImageRef: imageRef,
 		Rules:    *rules,
+		Fast:     fast,
 	}, nil
 }
 
-func (a *Analyzer) Run(ctx context.Context) (*types.AnalysisReport, error) {
+func (a *Analyzer) Run(ctx context.Context, onProgress func(step string, done bool, duration time.Duration)) (*types.AnalysisReport, error) {
 	logrus.Infof("Starting analysis for image: %s", a.ImageRef)
 
+	// Helper for progress reporting
+	notifyProgress := func(step string, done bool, start time.Time) {
+		if onProgress != nil {
+			var d time.Duration
+			if done {
+				d = time.Since(start)
+			}
+			onProgress(step, done, d)
+		}
+	}
+
 	// 1. Layer Analysis
+	stepName := "Layer Analysis"
+	startTime := time.Now()
+	notifyProgress(stepName, false, startTime)
 	layers, waste, err := a.AnalyzeLayers(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("layer analysis failed: %w", err)
 	}
+	notifyProgress(stepName, true, startTime)
 
 	// 2. Mount for Package & FS Analysis
+	stepName = "Image Mount"
+	startTime = time.Now()
+	notifyProgress(stepName, false, startTime)
 	b, mountPoint, err := a.mount()
 	if err != nil {
 		return nil, fmt.Errorf("failed to mount image: %w", err)
 	}
 	defer a.cleanup(b)
+	notifyProgress(stepName, true, startTime)
 
 	// 3. Package Analysis
+	stepName = "Package Analysis"
+	startTime = time.Now()
+	notifyProgress(stepName, false, startTime)
 	pkgs, err := a.AnalyzePackages(ctx, mountPoint)
 	if err != nil {
 		return nil, fmt.Errorf("package analysis failed: %w", err)
 	}
+	notifyProgress(stepName, true, startTime)
 
 	// 4. Filesystem Analysis
+	stepName = "Filesystem Analysis"
+	startTime = time.Now()
+	notifyProgress(stepName, false, startTime)
 	fsInfo, arch, err := a.AnalyzeFilesystem(ctx, mountPoint)
 	if err != nil {
 		return nil, fmt.Errorf("filesystem analysis failed: %w", err)
 	}
+	notifyProgress(stepName, true, startTime)
 
 	// 5. Advisor
+	stepName = "Advisor Generation"
+	startTime = time.Now()
+	notifyProgress(stepName, false, startTime)
 	recs := a.GenerateRecommendations(layers, pkgs, fsInfo, waste)
+	notifyProgress(stepName, true, startTime)
 
 	// Calculate total size from layers
 	totalSize := int64(0)
