@@ -22,9 +22,9 @@ type AnalysisReport struct {
 
 // ImageInfo contains basic metadata about the analyzed image
 type ImageInfo struct {
-	Ref     string    `json:"ref"`
-	Size    int64     `json:"size"`
-	OS      string    `json:"os"`
+	Ref          string    `json:"ref"`
+	Size         int64     `json:"size"`
+	OS           string    `json:"os"`
 	Created      time.Time `json:"created"`
 	Architecture string    `json:"architecture,omitempty"`
 }
@@ -39,9 +39,9 @@ type AnalysisData struct {
 
 // LayerInfo describes a single image layer
 type LayerInfo struct {
-	Index          int    `json:"index"`
-	Digest         string `json:"digest"`
-	Size           int64  `json:"size"`
+	Index            int    `json:"index"`
+	Digest           string `json:"digest"`
+	Size             int64  `json:"size"`
 	Command          string `json:"command"`
 	AddedFileCount   int    `json:"added_file_count"`
 	DeletedFileCount int    `json:"deleted_file_count"`
@@ -66,6 +66,7 @@ type Package struct {
 	Version string `json:"version"`
 	Size    int64  `json:"size"`
 	License string `json:"license,omitempty"`
+	Digest  string `json:"digest,omitempty"`
 }
 
 // FilesystemInfo contains filesystem statistics

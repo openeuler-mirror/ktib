@@ -14,17 +14,18 @@ package analyze
 import (
 	"bufio"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"gitee.com/openeuler/ktib/pkg/types"
+	rpmdb "github.com/knqyf263/go-rpmdb/pkg"
 	"github.com/sirupsen/logrus"
 )
-
-var execCommand = exec.Command
 
 func (a *Analyzer) AnalyzePackages(ctx context.Context, rootfs string) (types.PackageInfo, error) {
 	info := types.PackageInfo{}
@@ -49,40 +50,48 @@ func (a *Analyzer) AnalyzePackages(ctx context.Context, rootfs string) (types.Pa
 }
 
 func scanRPMs(rootfs string) ([]types.Package, error) {
-	dbPath := filepath.Join(rootfs, "var/lib/rpm")
-	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+	basePath := filepath.Join(rootfs, "var/lib/rpm")
+	if _, err := os.Stat(basePath); os.IsNotExist(err) {
 		return nil, nil // No RPM db
 	}
 
-	absDbPath, err := filepath.Abs(dbPath)
-	if err != nil {
-		return nil, err
+	// Try to find the actual database file
+	// Common names: Packages (BDB), rpmdb.sqlite (SQLite), Packages.db (SQLite in some distros)
+	candidates := []string{"Packages", "rpmdb.sqlite", "Packages.db"}
+	var dbPath string
+	for _, f := range candidates {
+		p := filepath.Join(basePath, f)
+		if _, err := os.Stat(p); err == nil {
+			dbPath = p
+			break
+		}
 	}
 
-	// Use the host rpm command
-	cmd := execCommand("rpm", "--dbpath", absDbPath, "-qa", "--qf", "%{NAME}|%{VERSION}|%{RELEASE}|%{SIZE}|%{LICENSE}\n")
-	out, err := cmd.Output()
+	if dbPath == "" {
+		// If no known DB file is found, but the directory exists, we assume no packages or unknown format.
+		// Returning nil is safer than failing hard.
+		return nil, nil
+	}
+
+	db, err := rpmdb.Open(dbPath)
 	if err != nil {
-		return nil, fmt.Errorf("rpm command failed: %w", err)
+		return nil, fmt.Errorf("failed to open rpmdb: %w", err)
+	}
+	defer db.Close()
+
+	pkgList, err := db.ListPackages()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list packages: %w", err)
 	}
 
 	var pkgs []types.Package
-	scanner := bufio.NewScanner(strings.NewReader(string(out)))
-	for scanner.Scan() {
-		line := scanner.Text()
-		parts := strings.Split(line, "|")
-		if len(parts) < 5 {
-			continue
-		}
-
-		size := int64(0)
-		fmt.Sscanf(parts[3], "%d", &size)
-
+	for _, p := range pkgList {
 		pkgs = append(pkgs, types.Package{
-			Name:    parts[0],
-			Version: parts[1] + "-" + parts[2],
-			Size:    size,
-			License: parts[4],
+			Name:    p.Name,
+			Version: fmt.Sprintf("%s-%s", p.Version, p.Release),
+			Size:    int64(p.Size),
+			License: p.License,
+			Digest:  p.SigMD5,
 		})
 	}
 	return pkgs, nil
@@ -101,7 +110,7 @@ func scanPython(rootfs string) ([]types.Package, error) {
 		if _, err := os.Stat(base); os.IsNotExist(err) {
 			continue
 		}
-		
+
 		err := filepath.Walk(base, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				return nil
@@ -127,7 +136,7 @@ func scanPython(rootfs string) ([]types.Package, error) {
 
 func parsePythonMetadata(path string) types.Package {
 	pkg := types.Package{}
-	
+
 	// Priority: METADATA > PKG-INFO
 	metaPath := filepath.Join(path, "METADATA")
 	if _, err := os.Stat(metaPath); os.IsNotExist(err) {
@@ -135,6 +144,13 @@ func parsePythonMetadata(path string) types.Package {
 		if _, err := os.Stat(metaPath); os.IsNotExist(err) {
 			return pkg
 		}
+	}
+
+	// Calculate hash of the metadata file
+	if hash, err := calculateFileHash(metaPath); err == nil {
+		pkg.Digest = hash
+	} else {
+		logrus.Debugf("Failed to calculate hash for %s: %v", metaPath, err)
 	}
 
 	f, err := os.Open(metaPath)
@@ -155,4 +171,18 @@ func parsePythonMetadata(path string) types.Package {
 		}
 	}
 	return pkg
+}
+
+func calculateFileHash(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return "sha256:" + hex.EncodeToString(h.Sum(nil)), nil
 }

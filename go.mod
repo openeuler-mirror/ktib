@@ -23,6 +23,11 @@ require (
 )
 
 require (
+	github.com/knqyf263/go-rpmdb v0.1.1
+	golang.org/x/xerrors v0.0.0-20231012003039-104605ab7028 // indirect
+)
+
+require (
 	dario.cat/mergo v1.0.0 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20230124172434-306776ec8161 // indirect
 	github.com/BurntSushi/toml v1.4.0 // indirect
