@@ -20,6 +20,7 @@ import (
 	"gitee.com/openeuler/ktib/pkg/builder"
 	"gitee.com/openeuler/ktib/pkg/options"
 	"gitee.com/openeuler/ktib/pkg/types"
+	"github.com/containers/common/libimage"
 	"github.com/containers/storage"
 	"github.com/sirupsen/logrus"
 )
@@ -31,11 +32,17 @@ type Analyzer struct {
 	Fast     bool
 }
 
-func NewAnalyzer(store storage.Store, imageRef string, rulesPath string, fast bool) (*Analyzer, error) {
+func NewAnalyzer(store storage.Store, imageRef string, rulesPath string, levels []string, fast bool) (*Analyzer, error) {
 	rules, err := LoadRules(rulesPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load rules: %w", err)
 	}
+
+	// Override levels if provided
+	if len(levels) > 0 {
+		rules.Strategy.EnableLevels = levels
+	}
+
 	return &Analyzer{
 		Store:    store,
 		ImageRef: imageRef,
@@ -103,7 +110,14 @@ func (a *Analyzer) Run(ctx context.Context, onProgress func(step string, done bo
 	stepName = "Advisor Generation"
 	startTime = time.Now()
 	notifyProgress(stepName, false, startTime)
-	recs := a.GenerateRecommendations(layers, pkgs, fsInfo, waste)
+
+	// Get Entrypoints for dependency analysis
+	entrypoints, err := a.getImageEntrypoints(ctx)
+	if err != nil {
+		logrus.Debugf("Failed to get image entrypoints: %v", err)
+	}
+
+	recs := a.GenerateRecommendations(layers, pkgs, fsInfo, waste, mountPoint, entrypoints)
 	notifyProgress(stepName, true, startTime)
 
 	// Calculate total size from layers
@@ -164,4 +178,31 @@ func (a *Analyzer) cleanup(b *builder.Builder) {
 	if err := b.Remove(options.RemoveOption{Force: true}); err != nil {
 		logrus.Warnf("Failed to remove builder %s: %v", b.ID, err)
 	}
+}
+
+func (a *Analyzer) getImageEntrypoints(ctx context.Context) ([]string, error) {
+	runtime, err := libimage.RuntimeFromStore(a.Store, &libimage.RuntimeOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	img, _, err := runtime.LookupImage(a.ImageRef, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := img.Inspect(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if data.Config == nil {
+		return nil, nil
+	}
+
+	var entrypoints []string
+	entrypoints = append(entrypoints, data.Config.Entrypoint...)
+	entrypoints = append(entrypoints, data.Config.Cmd...)
+
+	return entrypoints, nil
 }

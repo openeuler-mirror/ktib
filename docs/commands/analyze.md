@@ -11,7 +11,7 @@
   - **RPM**：扫描 `/var/lib/rpm` 数据库，列出包名、版本、大小、License 及签名摘要 (Digest)。
   - **Python**：扫描常见路径下的 Python 包（`.dist-info`, `.egg-info`），列出元数据及文件摘要 (Digest)。
 - **浪费检测**：识别跨层重复文件（Duplicate Files）。
-- **优化建议**：根据分析结果给出缩减镜像体积的建议。
+- **优化建议**：根据预置或自定义规则，给出缩减镜像体积的建议（如删除缓存、文档、非必要软件包）。
 
 ## 用法
 ```bash
@@ -25,14 +25,27 @@ ktib analyze <image> [flags]
 ktib analyze myimage:latest
 ```
 
-### 输出 JSON 格式
+### 指定优化建议等级
+只运行安全等级（SAFE）的规则，忽略可能影响功能的建议：
 ```bash
-ktib analyze myimage:latest --output json
+ktib analyze myimage:latest --level SAFE
 ```
 
-### 将报告保存到文件
+### 使用自定义规则文件
+加载用户定义的规则文件进行分析：
 ```bash
-ktib analyze myimage:latest --file report.json
+ktib analyze myimage:latest --rules ./my_rules.yaml
+```
+
+### 导出默认规则
+将内置的默认规则导出到默认系统路径 `/etc/ktib/default_rules.yaml`（如果失败则导出到当前目录），以便查看或修改：
+```bash
+ktib analyze --default-rules
+```
+
+### 输出 JSON 格式并保存
+```bash
+ktib analyze myimage:latest --output json --file report.json
 ```
 
 ### 快速模式（跳过校验和计算）
@@ -47,6 +60,9 @@ ktib analyze myimage:latest --fast
 | `--output` | `-o` | 输出格式 (summary, json) | `summary` |
 | `--file` | `-f` | 将分析报告输出到指定文件 | `""` |
 | `--fast` | | 启用快速模式（跳过文件校验和计算与深度检查） | `false` |
+| `--rules` | | 指定自定义规则文件路径（YAML格式）。如果不指定且 `/etc/ktib/default_rules.yaml` 存在，则加载该文件；否则使用内置规则。 | `""` |
+| `--level` | | 覆盖运行等级，多个等级用逗号分隔 (如 "SAFE,STANDARD") | `""` (使用规则文件定义) |
+| `--default-rules` | | 导出内置默认规则到 `/etc/ktib/default_rules.yaml` (失败则回退到当前目录) | `false` |
 
 ## 输出字段说明 (JSON)
 JSON 报告包含以下主要字段：
@@ -58,6 +74,6 @@ JSON 报告包含以下主要字段：
     - `python`: Python 包列表（Name, Version, License, **Digest**）。
   - `filesystem`: 文件系统统计（TopDirectories, FileTypes）。
   - `waste_detection`: 浪费检测（Duplicates, Caches）。
-- `recommendations`: 优化建议列表。
+- `recommendations`: 优化建议列表（Level, Code, Message, Command, Saving）。
 
 > **注意**：`digest` 字段为新增功能，用于提供软件包或元数据的完整性校验值（如 RPM SigMD5 或 Python Metadata SHA256）。

@@ -63,8 +63,9 @@ func PrintSummary(report *types.AnalysisReport) {
 	if len(report.Recommendations) > 0 {
 		fmt.Fprintln(w, "RECOMMENDATIONS")
 		fmt.Fprintln(w, "---------------")
+		fmt.Fprintln(w, "LEVEL\tID\tSAVINGS\tDESCRIPTION")
 		for _, r := range report.Recommendations {
-			fmt.Fprintf(w, "[%s] %s: %s (Save: %s)\n", r.Level, r.Code, r.Message, r.Saving)
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", r.Level, r.Code, r.Saving, r.Message)
 		}
 	}
 

@@ -1,7 +1,7 @@
 version: "1.1"
 
 strategy:
-  enable_levels: ["SAFE", "STANDARD", "OPTIMIZED", "AGGRESSIVE"]
+  enable_levels: ["SAFE", "STANDARD", "OPTIMIZED", "AGGRESSIVE", "EXPERIMENTAL"]
 
 whitelist:
   - "/usr/lib/systemd/systemd"
@@ -72,3 +72,12 @@ rules:
     level: "OPTIMIZED"
     action: "Remove test directories"
     description: "Python package tests"
+
+  # --- L5: Dependency Analysis ---
+  - id: "RM_UNUSED_LIBS"
+    match:
+      dependency_check: true
+    level: "EXPERIMENTAL"
+    action: "Consider using Distroless images or manually remove unused libraries based on dependency analysis"
+    description: "Prune shared libraries not linked by entrypoint binaries"
+

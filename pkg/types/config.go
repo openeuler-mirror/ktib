@@ -23,8 +23,9 @@ type Match struct {
 	Type         string                 `yaml:"type,omitempty"` // e.g., "dir_tree", "algorithm"
 	Extensions   []string               `yaml:"extensions,omitempty"`
 	ExcludePaths []string               `yaml:"exclude_paths,omitempty"`
-	PkgNames     []string               `yaml:"pkg_names,omitempty"`
-	Algorithm    string                 `yaml:"algorithm,omitempty"`
+	PkgNames        []string               `yaml:"pkg_names,omitempty"`
+	DependencyCheck bool                   `yaml:"dependency_check,omitempty"`
+	Algorithm       string                 `yaml:"algorithm,omitempty"`
 	Params       map[string]interface{} `yaml:"params,omitempty"`
 }
 

@@ -17,6 +17,8 @@ import (
 	"os"
 	"time"
 
+	"strings"
+
 	"gitee.com/openeuler/ktib/pkg/analyze"
 	"gitee.com/openeuler/ktib/pkg/utils"
 	"github.com/spf13/cobra"
@@ -27,13 +29,40 @@ func newCmdAnalyze() *cobra.Command {
 	var outputFile string
 	var fastMode bool
 	var rulesPath string
+	var levels string
+	var defaultRules bool
 
 	cmd := &cobra.Command{
 		Use:   "analyze <image>",
 		Short: "Analyze an image for bloat and packages",
 		Long:  `Analyze an image to find wasted space, installed packages, and provide optimization recommendations.`,
-		Args:  cobra.ExactArgs(1),
+		Args: func(cmd *cobra.Command, args []string) error {
+			if cmd.Flags().Changed("default-rules") {
+				return nil
+			}
+			if len(args) != 1 {
+				return fmt.Errorf("accepts 1 arg(s), received %d", len(args))
+			}
+			return nil
+		},
 		Run: func(cmd *cobra.Command, args []string) {
+			if defaultRules {
+				// Dump to default system path (e.g. /etc/ktib/default_rules.yaml)
+				// If rulesPath is provided, we could use it, but flag says dump default rules.
+				// We pass empty string to use default path defined in advisor.go
+				if err := analyze.DumpDefaultRules(""); err != nil {
+					// Fallback: try dumping to local directory if system path fails (e.g. permission denied)
+					fmt.Fprintf(os.Stderr, "Failed to dump to default system path: %v. Trying current directory...\n", err)
+					if err := analyze.DumpDefaultRules("default_rules.yaml"); err != nil {
+						utils.CheckErr(err)
+					}
+					fmt.Println("Default rules dumped to default_rules.yaml")
+				} else {
+					fmt.Printf("Default rules dumped to %s\n", analyze.DefaultRulesPath)
+				}
+				return
+			}
+
 			store, err := utils.GetStore(cmd)
 			utils.CheckErr(err)
 
@@ -58,7 +87,12 @@ func newCmdAnalyze() *cobra.Command {
 			// So it implies it's fine to show it on stderr even if json is on stdout.
 			// We'll stick to that behavior.
 
-			analyzer, err := analyze.NewAnalyzer(store, imageRef, rulesPath, fastMode)
+			var levelList []string
+			if levels != "" {
+				levelList = strings.Split(levels, ",")
+			}
+
+			analyzer, err := analyze.NewAnalyzer(store, imageRef, rulesPath, levelList, fastMode)
 			utils.CheckErr(err)
 
 			report, err := analyzer.Run(cmd.Context(), func(step string, done bool, duration time.Duration) {
@@ -103,8 +137,9 @@ func newCmdAnalyze() *cobra.Command {
 	cmd.Flags().StringVarP(&outputFormat, "output", "o", "summary", "Output format (summary|json)")
 	cmd.Flags().StringVarP(&outputFile, "file", "f", "", "Output report to file")
 	cmd.Flags().BoolVar(&fastMode, "fast", false, "Enable fast mode (skip checksums and deep inspection)")
-	// Hidden rules flag for now or just exposed? User didn't ask for it, but code needs it.
-	// I'll leave it as internal var initialized to "" (default rules).
-	// If I don't register it, it stays empty string. Perfect.
+	cmd.Flags().StringVar(&rulesPath, "rules", "", "Path to custom rules file")
+	cmd.Flags().StringVar(&levels, "level", "", "Override run levels (comma separated, e.g. SAFE,STANDARD)")
+	cmd.Flags().BoolVar(&defaultRules, "default-rules", false, "Dump default rules to default_rules.yaml")
+
 	return cmd
 }
