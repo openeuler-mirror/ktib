@@ -12,19 +12,27 @@
 package app
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"gitee.com/openeuler/ktib/pkg/fusion"
 	"gitee.com/openeuler/ktib/pkg/fusion/config"
+	"gitee.com/openeuler/ktib/pkg/fusion/solver"
 	"gitee.com/openeuler/ktib/pkg/utils"
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 )
 
 func newCmdFusion() *cobra.Command {
 	var configPath string
 	var outputDir string
 	var targetTag string
+	var dumpConfig string
+	var fromData string
+	var saveData string
 
 	cmd := &cobra.Command{
 		Use:   "fusion <image>",
@@ -35,9 +43,50 @@ It uses advanced dependency solving and RPM DB reconstruction to create a minima
 Example:
   ktib fusion myimage:latest --config fusion.yaml --output-dir ./output
 `,
-		Args: cobra.ExactArgs(1),
+		Args: func(cmd *cobra.Command, args []string) error {
+			if cmd.Flags().Changed("dump-config") {
+				return nil
+			}
+			if cmd.Flags().Changed("from-data") {
+				if len(args) > 1 {
+					return fmt.Errorf("accepts at most one image argument when --from-data is used")
+				}
+				return nil
+			}
+			return cobra.ExactArgs(1)(cmd, args)
+		},
 		Run: func(cmd *cobra.Command, args []string) {
-			imageRef := args[0]
+			if cmd.Flags().Changed("dump-config") {
+				cfg := config.NewDefaultConfig()
+				data, err := yaml.Marshal(cfg)
+				utils.CheckErr(err)
+
+				if dumpConfig == "-" {
+					fmt.Print(string(data))
+					return
+				}
+
+				if err := os.MkdirAll(filepath.Dir(dumpConfig), 0o755); err != nil {
+					utils.CheckErr(err)
+				}
+				if err := os.WriteFile(dumpConfig, data, 0o644); err != nil {
+					utils.CheckErr(err)
+				}
+				fmt.Printf("Default fusion config saved to %s\n", dumpConfig)
+				return
+			}
+
+			imageRef := ""
+			if len(args) > 0 {
+				imageRef = args[0]
+			} else if cmd.Flags().Changed("from-data") {
+				ref, err := inferImageRefFromData(fromData)
+				utils.CheckErr(err)
+				imageRef = ref
+			}
+			if imageRef == "" {
+				utils.CheckErr(fmt.Errorf("image reference is required (provide <image> or ensure --from-data contains image_info.ref)"))
+			}
 
 			// 1. Load Config
 			cfg, err := config.LoadConfig(configPath)
@@ -49,6 +98,10 @@ Example:
 
 			// 2. Initialize Manager
 			mgr := fusion.NewFusionManager(cfg, store)
+			mgr.Solver = solver.NewDefaultSolverWithOptions(store, solver.Options{
+				FromData: fromData,
+				SaveData: saveData,
+			})
 
 			// 3. Execute Fusion
 			// If outputDir is not specified, use a default one?
@@ -64,6 +117,26 @@ Example:
 	cmd.Flags().StringVarP(&configPath, "config", "c", "", "Path to fusion configuration file")
 	cmd.Flags().StringVarP(&outputDir, "output-dir", "o", "", "Directory to output the fused rootfs")
 	cmd.Flags().StringVarP(&targetTag, "tag", "t", "", "Tag for the new image (optional)")
+	cmd.Flags().StringVar(&dumpConfig, "dump-config", "", "Dump default fusion config to a file (use '-' for stdout)")
+	cmd.Flags().Lookup("dump-config").NoOptDefVal = "fusion.yaml"
+	cmd.Flags().StringVar(&saveData, "save-data", "", "Save analysis data to JSON file for reuse")
+	cmd.Flags().StringVar(&fromData, "from-data", "", "Load analysis data from JSON file to skip image scan")
 
 	return cmd
+}
+
+func inferImageRefFromData(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("failed to read analysis data %s: %w", path, err)
+	}
+	var payload struct {
+		ImageInfo struct {
+			Ref string `json:"ref"`
+		} `json:"image_info"`
+	}
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return "", fmt.Errorf("failed to parse analysis data %s: %w", path, err)
+	}
+	return payload.ImageInfo.Ref, nil
 }
