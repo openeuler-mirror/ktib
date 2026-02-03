@@ -378,7 +378,7 @@ func TestGenerateRecommendations_Legacy(t *testing.T) {
 		},
 	}
 
-	recs := analyzer.GenerateRecommendations(nil, pkgs, fs, waste)
+	recs := analyzer.GenerateRecommendations(nil, pkgs, fs, waste, "", nil)
 
 	assert.NotEmpty(t, recs)
 	assert.Equal(t, "MERGE_LAYERS", recs[0].Code)

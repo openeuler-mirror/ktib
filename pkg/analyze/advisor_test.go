@@ -103,7 +103,7 @@ func TestGenerateRecommendations(t *testing.T) {
 	waste := types.WasteDetection{}
 	layers := []types.LayerInfo{}
 
-	recs := analyzer.GenerateRecommendations(layers, pkgs, fs, waste)
+	recs := analyzer.GenerateRecommendations(layers, pkgs, fs, waste, "", nil)
 
 	assert.Len(t, recs, 3) // Cache, Docs, Pkg
 
@@ -119,4 +119,84 @@ func TestGenerateRecommendations(t *testing.T) {
 	// Check 3: Pkg
 	// "vim-enhanced" matches "vim*"
 	assert.Equal(t, "RM_PKG", recs[2].Code)
+}
+
+func TestGenerateRecommendations_Whitelist(t *testing.T) {
+	// Setup Analyzer with custom rules and whitelist
+	cfg := types.Config{
+		Strategy: types.Strategy{
+			EnableLevels: []string{"SAFE"},
+		},
+		Whitelist: []string{"/var/cache/yum/protected"},
+		Rules: []types.Rule{
+			{
+				ID: "RM_CACHE",
+				Match: types.Match{
+					Paths: []string{"/var/cache/yum"},
+				},
+				Level:       "SAFE",
+				Description: "Remove Cache",
+			},
+		},
+	}
+
+	analyzer := &Analyzer{
+		Rules: cfg,
+	}
+
+	// Mock Data
+	fs := types.FilesystemInfo{
+		TopDirectories: []types.TopDirectory{
+			{Path: "/var/cache/yum/data", Size: 100},         // Should match
+			{Path: "/var/cache/yum/protected", Size: 200},    // Should be ignored
+			{Path: "/var/cache/yum/protected/sub", Size: 50}, // Should be ignored
+		},
+	}
+	pkgs := types.PackageInfo{}
+	waste := types.WasteDetection{}
+	layers := []types.LayerInfo{}
+
+	recs := analyzer.GenerateRecommendations(layers, pkgs, fs, waste, "", nil)
+
+	assert.Len(t, recs, 1)
+	assert.Equal(t, "RM_CACHE", recs[0].Code)
+	// Only 100 bytes should be saved, not 350
+	assert.Equal(t, "100 B", recs[0].Saving)
+}
+
+func TestDumpDefaultRules(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "rules.yaml")
+
+	err := DumpDefaultRules(path)
+	assert.NoError(t, err)
+	assert.FileExists(t, path)
+
+	content, err := os.ReadFile(path)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, content)
+}
+
+func TestLoadRules_SystemDefault(t *testing.T) {
+	// Temporarily override the DefaultRulesPath
+	tmpDir := t.TempDir()
+	defaultPath := filepath.Join(tmpDir, "default_rules.yaml")
+	originalPath := DefaultRulesPath
+	DefaultRulesPath = defaultPath
+	defer func() { DefaultRulesPath = originalPath }()
+
+	// Create a dummy system default file
+	systemYaml := `
+version: "1.1"
+strategy:
+  enable_levels: ["SYSTEM_DEFAULT"]
+rules: []
+`
+	err := os.WriteFile(defaultPath, []byte(systemYaml), 0644)
+	assert.NoError(t, err)
+
+	// Test loading with empty path (should pick up system default)
+	cfg, err := LoadRules("")
+	assert.NoError(t, err)
+	assert.Contains(t, cfg.Strategy.EnableLevels, "SYSTEM_DEFAULT")
 }
