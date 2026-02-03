@@ -56,7 +56,7 @@ func TestAssessFatSlim(t *testing.T) {
 		"/lib64/lib3.so",
 	}
 
-	total, reqSize, saving := scanner.AssessFatSlim(required)
+	total, reqSize, saving, unused := scanner.AssessFatSlim(required)
 
 	// Total libs size = 100 + 200 + 300 = 600 (notalib.txt ignored)
 	// Required size = 100 + 300 = 400
@@ -65,6 +65,11 @@ func TestAssessFatSlim(t *testing.T) {
 	assert.Equal(t, int64(600), total)
 	assert.Equal(t, int64(400), reqSize)
 	assert.Equal(t, int64(200), saving)
+	assert.Len(t, unused, 1)
+	// Check if unused contains the expected lib. 
+	// Note: The path separator might need handling if strictly testing cross-platform behavior of the test itself, 
+	// but AssessFatSlim normalizes to forward slashes.
+	assert.Contains(t, unused, "/lib64/lib2.so")
 }
 
 func TestLoadLdSoConf(t *testing.T) {
