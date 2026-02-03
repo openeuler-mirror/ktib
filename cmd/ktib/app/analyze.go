@@ -67,6 +67,10 @@ func newCmdAnalyze() *cobra.Command {
 			utils.CheckErr(err)
 
 			imageRef := args[0]
+			// Validate image exists before starting progress bar to avoid hang
+			if _, err := store.Image(imageRef); err != nil {
+				utils.CheckErr(fmt.Errorf("failed to find image %s: %w", imageRef, err))
+			}
 
 			// Setup progress visualization
 			// Only show progress bar if we are not outputting JSON to stdout (to avoid mixing output)
@@ -115,6 +119,7 @@ func newCmdAnalyze() *cobra.Command {
 				defer file.Close()
 
 				enc := json.NewEncoder(file)
+				enc.SetEscapeHTML(false)
 				enc.SetIndent("", "  ")
 				err = enc.Encode(report)
 				utils.CheckErr(err)
@@ -125,6 +130,7 @@ func newCmdAnalyze() *cobra.Command {
 			if outputFormat == "json" {
 				// If user explicitly asked for JSON to stdout (and maybe also to file if they set both)
 				enc := json.NewEncoder(os.Stdout)
+				enc.SetEscapeHTML(false)
 				enc.SetIndent("", "  ")
 				err = enc.Encode(report)
 				utils.CheckErr(err)
