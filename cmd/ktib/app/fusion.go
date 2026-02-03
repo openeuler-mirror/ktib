@@ -56,12 +56,8 @@ Example:
 				outputDir = fmt.Sprintf("fusion_output_%s", strings.ReplaceAll(imageRef, ":", "_"))
 			}
 
-			err = mgr.Run(imageRef, outputDir)
+			err = mgr.Run(imageRef, outputDir, targetTag)
 			utils.CheckErr(err)
-
-			if targetTag != "" {
-				fmt.Printf("Building new image %s from %s is not yet implemented.\n", targetTag, outputDir)
-			}
 		},
 	}
 
