@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"gitee.com/openeuler/ktib/pkg/analyze"
+	"gitee.com/openeuler/ktib/pkg/types"
 	"gitee.com/openeuler/ktib/pkg/utils"
 	"github.com/spf13/cobra"
 )
@@ -31,13 +32,53 @@ func newCmdAnalyze() *cobra.Command {
 	var rulesPath string
 	var levels string
 	var defaultRules bool
+	var saveData string
+	var fromData string
 
 	cmd := &cobra.Command{
 		Use:   "analyze <image>",
 		Short: "Analyze an image for bloat and packages",
-		Long:  `Analyze an image to find wasted space, installed packages, and provide optimization recommendations.`,
+		Long: `Analyze an image to find wasted space, installed packages, and provide optimization recommendations.
+
+This command supports two modes:
+1. Online Mode (default): Scans a local image, collects data, and generates recommendations.
+2. Offline Mode: Uses pre-collected analysis data to generate recommendations without needing the image.
+
+Key Features:
+- Layer Analysis: Detailed breakdown of file changes per layer.
+- Package Scan: Detection of RPM and Python packages with metadata.
+- Waste Detection: Identification of duplicate files across layers.
+- Advisor: Rule-based optimization recommendations.`,
+		Example: ` # 1. Standard Analysis (Scan + Recommend)
+  ktib analyze myimage:latest
+
+ # 2. Save Analysis Report to File (JSON)
+  ktib analyze myimage:latest --output json --file report.json
+
+ # 3. Separated Workflow (Useful for CI/CD or offloading analysis)
+  # Step A: Collect data only (skips recommendation generation)
+  ktib analyze myimage:latest --save-data raw_data.json
+
+  # Step B: Generate recommendations from data (offline, no image needed)
+  ktib analyze --from-data raw_data.json
+
+ # 4. Advanced Options
+  # Use custom rules
+  ktib analyze myimage:latest --rules my_rules.yaml
+
+  # Only run safe checks
+  ktib analyze myimage:latest --level SAFE
+
+  # Fast mode (skip heavy checksums)
+  ktib analyze myimage:latest --fast`,
 		Args: func(cmd *cobra.Command, args []string) error {
 			if cmd.Flags().Changed("default-rules") {
+				return nil
+			}
+			if cmd.Flags().Changed("from-data") {
+				if len(args) > 0 {
+					return fmt.Errorf("does not accept image argument when --from-data is used")
+				}
 				return nil
 			}
 			if len(args) != 1 {
@@ -63,6 +104,62 @@ func newCmdAnalyze() *cobra.Command {
 				return
 			}
 
+			var levelList []string
+			if levels != "" {
+				levelList = strings.Split(levels, ",")
+			}
+
+			// --- 1. Offline Mode: Load Data ---
+			if fromData != "" {
+				data, err := os.ReadFile(fromData)
+				utils.CheckErr(err)
+
+				var report types.AnalysisReport
+				err = json.Unmarshal(data, &report)
+				utils.CheckErr(err)
+
+				// Initialize Analyzer with nil store for offline mode
+				analyzer, err := analyze.NewAnalyzer(nil, "", rulesPath, levelList, fastMode)
+				utils.CheckErr(err)
+
+				// Run Advisor (Offline)
+				recs := analyzer.GenerateRecommendations(
+					report.Analysis.Layers,
+					report.Analysis.Packages,
+					report.Analysis.Filesystem,
+					report.Analysis.WasteDetection,
+					"",  // No mount point
+					nil, // No entrypoints (skips dependency check)
+				)
+				report.Recommendations = recs
+
+				// Output
+				if outputFile != "" {
+					file, err := os.Create(outputFile)
+					utils.CheckErr(err)
+					defer file.Close()
+
+					enc := json.NewEncoder(file)
+					enc.SetEscapeHTML(false)
+					enc.SetIndent("", "  ")
+					err = enc.Encode(report)
+					utils.CheckErr(err)
+					fmt.Printf("Report with recommendations saved to %s\n", outputFile)
+				}
+
+				if outputFormat == "json" {
+					enc := json.NewEncoder(os.Stdout)
+					enc.SetEscapeHTML(false)
+					enc.SetIndent("", "  ")
+					err = enc.Encode(report)
+					utils.CheckErr(err)
+				} else {
+					analyze.PrintRecommendations(recs)
+				}
+				return
+			}
+
+			// --- 2. Online Mode ---
 			store, err := utils.GetStore(cmd)
 			utils.CheckErr(err)
 
@@ -72,45 +169,70 @@ func newCmdAnalyze() *cobra.Command {
 				utils.CheckErr(fmt.Errorf("failed to find image %s: %w", imageRef, err))
 			}
 
-			// Setup progress visualization
-			// Only show progress bar if we are not outputting JSON to stdout (to avoid mixing output)
-			// If output is summary (default) or we are writing to file, show progress.
-			// If output is json and NO file is specified (meaning json goes to stdout), suppress progress or send to stderr.
-			// The progress bar inside NewAnalysisProgressBar writes to stderr, so it's generally safe.
-			// However, if we strictly want to suppress it for json stdout, we might want to control it.
-			// But the original code just initialized it always to Stderr.
-			// "p = mpb.New(mpb.WithOutput(os.Stderr), mpb.WithWidth(60))"
-			// So we can just use the new function.
-
 			totalSteps := 5
-			progressFunc, waitFunc := analyze.NewAnalysisProgressBar(totalSteps)
-
-			// If user wants JSON to stdout and no file, maybe we should not show progress?
-			// The original code comment said:
-			// "If output is json and NO file is specified (meaning json goes to stdout), suppress progress or send to stderr. We send to stderr so it's fine."
-			// So it implies it's fine to show it on stderr even if json is on stdout.
-			// We'll stick to that behavior.
-
-			var levelList []string
-			if levels != "" {
-				levelList = strings.Split(levels, ",")
+			if saveData != "" {
+				totalSteps = 4 // Skip advisor step
 			}
+			progressFunc, waitFunc := analyze.NewAnalysisProgressBar(totalSteps)
 
 			analyzer, err := analyze.NewAnalyzer(store, imageRef, rulesPath, levelList, fastMode)
 			utils.CheckErr(err)
 
-			report, err := analyzer.Run(cmd.Context(), func(step string, done bool, duration time.Duration) {
+			report, mountPoint, entrypoints, cleanup, err := analyzer.Analyze(cmd.Context(), func(step string, done bool, duration time.Duration) {
 				if progressFunc != nil {
 					progressFunc(step, done, duration)
 				}
 			})
+			if cleanup != nil {
+				defer cleanup()
+			}
+			// Ensure progress bar finishes cleanly (for the analyze part)
+			if waitFunc != nil && saveData != "" {
+				waitFunc()
+			}
+
+			utils.CheckErr(err)
+
+			// Handle --save-data
+			if saveData != "" {
+				file, err := os.Create(saveData)
+				utils.CheckErr(err)
+				defer file.Close()
+
+				enc := json.NewEncoder(file)
+				enc.SetEscapeHTML(false)
+				enc.SetIndent("", "  ")
+				err = enc.Encode(report)
+				utils.CheckErr(err)
+				fmt.Printf("Analysis data saved to %s\n", saveData)
+				return
+			}
+
+			// --- 3. Advisor (Standard Flow) ---
+			stepName := "Advisor Generation"
+			startTime := time.Now()
+			if progressFunc != nil {
+				progressFunc(stepName, false, 0)
+			}
+
+			recs := analyzer.GenerateRecommendations(
+				report.Analysis.Layers,
+				report.Analysis.Packages,
+				report.Analysis.Filesystem,
+				report.Analysis.WasteDetection,
+				mountPoint,
+				entrypoints,
+			)
+			report.Recommendations = recs
+
+			if progressFunc != nil {
+				progressFunc(stepName, true, time.Since(startTime))
+			}
 
 			// Ensure progress bar finishes cleanly
 			if waitFunc != nil {
 				waitFunc()
 			}
-
-			utils.CheckErr(err)
 
 			// 1. Handle File Output
 			if outputFile != "" {
@@ -144,8 +266,11 @@ func newCmdAnalyze() *cobra.Command {
 	cmd.Flags().StringVarP(&outputFile, "file", "f", "", "Output report to file")
 	cmd.Flags().BoolVar(&fastMode, "fast", false, "Enable fast mode (skip checksums and deep inspection)")
 	cmd.Flags().StringVar(&rulesPath, "rules", "", "Path to custom rules file")
+	cmd.Flags().Lookup("rules").NoOptDefVal = "/etc/ktib/default_rules.yaml"
 	cmd.Flags().StringVar(&levels, "level", "", "Override run levels (comma separated, e.g. SAFE,STANDARD)")
 	cmd.Flags().BoolVar(&defaultRules, "default-rules", false, "Dump default rules to default_rules.yaml")
+	cmd.Flags().StringVar(&saveData, "save-data", "", "Save analysis data to JSON file (skips advisor)")
+	cmd.Flags().StringVar(&fromData, "from-data", "", "Load analysis data from JSON file to generate recommendations (skips image scan)")
 
 	return cmd
 }

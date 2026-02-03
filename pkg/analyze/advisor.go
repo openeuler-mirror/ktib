@@ -135,6 +135,7 @@ func (a *Analyzer) GenerateRecommendations(
 		// Match Logic
 		matched := false
 		saving := int64(0)
+		var matchedItems []string
 
 		// 1. Path Matching (Directories)
 		if len(rule.Match.Paths) > 0 {
@@ -146,6 +147,7 @@ func (a *Analyzer) GenerateRecommendations(
 					if strings.HasPrefix(dir.Path, target) {
 						matched = true
 						saving += dir.Size
+						matchedItems = append(matchedItems, dir.Path)
 					}
 				}
 			}
@@ -161,6 +163,7 @@ func (a *Analyzer) GenerateRecommendations(
 					if match, _ := filepath.Match(pattern, filepath.Base(dir.Path)); match {
 						matched = true
 						saving += dir.Size
+						matchedItems = append(matchedItems, dir.Path)
 					}
 				}
 			}
@@ -179,6 +182,7 @@ func (a *Analyzer) GenerateRecommendations(
 					if match, _ := filepath.Match(pattern, p.Name); match {
 						matched = true
 						saving += p.Size
+						matchedItems = append(matchedItems, fmt.Sprintf("rpm:%s", p.Name))
 					}
 				}
 			}
@@ -188,6 +192,7 @@ func (a *Analyzer) GenerateRecommendations(
 					if match, _ := filepath.Match(pattern, p.Name); match {
 						matched = true
 						saving += p.Size
+						matchedItems = append(matchedItems, fmt.Sprintf("pip:%s", p.Name))
 					}
 				}
 			}
@@ -204,6 +209,7 @@ func (a *Analyzer) GenerateRecommendations(
 					if ext == target {
 						matched = true
 						saving += dir.Size
+						matchedItems = append(matchedItems, dir.Path)
 					}
 				}
 			}
@@ -215,10 +221,11 @@ func (a *Analyzer) GenerateRecommendations(
 				scanner := NewDependencyScanner(mountPoint)
 				requiredLibs, err := scanner.ScanDependencies(entrypoints)
 				if err == nil {
-					_, _, potentialSaving := scanner.AssessFatSlim(requiredLibs)
+					_, _, potentialSaving, unusedLibs := scanner.AssessFatSlim(requiredLibs)
 					if potentialSaving > 0 {
 						matched = true
 						saving += potentialSaving
+						matchedItems = append(matchedItems, unusedLibs...)
 					}
 				}
 			}
@@ -226,11 +233,12 @@ func (a *Analyzer) GenerateRecommendations(
 
 		if matched {
 			recs = append(recs, types.Recommendation{
-				Level:   rule.Level,
-				Code:    rule.ID,
-				Message: rule.Description,
-				Command: rule.Action,
-				Saving:  formatSize(saving),
+				Level:        rule.Level,
+				Code:         rule.ID,
+				Message:      rule.Description,
+				Command:      rule.Action,
+				Saving:       formatSize(saving),
+				MatchedItems: matchedItems,
 			})
 		}
 	}

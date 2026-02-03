@@ -106,6 +106,7 @@ type Recommendation struct {
 	Level   string `json:"level"` // e.g., WARN, INFO
 	Code    string `json:"code"`  // e.g., RM_CACHE
 	Message string `json:"message"`
-	Saving  string `json:"saving"`
-	Command string `json:"command,omitempty"`
+	Saving       string   `json:"saving"`
+	Command      string   `json:"command,omitempty"`
+	MatchedItems []string `json:"matched_items,omitempty"`
 }

@@ -52,6 +52,47 @@ func NewAnalyzer(store storage.Store, imageRef string, rulesPath string, levels 
 }
 
 func (a *Analyzer) Run(ctx context.Context, onProgress func(step string, done bool, duration time.Duration)) (*types.AnalysisReport, error) {
+	// 1. Run Analysis (Data Collection)
+	report, mountPoint, entrypoints, cleanup, err := a.Analyze(ctx, onProgress)
+	if err != nil {
+		return nil, err
+	}
+	defer cleanup()
+
+	// 2. Run Advisor (Recommendation Generation)
+	stepName := "Advisor Generation"
+	notifyProgress := func(step string, done bool, start time.Time) {
+		if onProgress != nil {
+			var d time.Duration
+			if done {
+				d = time.Since(start)
+			}
+			onProgress(step, done, d)
+		}
+	}
+
+	startTime := time.Now()
+	notifyProgress(stepName, false, startTime)
+	
+	recs := a.GenerateRecommendations(
+		report.Analysis.Layers,
+		report.Analysis.Packages,
+		report.Analysis.Filesystem,
+		report.Analysis.WasteDetection,
+		mountPoint,
+		entrypoints,
+	)
+	report.Recommendations = recs
+	
+	notifyProgress(stepName, true, startTime)
+
+	return report, nil
+}
+
+// Analyze performs the data collection phase. 
+// It returns the report, mount point, entrypoints, a cleanup function, and any error.
+// The caller IS RESPONSIBLE for calling the cleanup function to unmount the image.
+func (a *Analyzer) Analyze(ctx context.Context, onProgress func(step string, done bool, duration time.Duration)) (*types.AnalysisReport, string, []string, func(), error) {
 	logrus.Infof("Starting analysis for image: %s", a.ImageRef)
 
 	// Helper for progress reporting
@@ -65,13 +106,15 @@ func (a *Analyzer) Run(ctx context.Context, onProgress func(step string, done bo
 		}
 	}
 
+	noopCleanup := func() {}
+
 	// 1. Layer Analysis
 	stepName := "Layer Analysis"
 	startTime := time.Now()
 	notifyProgress(stepName, false, startTime)
 	layers, waste, err := a.AnalyzeLayers(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("layer analysis failed: %w", err)
+		return nil, "", nil, noopCleanup, fmt.Errorf("layer analysis failed: %w", err)
 	}
 	notifyProgress(stepName, true, startTime)
 
@@ -81,9 +124,12 @@ func (a *Analyzer) Run(ctx context.Context, onProgress func(step string, done bo
 	notifyProgress(stepName, false, startTime)
 	b, mountPoint, err := a.mount()
 	if err != nil {
-		return nil, fmt.Errorf("failed to mount image: %w", err)
+		return nil, "", nil, noopCleanup, fmt.Errorf("failed to mount image: %w", err)
 	}
-	defer a.cleanup(b)
+	// We do NOT defer cleanup here; we pass it back.
+	cleanup := func() {
+		a.cleanup(b)
+	}
 	notifyProgress(stepName, true, startTime)
 
 	// 3. Package Analysis
@@ -92,7 +138,8 @@ func (a *Analyzer) Run(ctx context.Context, onProgress func(step string, done bo
 	notifyProgress(stepName, false, startTime)
 	pkgs, err := a.AnalyzePackages(ctx, mountPoint)
 	if err != nil {
-		return nil, fmt.Errorf("package analysis failed: %w", err)
+		cleanup() // cleanup if we fail here
+		return nil, "", nil, noopCleanup, fmt.Errorf("package analysis failed: %w", err)
 	}
 	notifyProgress(stepName, true, startTime)
 
@@ -102,23 +149,16 @@ func (a *Analyzer) Run(ctx context.Context, onProgress func(step string, done bo
 	notifyProgress(stepName, false, startTime)
 	fsInfo, arch, err := a.AnalyzeFilesystem(ctx, mountPoint)
 	if err != nil {
-		return nil, fmt.Errorf("filesystem analysis failed: %w", err)
+		cleanup() // cleanup if we fail here
+		return nil, "", nil, noopCleanup, fmt.Errorf("filesystem analysis failed: %w", err)
 	}
 	notifyProgress(stepName, true, startTime)
 
-	// 5. Advisor
-	stepName = "Advisor Generation"
-	startTime = time.Now()
-	notifyProgress(stepName, false, startTime)
-
-	// Get Entrypoints for dependency analysis
+	// Get Entrypoints for dependency analysis (done here while we have context, though it uses Store not mount)
 	entrypoints, err := a.getImageEntrypoints(ctx)
 	if err != nil {
 		logrus.Debugf("Failed to get image entrypoints: %v", err)
 	}
-
-	recs := a.GenerateRecommendations(layers, pkgs, fsInfo, waste, mountPoint, entrypoints)
-	notifyProgress(stepName, true, startTime)
 
 	// Calculate total size from layers
 	totalSize := int64(0)
@@ -140,10 +180,9 @@ func (a *Analyzer) Run(ctx context.Context, onProgress func(step string, done bo
 			Filesystem:     fsInfo,
 			WasteDetection: waste,
 		},
-		Recommendations: recs,
 	}
 
-	return report, nil
+	return report, mountPoint, entrypoints, cleanup, nil
 }
 
 func (a *Analyzer) mount() (*builder.Builder, string, error) {

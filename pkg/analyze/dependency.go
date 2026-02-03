@@ -204,8 +204,8 @@ func (s *DependencyScanner) resolveLibrary(libName string) (string, error) {
 }
 
 // AssessFatSlim calculates potential savings
-// returns: totalLibsSize, requiredLibsSize, savings
-func (s *DependencyScanner) AssessFatSlim(requiredLibs []string) (int64, int64, int64) {
+// returns: totalLibsSize, requiredLibsSize, savings, unusedLibs
+func (s *DependencyScanner) AssessFatSlim(requiredLibs []string) (int64, int64, int64, []string) {
 	requiredSet := make(map[string]struct{})
 	for _, l := range requiredLibs {
 		requiredSet[l] = struct{}{}
@@ -213,6 +213,7 @@ func (s *DependencyScanner) AssessFatSlim(requiredLibs []string) (int64, int64, 
 
 	var totalSize int64
 	var requiredSize int64
+	var unusedLibs []string
 
 	// Helper to walk paths
 	walkFn := func(path string, info os.FileInfo, err error) error {
@@ -237,6 +238,8 @@ func (s *DependencyScanner) AssessFatSlim(requiredLibs []string) (int64, int64, 
 
 			if _, ok := requiredSet[containerPath]; ok {
 				requiredSize += size
+			} else {
+				unusedLibs = append(unusedLibs, containerPath)
 			}
 		}
 		return nil
@@ -250,5 +253,5 @@ func (s *DependencyScanner) AssessFatSlim(requiredLibs []string) (int64, int64, 
 		}
 	}
 
-	return totalSize, requiredSize, totalSize - requiredSize
+	return totalSize, requiredSize, totalSize - requiredSize, unusedLibs
 }
