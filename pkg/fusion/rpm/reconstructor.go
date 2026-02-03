@@ -15,13 +15,18 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 
 	"gitee.com/openeuler/ktib/pkg/fusion/types"
+	rpmdb "github.com/knqyf263/go-rpmdb/pkg"
 	"github.com/sirupsen/logrus"
 )
 
-// DefaultReconstructor is an implementation of DBReconstructor that supports SQLite
+// Allow mocking for tests
+var execCommand = exec.Command
+
+// DefaultReconstructor is an implementation of DBReconstructor
 type DefaultReconstructor struct {
 	SourceRPMDBPath string // Path to the source RPM DB directory (e.g., /var/lib/rpm)
 }
@@ -79,12 +84,90 @@ func (r *DefaultReconstructor) Reconstruct(sourcePath string, plan *types.Fusion
 		return fmt.Errorf("failed to copy RPM DB: %w", err)
 	}
 
-	// 5. Prune the target DB
-	if err := pruneSQLiteDB(targetPath, plan.KeptPackages); err != nil {
+	// 5. Prune the target DB using CLI or other means
+	if err := r.pruneDB(targetPath, plan.KeptPackages); err != nil {
 		return fmt.Errorf("failed to prune RPM DB: %w", err)
 	}
 
 	logrus.Infof("Successfully reconstructed RPM DB at %s", targetPath)
+	return nil
+}
+
+func (r *DefaultReconstructor) pruneDB(dbFile string, keptPackages []string) error {
+	// 1. List all packages in the copied DB
+	db, err := rpmdb.Open(dbFile)
+	if err != nil {
+		return fmt.Errorf("failed to open rpmdb for pruning: %w", err)
+	}
+
+	pkgList, err := db.ListPackages()
+	if err != nil {
+		db.Close()
+		return fmt.Errorf("failed to list packages: %w", err)
+	}
+	db.Close() // Close before modifying
+
+	// 2. Calculate packages to remove
+	keptSet := make(map[string]bool)
+	for _, p := range keptPackages {
+		keptSet[p] = true
+	}
+
+	var toRemove []string
+	for _, p := range pkgList {
+		if !keptSet[p.Name] {
+			toRemove = append(toRemove, p.Name)
+		}
+	}
+
+	if len(toRemove) == 0 {
+		logrus.Info("No packages to prune from RPM DB.")
+		return nil
+	}
+
+	logrus.Infof("Identifying %d packages to prune from RPM DB", len(toRemove))
+
+	// 3. Use rpm CLI to remove packages
+	// Check if rpm is available
+	rpmPath, err := exec.LookPath("rpm")
+	if err != nil {
+		logrus.Warn("rpm command not found. Skipping RPM DB pruning. The resulting DB will contain all original packages.")
+		return nil
+	}
+
+	// We need to run rpm --dbpath <dir> -e --justdb --nodeps --noscripts --notriggers <pkgs>
+	// dbFile is the file path (e.g. /path/to/rpmdb.sqlite), we need the directory.
+	dbDir, _ := filepath.Abs(filepath.Dir(dbFile))
+
+	// Batch processing to avoid command line length limits
+	batchSize := 50
+	for i := 0; i < len(toRemove); i += batchSize {
+		end := i + batchSize
+		if end > len(toRemove) {
+			end = len(toRemove)
+		}
+		batch := toRemove[i:end]
+
+		args := []string{
+			"--dbpath", dbDir,
+			"-e",
+			"--justdb",
+			"--nodeps",
+			"--noscripts",
+			"--notriggers",
+		}
+		args = append(args, batch...)
+
+		cmd := execCommand(rpmPath, args...)
+		if output, err := cmd.CombinedOutput(); err != nil {
+			logrus.Errorf("Failed to prune RPM DB batch: %v, output: %s", err, string(output))
+			// Continue or fail? If one batch fails, DB might be inconsistent vs file system.
+			// But since we are constructing a new DB, it's better to try best effort or fail?
+			// Let's fail to ensure integrity.
+			return fmt.Errorf("rpm pruning failed: %w", err)
+		}
+	}
+
 	return nil
 }
 

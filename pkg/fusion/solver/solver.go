@@ -50,8 +50,8 @@ func (s *DefaultSolver) Solve(imageRef string, cfg *config.FusionConfig) (*types
 	ctx := context.Background()
 
 	// Perform analysis
-	// We ignore mountPoint and entrypoints for now, as we focus on RPM DB
-	report, _, _, cleanup, err := analyzer.Analyze(ctx, nil)
+	// We capture mountPoint for ELF analysis
+	report, mountPoint, _, cleanup, err := analyzer.Analyze(ctx, nil)
 	if cleanup != nil {
 		defer cleanup()
 	}
@@ -66,14 +66,103 @@ func (s *DefaultSolver) Solve(imageRef string, cfg *config.FusionConfig) (*types
 		logrus.Warn("No RPM packages found. Fusion might result in empty image.")
 	}
 
+	// 2. Initial RPM Graph Solve
 	keptList := s.solveGraph(allPackages, cfg.Fusion.KeepPackages)
+
+	// 3. ELF Dynamic Library Analysis
+	if cfg.Fusion.Behavior.AutoHealLibs {
+		var err error
+		keptList, err = s.solveELF(mountPoint, allPackages, keptList)
+		if err != nil {
+			logrus.Warnf("ELF analysis failed: %v", err)
+		}
+	}
 
 	logrus.Infof("Resolved %d packages to keep (from %d initial requests)", len(keptList), len(cfg.Fusion.KeepPackages))
 
+	// 4. Collect Files
+	keptFiles := s.collectFiles(allPackages, keptList)
+
 	return &types.FusionPlan{
 		KeptPackages: keptList,
-		KeptFiles:    []string{}, // TODO: Implement file-level dependency solving if needed
+		KeptFiles:    keptFiles,
 	}, nil
+}
+
+func (s *DefaultSolver) solveELF(mountPoint string, allPackages []coretypes.Package, keptList []string) ([]string, error) {
+	scanner := analyze.NewDependencyScanner(mountPoint)
+
+	// Map File -> Package Name
+	fileToPkg := make(map[string]string)
+	pkgMap := make(map[string]coretypes.Package)
+
+	for _, p := range allPackages {
+		pkgMap[p.Name] = p
+		for _, f := range p.Files {
+			fileToPkg[f] = p.Name
+		}
+	}
+
+	currentList := keptList
+
+	// Iterative resolution
+	for i := 0; i < 5; i++ {
+		logrus.Debugf("ELF Analysis Iteration %d, current packages: %d", i+1, len(currentList))
+
+		// Build entrypoints from current kept packages
+		var entrypoints []string
+		keptSet := make(map[string]struct{})
+		for _, name := range currentList {
+			keptSet[name] = struct{}{}
+			if p, ok := pkgMap[name]; ok {
+				entrypoints = append(entrypoints, p.Files...)
+			}
+		}
+
+		// Scan dependencies
+		neededLibs, err := scanner.ScanDependencies(entrypoints)
+		if err != nil {
+			return currentList, err
+		}
+
+		// Resolve providers
+		var added []string
+		for _, libPath := range neededLibs {
+			// libPath is absolute path in container
+			if pkgName, ok := fileToPkg[libPath]; ok {
+				if _, kept := keptSet[pkgName]; !kept {
+					logrus.Infof("ELF dependency: %s provided by %s (added)", libPath, pkgName)
+					added = append(added, pkgName)
+					keptSet[pkgName] = struct{}{}
+				}
+			}
+		}
+
+		if len(added) == 0 {
+			break
+		}
+
+		// Add new packages and re-solve RPM graph to satisfy their dependencies
+		currentList = append(currentList, added...)
+		currentList = s.solveGraph(allPackages, currentList)
+	}
+
+	return currentList, nil
+}
+
+func (s *DefaultSolver) collectFiles(allPackages []coretypes.Package, keptList []string) []string {
+	var files []string
+	pkgMap := make(map[string]coretypes.Package)
+	for _, p := range allPackages {
+		pkgMap[p.Name] = p
+	}
+
+	for _, name := range keptList {
+		if p, ok := pkgMap[name]; ok {
+			files = append(files, p.Files...)
+		}
+	}
+	return files
 }
 
 // solveGraph performs the dependency resolution on a list of packages
