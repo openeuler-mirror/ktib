@@ -20,6 +20,7 @@ import (
 	"gitee.com/openeuler/ktib/pkg/fusion/solver"
 	"gitee.com/openeuler/ktib/pkg/fusion/types"
 	"gitee.com/openeuler/ktib/pkg/fusion/verify"
+	"github.com/containers/storage"
 	"github.com/sirupsen/logrus"
 )
 
@@ -33,10 +34,10 @@ type FusionManager struct {
 }
 
 // NewFusionManager creates a new FusionManager
-func NewFusionManager(cfg *config.FusionConfig) *FusionManager {
+func NewFusionManager(cfg *config.FusionConfig, store storage.Store) *FusionManager {
 	return &FusionManager{
 		Config: cfg,
-		Solver: solver.NewDefaultSolver(),
+		Solver: solver.NewDefaultSolver(store),
 		RPM:    rpm.NewDefaultReconstructor(),
 		FS:     fs.NewDefaultSynthesizer(),
 		Verify: verify.NewDefaultVerifier(),
