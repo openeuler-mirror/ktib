@@ -47,6 +47,8 @@ type Behavior struct {
 	RetainWeakDeps bool `yaml:"retain_weak_deps"`
 	// AutoHealLibs enables automatic library recovery if broken dependencies are detected
 	AutoHealLibs bool `yaml:"auto_heal_libs"`
+	// RetainUnowned determines whether to keep files that are not owned by any RPM package (default: true)
+	RetainUnowned bool `yaml:"retain_unowned"`
 }
 
 // NewDefaultConfig returns a configuration with default values (empty policies)
@@ -60,6 +62,7 @@ func NewDefaultConfig() *FusionConfig {
 				RetainDocs:     false,
 				RetainWeakDeps: false,
 				AutoHealLibs:   true,
+				RetainUnowned:  true,
 			},
 		},
 	}
@@ -87,6 +90,7 @@ func NewExampleConfig() *FusionConfig {
 				RetainDocs:     false,
 				RetainWeakDeps: false,
 				AutoHealLibs:   true,
+				RetainUnowned:  true,
 			},
 		},
 	}

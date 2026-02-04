@@ -16,6 +16,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -68,6 +69,7 @@ func (s *DefaultSolver) Solve(imageRef string, cfg *config.FusionConfig) (*types
 
 	var mountPoint string
 	var allPackages []coretypes.Package
+	var imageConfig coretypes.ImageConfig
 
 	if s.FromData != "" {
 		if s.stepUpdater != nil {
@@ -81,6 +83,9 @@ func (s *DefaultSolver) Solve(imageRef string, cfg *config.FusionConfig) (*types
 			logrus.Warnf("from-data image ref '%s' differs from argument '%s'", report.ImageInfo.Ref, imageRef)
 		}
 		allPackages = report.Analysis.Packages.RPM
+		// Append Python packages to allPackages
+		allPackages = append(allPackages, report.Analysis.Packages.Python...)
+		imageConfig = report.ImageInfo.Config
 	} else {
 		// 1. Analyze Image to get package list
 		// Use fast mode (true) to skip heavy checksums as we only need RPM metadata
@@ -110,6 +115,9 @@ func (s *DefaultSolver) Solve(imageRef string, cfg *config.FusionConfig) (*types
 		}
 		mountPoint = mp
 		allPackages = report.Analysis.Packages.RPM
+		// Append Python packages to allPackages
+		allPackages = append(allPackages, report.Analysis.Packages.Python...)
+		imageConfig = report.ImageInfo.Config
 
 		if s.SaveData != "" {
 			if err := saveAnalysisReport(s.SaveData, report); err != nil {
@@ -118,11 +126,35 @@ func (s *DefaultSolver) Solve(imageRef string, cfg *config.FusionConfig) (*types
 		}
 	}
 
-	logrus.Infof("Found %d RPM packages in the image", len(allPackages))
+	logrus.Infof("Found %d packages (RPM+Python) in the image", len(allPackages))
 
 	if len(allPackages) == 0 {
-		logrus.Warn("No RPM packages found. Fusion might result in empty image.")
+		logrus.Warn("No packages found. Fusion might result in empty image.")
 	}
+
+	// P0: App Anchor Analysis
+	if len(imageConfig.Cmd) > 0 || len(imageConfig.Entrypoint) > 0 {
+		anchors := s.resolveAppAnchors(imageConfig, allPackages)
+		if len(anchors) > 0 {
+			logrus.Infof("Automatically resolved application anchors: %v", anchors)
+			cfg.Fusion.KeepPackages = append(cfg.Fusion.KeepPackages, anchors...)
+		}
+	}
+
+	// P1: Ensure Vital Paths (Base System Integrity)
+	vitalPackages := []string{"filesystem", "setup", "basesystem"}
+	for _, v := range vitalPackages {
+		// Only add if it exists in the image
+		for _, p := range allPackages {
+			if p.Name == v {
+				cfg.Fusion.KeepPackages = append(cfg.Fusion.KeepPackages, v)
+				break
+			}
+		}
+	}
+
+	// Deduplicate
+	cfg.Fusion.KeepPackages = uniqueStrings(cfg.Fusion.KeepPackages)
 
 	// 2. Initial RPM Graph Solve
 	keptList := s.solveGraph(allPackages, cfg.Fusion.KeepPackages)
@@ -143,12 +175,12 @@ func (s *DefaultSolver) Solve(imageRef string, cfg *config.FusionConfig) (*types
 	logrus.Infof("Resolved %d packages to keep (from %d initial requests)", len(keptList), len(cfg.Fusion.KeepPackages))
 
 	// 4. Collect Files
-	// from-data mode does not contain per-package file lists in JSON (Files is not serialized),
-	// so we skip collecting kept files here and rely on RPMDB-driven whitelist in the FS synthesizer.
+	// Collect files from ALL kept packages (RPM + Python)
+	// Now that Package.Files is populated even for Python (and RPM if analyzing), we can use it.
+	// For from-data, Package.Files is loaded from JSON.
 	var keptFiles []string
-	if mountPoint != "" {
-		keptFiles = s.collectFiles(allPackages, keptList)
-	}
+	keptFiles = s.collectFiles(allPackages, keptList)
+
 	// Append explicitly kept files from config
 	if len(cfg.Fusion.KeepFiles) > 0 {
 		keptFiles = append(keptFiles, cfg.Fusion.KeepFiles...)
@@ -157,7 +189,174 @@ func (s *DefaultSolver) Solve(imageRef string, cfg *config.FusionConfig) (*types
 	return &types.FusionPlan{
 		KeptPackages: keptList,
 		KeptFiles:    keptFiles,
+		Config:       cfg,
 	}, nil
+}
+
+func (s *DefaultSolver) resolveAppAnchors(cfg coretypes.ImageConfig, allPackages []coretypes.Package) []string {
+	var anchors []string
+
+	// Helper to find package owning a file
+	findOwner := func(path string) string {
+		// Normalize path
+		// If not absolute, prepend WorkingDir or "/"
+		absPath := path
+		if !strings.HasPrefix(path, "/") {
+			wd := cfg.WorkingDir
+			if wd == "" {
+				wd = "/"
+			}
+			absPath = filepath.Join(wd, path)
+		}
+		absPath = filepath.Clean(absPath)
+
+		// Search in packages
+		for _, p := range allPackages {
+			for _, f := range p.Files {
+				if f == absPath {
+					return p.Name
+				}
+			}
+		}
+
+		// Heuristic: If it's a command name without path, check common bin dirs
+		if !strings.Contains(path, "/") {
+			candidates := []string{
+				"/usr/bin/" + path,
+				"/bin/" + path,
+				"/usr/local/bin/" + path,
+				"/usr/sbin/" + path,
+				"/sbin/" + path,
+			}
+			for _, c := range candidates {
+				for _, p := range allPackages {
+					for _, f := range p.Files {
+						if f == c {
+							return p.Name
+						}
+					}
+				}
+			}
+		}
+
+		return ""
+	}
+
+	// Helper to analyze command arguments (handles shell wrapping)
+	var analyzeArgs func([]string)
+	analyzeArgs = func(args []string) {
+		if len(args) == 0 {
+			return
+		}
+
+		// 1. Keep the direct command
+		if owner := findOwner(args[0]); owner != "" {
+			anchors = append(anchors, owner)
+		}
+
+		// 2. Check for shell wrapping
+		exe := filepath.Base(args[0])
+		if exe == "sh" || exe == "bash" || exe == "zsh" || exe == "dash" || exe == "busybox" {
+			for i, arg := range args {
+				if arg == "-c" && i+1 < len(args) {
+					// Found shell command string
+					cmdStr := args[i+1]
+					parts := strings.Fields(cmdStr)
+					if len(parts) > 0 {
+						// Recursively check the inner command
+						analyzeArgs(parts)
+					}
+				}
+			}
+		}
+
+		// 3. Special handling for Python
+		if exe == "python" || exe == "python3" {
+			// python -m <module>
+			for i, arg := range args {
+				if arg == "-m" && i+1 < len(args) {
+					moduleName := args[i+1]
+					// Find package owning this module
+					// Module name to file path:
+					// foo.bar -> foo/bar/__init__.py or foo/bar.py or foo/__init__.py (if bar is function)
+					// We just search for simple mapping first:
+					// foo -> foo/__init__.py or foo.py
+					
+					// Convert module to path segments
+					modPath := strings.ReplaceAll(moduleName, ".", "/")
+					
+					// Candidates to search in Files
+					candidates := []string{
+						modPath + ".py",
+						modPath + "/__init__.py",
+					}
+					
+					// Scan all packages
+					found := false
+					for _, p := range allPackages {
+						for _, f := range p.Files {
+							for _, cand := range candidates {
+								if strings.HasSuffix(f, cand) {
+									anchors = append(anchors, p.Name)
+									logrus.Infof("Resolved python module '%s' to package '%s'", moduleName, p.Name)
+									found = true
+									break
+								}
+							}
+							if found { break }
+						}
+						if found { break }
+					}
+				}
+				// python script.py
+				// If argument ends with .py and is not a flag
+				if strings.HasSuffix(arg, ".py") && !strings.HasPrefix(arg, "-") {
+					if owner := findOwner(arg); owner != "" {
+						anchors = append(anchors, owner)
+						logrus.Infof("Resolved python script '%s' to package '%s'", arg, owner)
+					}
+				}
+			}
+			// Add python itself as an anchor
+			if owner := findOwner(exe); owner != "" {
+				// Only add if not already added
+				alreadyAdded := false
+				for _, a := range anchors {
+					if a == owner {
+						alreadyAdded = true
+						break
+					}
+				}
+				if !alreadyAdded {
+					anchors = append(anchors, owner)
+				}
+			}
+		}
+	}
+
+	// Check Entrypoint
+	if len(cfg.Entrypoint) > 0 {
+		analyzeArgs(cfg.Entrypoint)
+	}
+
+	// Check Cmd
+	if len(cfg.Cmd) > 0 {
+		analyzeArgs(cfg.Cmd)
+	}
+
+	return anchors
+}
+
+func uniqueStrings(slice []string) []string {
+	keys := make(map[string]bool)
+	list := []string{}
+	for _, entry := range slice {
+		if _, value := keys[entry]; !value {
+			keys[entry] = true
+			list = append(list, entry)
+		}
+	}
+	return list
 }
 
 func loadAnalysisReport(path string) (*coretypes.AnalysisReport, error) {

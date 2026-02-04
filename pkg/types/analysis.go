@@ -25,8 +25,17 @@ type ImageInfo struct {
 	Ref          string    `json:"ref"`
 	Size         int64     `json:"size"`
 	OS           string    `json:"os"`
-	Created      time.Time `json:"created"`
-	Architecture string    `json:"architecture,omitempty"`
+	Created      time.Time   `json:"created"`
+	Architecture string      `json:"architecture,omitempty"`
+	Config       ImageConfig `json:"config,omitempty"`
+}
+
+// ImageConfig contains configuration from the image
+type ImageConfig struct {
+	Cmd        []string `json:"cmd"`
+	Entrypoint []string `json:"entrypoint"`
+	Env        []string `json:"env"`
+	WorkingDir string   `json:"working_dir"`
 }
 
 // AnalysisData aggregates all detailed analysis results
@@ -69,7 +78,7 @@ type Package struct {
 	Digest   string   `json:"digest,omitempty"`
 	Requires []string `json:"requires,omitempty"`
 	Provides []string `json:"provides,omitempty"`
-	Files    []string `json:"-"` // Files installed by the package (internal use)
+	Files    []string `json:"files,omitempty"` // Files installed by the package
 }
 
 // FilesystemInfo contains filesystem statistics

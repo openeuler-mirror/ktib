@@ -45,5 +45,5 @@ type Verifier interface {
 type FusionPlan struct {
 	KeptPackages []string
 	KeptFiles    []string
-	// Add more fields as needed
+	Config       *config.FusionConfig
 }
