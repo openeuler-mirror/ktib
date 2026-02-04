@@ -16,7 +16,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"gitee.com/openeuler/ktib/pkg/fusion"
 	"gitee.com/openeuler/ktib/pkg/fusion/config"
@@ -41,7 +40,7 @@ func newCmdFusion() *cobra.Command {
 It uses advanced dependency solving and RPM DB reconstruction to create a minimal, valid rootfs.
 
 Example:
-  ktib fusion myimage:latest --config fusion.yaml --output-dir ./output
+  ktib fusion myimage:latest --config fusion.yaml --tag myimage:slim
 `,
 		Args: func(cmd *cobra.Command, args []string) error {
 			if cmd.Flags().Changed("dump-config") {
@@ -103,20 +102,42 @@ Example:
 				SaveData: saveData,
 			})
 
-			// 3. Execute Fusion
-			// If outputDir is not specified, use a default one?
-			if outputDir == "" {
-				outputDir = fmt.Sprintf("fusion_output_%s", strings.ReplaceAll(imageRef, ":", "_"))
+			if targetTag == "" {
+				utils.CheckErr(fmt.Errorf("--tag is required"))
 			}
 
-			err = mgr.Run(imageRef, outputDir, targetTag)
+			totalSteps := 4
+			if targetTag != "" {
+				totalSteps++
+			}
+			progressFunc, waitFunc := fusion.NewFusionProgressBar(totalSteps)
+			mgr.OnProgress = progressFunc
+
+			keepOutput := cmd.Flags().Changed("output-dir") && outputDir != ""
+			outputRootfs := outputDir
+			tempOutput := ""
+			if !keepOutput {
+				tmpDir, err := os.MkdirTemp("", "ktib-fusion-output-")
+				utils.CheckErr(err)
+				tempOutput = tmpDir
+				outputRootfs = tmpDir
+			}
+
+			err = mgr.Run(imageRef, outputRootfs, targetTag)
+			waitFunc()
+			if tempOutput != "" && err == nil {
+				_ = os.RemoveAll(tempOutput)
+			}
+			if tempOutput != "" && err != nil {
+				fmt.Fprintf(os.Stderr, "fusion failed; keeping temporary rootfs at %s\n", tempOutput)
+			}
 			utils.CheckErr(err)
 		},
 	}
 
 	cmd.Flags().StringVarP(&configPath, "config", "c", "", "Path to fusion configuration file")
-	cmd.Flags().StringVarP(&outputDir, "output-dir", "o", "", "Directory to output the fused rootfs")
-	cmd.Flags().StringVarP(&targetTag, "tag", "t", "", "Tag for the new image (optional)")
+	cmd.Flags().StringVarP(&outputDir, "output-dir", "o", "", "Directory to output the fused rootfs (optional; if omitted, uses a temp dir and cleans up on success)")
+	cmd.Flags().StringVarP(&targetTag, "tag", "t", "", "Tag for the new image (required)")
 	cmd.Flags().StringVar(&dumpConfig, "dump-config", "", "Dump default fusion config to a file (use '-' for stdout)")
 	cmd.Flags().Lookup("dump-config").NoOptDefVal = "fusion.yaml"
 	cmd.Flags().StringVar(&saveData, "save-data", "", "Save analysis data to JSON file for reuse")

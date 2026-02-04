@@ -162,7 +162,7 @@ func (a *Analyzer) AnalyzeLayers(ctx context.Context) ([]types.LayerInfo, types.
 }
 
 func (a *Analyzer) processLayer(ctx context.Context, layerID string, index int) (*layerResult, error) {
-	logrus.Infof("Analyzing layer %d: %s", index+1, layerID)
+	logrus.Debugf("Analyzing layer %d: %s", index+1, layerID)
 
 	diffOptions := &storage.DiffOptions{}
 	rc, err := a.Store.Diff("", layerID, diffOptions)

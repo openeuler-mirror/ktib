@@ -14,8 +14,8 @@ ktib fusion [image] [flags]
 | 选项 | 简写 | 描述 | 默认值 |
 | :--- | :--- | :--- | :--- |
 | `--config` | `-c` | 融合配置文件路径 (YAML) | "" |
-| `--output-dir` | `-o` | 融合后 Rootfs 的输出目录 | "fusion_output_<image_name>" |
-| `--tag` | `-t` | (可选) 生成新镜像的 Tag | "" |
+| `--output-dir` | `-o` | 融合后 Rootfs 的输出目录（可选；不设置则使用临时目录并在成功后自动清理） | "" |
+| `--tag` | `-t` | 生成新镜像的 Tag（必填） | "" |
 | `--dump-config` |  | 导出默认融合配置到文件（传 `-` 输出到 stdout；不带参数时写入 `fusion.yaml`） | "" |
 | `--save-data` |  | 保存分析数据到 JSON 文件（便于后续复用） | "" |
 | `--from-data` |  | 从 JSON 文件加载分析数据以跳过镜像扫描（可不传 image 参数） | "" |
@@ -38,19 +38,19 @@ fusion:
 ## 示例
 
 ### 1. 基本融合
-使用默认策略对镜像进行融合，输出到默认目录：
+使用默认策略对镜像进行融合并生成新镜像（不保留 Rootfs 输出）：
 ```bash
-ktib fusion myimage:latest
+ktib fusion myimage:latest --tag myimage:slim
 ```
 
 ### 2. 指定输出目录
 ```bash
-ktib fusion myimage:latest --output-dir ./slim-rootfs
+ktib fusion myimage:latest --tag myimage:slim --output-dir ./slim-rootfs
 ```
 
 ### 3. 使用配置文件进行精细控制
 ```bash
-ktib fusion myimage:latest --config my-policy.yaml --output-dir ./output
+ktib fusion myimage:latest --config my-policy.yaml --tag myimage:slim --output-dir ./output
 ```
 
 ### 4. 生成默认配置模板
@@ -65,9 +65,9 @@ ktib fusion --dump-config=-
 
 ### 5. 一行命令生成新镜像
 ```bash
-ktib fusion myimage:latest --config fusion.yaml --output-dir ./output --tag myimage:slim
+ktib fusion myimage:latest --config fusion.yaml --tag myimage:slim
 ```
-说明：`--tag` 会在融合完成后通过 buildah 提交生成新镜像。
+说明：`--tag` 会在融合完成后将 Rootfs 打包并构建 `FROM scratch` 的新镜像（不依赖外部 buildah 命令）。
 
 ### 6. 复用 analyze 的 JSON 数据
 先保存一次分析数据（推荐加 `--fast`）：
@@ -76,6 +76,6 @@ ktib analyze myimage:latest --fast --save-data analysis.json
 ```
 再使用该数据进行 fusion（可省略 image 参数，自动读取 `image_info.ref`）：
 ```bash
-ktib fusion --from-data analysis.json --output-dir ./output
+ktib fusion --from-data analysis.json --tag myimage:slim --output-dir ./output
 ```
 限制：由于 analyze 的 JSON 不包含包级文件列表，`auto_heal_libs` 在 `--from-data` 模式下会自动跳过。

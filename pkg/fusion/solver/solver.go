@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"gitee.com/openeuler/ktib/pkg/analyze"
 	"gitee.com/openeuler/ktib/pkg/fusion/config"
@@ -36,6 +37,8 @@ type DefaultSolver struct {
 	Store    storage.Store
 	FromData string
 	SaveData string
+
+	stepUpdater func(string)
 }
 
 // NewDefaultSolver creates a new DefaultSolver
@@ -53,6 +56,10 @@ func NewDefaultSolverWithOptions(store storage.Store, opts Options) *DefaultSolv
 	}
 }
 
+func (s *DefaultSolver) SetStepUpdater(fn func(string)) {
+	s.stepUpdater = fn
+}
+
 // Solve calculates the list of packages and files to keep
 func (s *DefaultSolver) Solve(imageRef string, cfg *config.FusionConfig) (*types.FusionPlan, error) {
 	logrus.Infof("Solving dependencies for %s", imageRef)
@@ -63,6 +70,9 @@ func (s *DefaultSolver) Solve(imageRef string, cfg *config.FusionConfig) (*types
 	var allPackages []coretypes.Package
 
 	if s.FromData != "" {
+		if s.stepUpdater != nil {
+			s.stepUpdater("Loading analysis data")
+		}
 		report, err := loadAnalysisReport(s.FromData)
 		if err != nil {
 			return nil, err
@@ -81,7 +91,17 @@ func (s *DefaultSolver) Solve(imageRef string, cfg *config.FusionConfig) (*types
 
 		// Perform analysis
 		// We capture mountPoint for ELF analysis
-		report, mp, _, cleanup, err := analyzer.Analyze(ctx, nil)
+		var onProgress func(step string, done bool, duration time.Duration)
+		if s.stepUpdater != nil {
+			onProgress = func(step string, done bool, duration time.Duration) {
+				if done {
+					return
+				}
+				s.stepUpdater(step)
+			}
+		}
+
+		report, mp, _, cleanup, err := analyzer.Analyze(ctx, onProgress)
 		if cleanup != nil {
 			defer cleanup()
 		}
