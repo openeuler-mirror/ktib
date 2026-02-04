@@ -20,6 +20,7 @@ import (
 	"gitee.com/openeuler/ktib/pkg/fusion"
 	"gitee.com/openeuler/ktib/pkg/fusion/config"
 	"gitee.com/openeuler/ktib/pkg/fusion/solver"
+	"gitee.com/openeuler/ktib/pkg/types"
 	"gitee.com/openeuler/ktib/pkg/utils"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
@@ -40,6 +41,7 @@ func newCmdFusion() *cobra.Command {
 It uses advanced dependency solving and RPM DB reconstruction to create a minimal, valid rootfs.
 
 Example:
+  ktib fusion --dump-config fusion.yaml
   ktib fusion myimage:latest --config fusion.yaml --tag myimage:slim
 `,
 		Args: func(cmd *cobra.Command, args []string) error {
@@ -56,7 +58,7 @@ Example:
 		},
 		Run: func(cmd *cobra.Command, args []string) {
 			if cmd.Flags().Changed("dump-config") {
-				cfg := config.NewDefaultConfig()
+				cfg := config.NewExampleConfig()
 				data, err := yaml.Marshal(cfg)
 				utils.CheckErr(err)
 
@@ -151,13 +153,9 @@ func inferImageRefFromData(path string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to read analysis data %s: %w", path, err)
 	}
-	var payload struct {
-		ImageInfo struct {
-			Ref string `json:"ref"`
-		} `json:"image_info"`
-	}
-	if err := json.Unmarshal(data, &payload); err != nil {
+	var report types.AnalysisReport
+	if err := json.Unmarshal(data, &report); err != nil {
 		return "", fmt.Errorf("failed to parse analysis data %s: %w", path, err)
 	}
-	return payload.ImageInfo.Ref, nil
+	return report.ImageInfo.Ref, nil
 }

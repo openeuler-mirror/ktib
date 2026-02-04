@@ -149,6 +149,10 @@ func (s *DefaultSolver) Solve(imageRef string, cfg *config.FusionConfig) (*types
 	if mountPoint != "" {
 		keptFiles = s.collectFiles(allPackages, keptList)
 	}
+	// Append explicitly kept files from config
+	if len(cfg.Fusion.KeepFiles) > 0 {
+		keptFiles = append(keptFiles, cfg.Fusion.KeepFiles...)
+	}
 
 	return &types.FusionPlan{
 		KeptPackages: keptList,

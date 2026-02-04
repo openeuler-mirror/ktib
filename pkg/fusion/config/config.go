@@ -21,29 +21,68 @@ import (
 
 // FusionConfig defines the configuration for the image fusion process
 type FusionConfig struct {
+	// Fusion contains the policy rules for the fusion process
 	Fusion FusionPolicy `yaml:"fusion"`
 }
 
 // FusionPolicy holds the specific policy rules
 type FusionPolicy struct {
+	// KeepPackages is a list of package names that must be preserved in the final image.
+	// Dependencies of these packages will be automatically resolved and kept.
 	KeepPackages []string `yaml:"keep_packages"`
+	// KeepFiles is a list of specific file paths (absolute paths) to preserve,
+	// regardless of whether they belong to a kept package.
+	KeepFiles []string `yaml:"keep_files"`
+	// DropPackages is a list of package names that should be explicitly removed.
 	DropPackages []string `yaml:"drop_packages"`
-	Behavior     Behavior `yaml:"behavior"`
+	// Behavior defines specific behaviors/flags for the fusion process
+	Behavior Behavior `yaml:"behavior"`
 }
 
 // Behavior defines specific behaviors for the fusion process
 type Behavior struct {
-	RetainDocs     bool `yaml:"retain_docs"`
+	// RetainDocs determines whether to keep documentation files (man pages, etc.)
+	RetainDocs bool `yaml:"retain_docs"`
+	// RetainWeakDeps determines whether to keep weak dependencies (Recommends/Suggests)
 	RetainWeakDeps bool `yaml:"retain_weak_deps"`
-	AutoHealLibs   bool `yaml:"auto_heal_libs"`
+	// AutoHealLibs enables automatic library recovery if broken dependencies are detected
+	AutoHealLibs bool `yaml:"auto_heal_libs"`
 }
 
-// NewDefaultConfig returns a configuration with default values
+// NewDefaultConfig returns a configuration with default values (empty policies)
 func NewDefaultConfig() *FusionConfig {
 	return &FusionConfig{
 		Fusion: FusionPolicy{
 			KeepPackages: []string{},
+			KeepFiles:    []string{},
 			DropPackages: []string{},
+			Behavior: Behavior{
+				RetainDocs:     false,
+				RetainWeakDeps: false,
+				AutoHealLibs:   true,
+			},
+		},
+	}
+}
+
+// NewExampleConfig returns a configuration with example values for reference
+func NewExampleConfig() *FusionConfig {
+	return &FusionConfig{
+		Fusion: FusionPolicy{
+			// Providing some common examples to guide the user
+			KeepPackages: []string{
+				"bash",
+				"coreutils",
+				"systemd",
+			},
+			KeepFiles: []string{
+				"/etc/resolv.conf",
+				"/etc/hosts",
+			},
+			DropPackages: []string{
+				"vim-common",
+				"emacs-filesystem",
+			},
 			Behavior: Behavior{
 				RetainDocs:     false,
 				RetainWeakDeps: false,
@@ -98,6 +137,7 @@ func mergeConfigFile(base *FusionConfig, path string) error {
 
 	// Calculate Union of slices
 	mergedKeep := uniqueStrings(append(base.Fusion.KeepPackages, temp.Fusion.KeepPackages...))
+	mergedFiles := uniqueStrings(append(base.Fusion.KeepFiles, temp.Fusion.KeepFiles...))
 	mergedDrop := uniqueStrings(append(base.Fusion.DropPackages, temp.Fusion.DropPackages...))
 
 	// Apply scalar overrides (and potential slice overwrites)
@@ -107,6 +147,7 @@ func mergeConfigFile(base *FusionConfig, path string) error {
 
 	// Restore Union slices
 	base.Fusion.KeepPackages = mergedKeep
+	base.Fusion.KeepFiles = mergedFiles
 	base.Fusion.DropPackages = mergedDrop
 
 	return nil
