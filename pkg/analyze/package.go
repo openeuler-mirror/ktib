@@ -179,7 +179,18 @@ func parsePythonMetadata(rootfs, path string) types.Package {
 			pkg.Version = strings.TrimSpace(strings.TrimPrefix(line, "Version: "))
 		} else if strings.HasPrefix(line, "License: ") {
 			pkg.License = strings.TrimSpace(strings.TrimPrefix(line, "License: "))
+		} else if strings.HasPrefix(line, "Requires-Dist: ") {
+			req := strings.TrimPrefix(line, "Requires-Dist: ")
+			clean := cleanPythonRequirement(req)
+			if clean != "" {
+				pkg.Requires = append(pkg.Requires, clean)
+			}
 		}
+	}
+
+	// Add self to Provides
+	if pkg.Name != "" {
+		pkg.Provides = append(pkg.Provides, pkg.Name)
 	}
 
 	// Parse Files
@@ -374,4 +385,26 @@ func calculateFileHash(path string) (string, error) {
 		return "", err
 	}
 	return "sha256:" + hex.EncodeToString(h.Sum(nil)), nil
+}
+
+func cleanPythonRequirement(req string) string {
+	// 1. Remove environment markers
+	if idx := strings.Index(req, ";"); idx != -1 {
+		req = req[:idx]
+	}
+	// 2. Remove version constraints
+	if idx := strings.Index(req, "("); idx != -1 {
+		req = req[:idx]
+	}
+	// 3. Remove extras
+	if idx := strings.Index(req, "["); idx != -1 {
+		req = req[:idx]
+	}
+	// 4. Handle cases like "name>=1.0" where no parens used
+	for _, op := range []string{"<", ">", "=", "!", "~"} {
+		if idx := strings.Index(req, op); idx != -1 {
+			req = req[:idx]
+		}
+	}
+	return strings.TrimSpace(req)
 }
