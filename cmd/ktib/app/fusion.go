@@ -43,8 +43,9 @@ func newCmdFusion() *cobra.Command {
 It uses advanced dependency solving and RPM DB reconstruction to create a minimal, valid rootfs.
 
 Example:
-  ktib fusion --dump-config fusion.yaml
-  ktib fusion myimage:latest --config fusion.yaml --tag myimage:slim
+  ktib fusion --dump-config fusion.yaml --lang en
+  ktib fusion myimage:latest --config fusion.yaml --tag myimage:slim --lang zh
+  ktib fusion myimage:latest --config fusion.yaml --tag myimage:slim --from-data analysis.json --output-dir ./output --lang zh
 `,
 		Args: func(cmd *cobra.Command, args []string) error {
 			if cmd.Flags().Changed("dump-config") {

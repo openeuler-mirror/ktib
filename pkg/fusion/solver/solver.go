@@ -89,7 +89,7 @@ func (s *DefaultSolver) Solve(imageRef string, cfg *config.FusionConfig) (*types
 	} else {
 		// 1. Analyze Image to get package list
 		// Use fast mode (true) to skip heavy checksums as we only need RPM metadata
-		analyzer, err := analyze.NewAnalyzer(s.Store, imageRef, "", nil, true)
+		analyzer, err := analyze.NewAnalyzer(s.Store, imageRef, "", nil, true, "")
 		if err != nil {
 			return nil, fmt.Errorf("failed to create analyzer: %w", err)
 		}
@@ -281,16 +281,16 @@ func (s *DefaultSolver) resolveAppAnchors(cfg coretypes.ImageConfig, allPackages
 					// foo.bar -> foo/bar/__init__.py or foo/bar.py or foo/__init__.py (if bar is function)
 					// We just search for simple mapping first:
 					// foo -> foo/__init__.py or foo.py
-					
+
 					// Convert module to path segments
 					modPath := strings.ReplaceAll(moduleName, ".", "/")
-					
+
 					// Candidates to search in Files
 					candidates := []string{
 						modPath + ".py",
 						modPath + "/__init__.py",
 					}
-					
+
 					// Scan all packages
 					found := false
 					for _, p := range allPackages {
@@ -303,9 +303,13 @@ func (s *DefaultSolver) resolveAppAnchors(cfg coretypes.ImageConfig, allPackages
 									break
 								}
 							}
-							if found { break }
+							if found {
+								break
+							}
 						}
-						if found { break }
+						if found {
+							break
+						}
 					}
 				}
 				// python script.py
