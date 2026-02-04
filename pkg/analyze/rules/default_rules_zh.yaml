@@ -1,0 +1,82 @@
+version: "1.1"
+
+strategy:
+  enable_levels: ["SAFE", "STANDARD", "OPTIMIZED", "AGGRESSIVE", "EXPERIMENTAL"]
+
+whitelist:
+  - "/usr/lib/systemd/systemd"
+  - "/lib64/ld-linux-x86-64.so.2"
+
+rules:
+  # --- L1: Safe to Remove ---
+  - id: "RM_PKG_CACHE"
+    match:
+      paths: ["/var/cache/yum", "/var/cache/dnf", "/var/lib/rpm/__db.*", "/var/cache/apt/archives", "/var/lib/apt/lists", "/root/.cache/pip"]
+      type: "dir_tree"
+    level: "SAFE"
+    action: "运行 dnf clean all (或等效命令)"
+    description: "包管理器缓存"
+
+  - id: "RM_LOGS_TMP"
+    match:
+      paths: ["/tmp", "/var/tmp", "/var/log"]
+      type: "dir_tree"
+    level: "SAFE"
+    action: "运行 rm -rf /var/log/* /tmp/*"
+    description: "临时文件和日志"
+
+  # --- L2: Standard Slimming ---
+  - id: "RM_DOCS"
+    match:
+      paths: ["/usr/share/doc", "/usr/share/man", "/usr/share/info", "/usr/share/gtk-doc"]
+      type: "dir_tree"
+    level: "STANDARD"
+    action: "删除文档目录"
+    description: "文档和手册页"
+
+  - id: "RM_LOCALE"
+    match:
+      paths: ["/usr/lib/locale", "/usr/share/locale"]
+      type: "dir_tree"
+    level: "STANDARD"
+    action: "仅保留 en_US.utf8 和 zh_CN.utf8"
+    description: "未使用的语言包"
+
+  # --- L3: Aggressive Slimming ---
+  - id: "RM_DEV_HEADERS"
+    match:
+      extensions: [".h", ".hpp", ".pc", ".a"]
+      exclude_paths: ["/usr/include/python*"]
+    level: "AGGRESSIVE"
+    action: "删除开发头文件"
+    description: "C/C++ 开发头文件和静态库"
+
+  - id: "RM_DEV_TOOLS"
+    match:
+      pkg_names: ["gcc", "make", "cmake", "*-devel"]
+    level: "AGGRESSIVE"
+    action: "使用多阶段构建"
+    description: "生产镜像中的构建工具"
+
+  # --- L4: Language Specific ---
+  - id: "RM_PY_CACHE"
+    match:
+      path_globs: ["**/__pycache__", "**/*.pyc"]
+    level: "OPTIMIZED"
+    action: "删除字节码缓存"
+    description: "Python 字节码缓存 (Serverless 场景安全)"
+
+  - id: "RM_PY_TESTS"
+    match:
+      path_globs: ["**/site-packages/*/test", "**/site-packages/*/tests"]
+    level: "OPTIMIZED"
+    action: "删除测试目录"
+    description: "Python 包测试目录"
+
+  # --- L5: Dependency Analysis ---
+  - id: "RM_UNUSED_LIBS"
+    match:
+      dependency_check: true
+    level: "EXPERIMENTAL"
+    action: "考虑使用 Distroless 镜像或根据依赖分析手动删除未使用的库"
+    description: "裁剪入口程序未使用的共享库"

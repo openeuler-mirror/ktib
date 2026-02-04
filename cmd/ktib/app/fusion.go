@@ -20,6 +20,7 @@ import (
 	"gitee.com/openeuler/ktib/pkg/fusion"
 	"gitee.com/openeuler/ktib/pkg/fusion/config"
 	"gitee.com/openeuler/ktib/pkg/fusion/solver"
+	"gitee.com/openeuler/ktib/pkg/i18n"
 	"gitee.com/openeuler/ktib/pkg/types"
 	"gitee.com/openeuler/ktib/pkg/utils"
 	"github.com/spf13/cobra"
@@ -33,6 +34,7 @@ func newCmdFusion() *cobra.Command {
 	var dumpConfig string
 	var fromData string
 	var saveData string
+	var lang string
 
 	cmd := &cobra.Command{
 		Use:   "fusion <image>",
@@ -57,6 +59,9 @@ Example:
 			return cobra.ExactArgs(1)(cmd, args)
 		},
 		Run: func(cmd *cobra.Command, args []string) {
+			// Initialize i18n
+			i18n.SetLanguage(lang)
+
 			if cmd.Flags().Changed("dump-config") {
 				cfg := config.NewExampleConfig()
 				data, err := yaml.Marshal(cfg)
@@ -99,6 +104,7 @@ Example:
 
 			// 2. Initialize Manager
 			mgr := fusion.NewFusionManager(cfg, store)
+			mgr.Lang = lang
 			mgr.Solver = solver.NewDefaultSolverWithOptions(store, solver.Options{
 				FromData: fromData,
 				SaveData: saveData,
@@ -144,6 +150,7 @@ Example:
 	cmd.Flags().Lookup("dump-config").NoOptDefVal = "fusion.yaml"
 	cmd.Flags().StringVar(&saveData, "save-data", "", "Save analysis data to JSON file for reuse")
 	cmd.Flags().StringVar(&fromData, "from-data", "", "Load analysis data from JSON file to skip image scan")
+	cmd.Flags().StringVar(&lang, "lang", "en", "Output language (en|zh)")
 
 	return cmd
 }

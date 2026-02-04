@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"gitee.com/openeuler/ktib/pkg/analyze"
+	"gitee.com/openeuler/ktib/pkg/i18n"
 	"gitee.com/openeuler/ktib/pkg/types"
 	"gitee.com/openeuler/ktib/pkg/utils"
 	"github.com/spf13/cobra"
@@ -34,6 +35,7 @@ func newCmdAnalyze() *cobra.Command {
 	var defaultRules bool
 	var saveData string
 	var fromData string
+	var lang string
 
 	cmd := &cobra.Command{
 		Use:   "analyze <image>",
@@ -87,6 +89,9 @@ Key Features:
 			return nil
 		},
 		Run: func(cmd *cobra.Command, args []string) {
+			// Initialize i18n
+			i18n.SetLanguage(lang)
+
 			if defaultRules {
 				// Dump to default system path (e.g. /etc/ktib/default_rules.yaml)
 				// If rulesPath is provided, we could use it, but flag says dump default rules.
@@ -119,7 +124,7 @@ Key Features:
 				utils.CheckErr(err)
 
 				// Initialize Analyzer with nil store for offline mode
-				analyzer, err := analyze.NewAnalyzer(nil, "", rulesPath, levelList, fastMode)
+				analyzer, err := analyze.NewAnalyzer(nil, "", rulesPath, levelList, fastMode, lang)
 				utils.CheckErr(err)
 
 				// Run Advisor (Offline)
@@ -175,7 +180,7 @@ Key Features:
 			}
 			progressFunc, waitFunc := analyze.NewAnalysisProgressBar(totalSteps)
 
-			analyzer, err := analyze.NewAnalyzer(store, imageRef, rulesPath, levelList, fastMode)
+			analyzer, err := analyze.NewAnalyzer(store, imageRef, rulesPath, levelList, fastMode, lang)
 			utils.CheckErr(err)
 
 			report, mountPoint, entrypoints, cleanup, err := analyzer.Analyze(cmd.Context(), func(step string, done bool, duration time.Duration) {
@@ -271,6 +276,7 @@ Key Features:
 	cmd.Flags().BoolVar(&defaultRules, "default-rules", false, "Dump default rules to default_rules.yaml")
 	cmd.Flags().StringVar(&saveData, "save-data", "", "Save analysis data to JSON file (skips advisor)")
 	cmd.Flags().StringVar(&fromData, "from-data", "", "Load analysis data from JSON file to generate recommendations (skips image scan)")
+	cmd.Flags().StringVar(&lang, "lang", "en", "Output language (en|zh)")
 
 	return cmd
 }

@@ -32,8 +32,8 @@ type Analyzer struct {
 	Fast     bool
 }
 
-func NewAnalyzer(store storage.Store, imageRef string, rulesPath string, levels []string, fast bool) (*Analyzer, error) {
-	rules, err := LoadRules(rulesPath)
+func NewAnalyzer(store storage.Store, imageRef string, rulesPath string, levels []string, fast bool, lang string) (*Analyzer, error) {
+	rules, err := LoadRules(rulesPath, lang)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load rules: %w", err)
 	}

@@ -17,6 +17,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
+	"gitee.com/openeuler/ktib/pkg/i18n"
 	"gitee.com/openeuler/ktib/pkg/types"
 	"gitee.com/openeuler/ktib/pkg/utils"
 )
@@ -25,25 +26,25 @@ import (
 func PrintSummary(report *types.AnalysisReport) {
 	PrintAnalysisStats(report)
 	PrintRecommendations(report.Recommendations)
-	fmt.Println("\nTip: Use '-o json' or '-f <file>' for detailed report.")
+	fmt.Println("\n" + i18n.T("Tip: Use '-o json' or '-f <file>' for detailed report."))
 }
 
 // PrintAnalysisStats prints the statistical part of the analysis report
 func PrintAnalysisStats(report *types.AnalysisReport) {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-	fmt.Fprintln(w, "IMAGE ANALYSIS SUMMARY")
+	fmt.Fprintln(w, i18n.T("IMAGE ANALYSIS SUMMARY"))
 	fmt.Fprintln(w, "======================")
-	fmt.Fprintf(w, "Image Ref:\t%s\n", report.ImageInfo.Ref)
-	fmt.Fprintf(w, "Architecture:\t%s\n", report.ImageInfo.Architecture)
-	fmt.Fprintf(w, "OS:\t%s\n", report.ImageInfo.OS)
-	fmt.Fprintf(w, "Total Size:\t%s\n", utils.FormatBytes(report.ImageInfo.Size))
+	fmt.Fprintf(w, "%s\t%s\n", i18n.T("Image Ref:"), report.ImageInfo.Ref)
+	fmt.Fprintf(w, "%s\t%s\n", i18n.T("Architecture:"), report.ImageInfo.Architecture)
+	fmt.Fprintf(w, "%s\t%s\n", i18n.T("OS:"), report.ImageInfo.OS)
+	fmt.Fprintf(w, "%s\t%s\n", i18n.T("Total Size:"), utils.FormatBytes(report.ImageInfo.Size))
 	fmt.Fprintln(w, "\t")
 
-	fmt.Fprintln(w, "CONTENT STATS")
+	fmt.Fprintln(w, i18n.T("CONTENT STATS"))
 	fmt.Fprintln(w, "-------------")
-	fmt.Fprintf(w, "Layers:\t%d\n", len(report.Analysis.Layers))
-	fmt.Fprintf(w, "RPM Packages:\t%d\n", len(report.Analysis.Packages.RPM))
-	fmt.Fprintf(w, "Python Packages:\t%d\n", len(report.Analysis.Packages.Python))
+	fmt.Fprintf(w, "%s\t%d\n", i18n.T("Layers:"), len(report.Analysis.Layers))
+	fmt.Fprintf(w, "%s\t%d\n", i18n.T("RPM Packages:"), len(report.Analysis.Packages.RPM))
+	fmt.Fprintf(w, "%s\t%d\n", i18n.T("Python Packages:"), len(report.Analysis.Packages.Python))
 
 	// Calculate waste
 	var wastedBytes int64
@@ -60,12 +61,12 @@ func PrintAnalysisStats(report *types.AnalysisReport) {
 		wastedBytes += c.Size
 	}
 
-	fmt.Fprintf(w, "Potential Waste:\t%s\n", utils.FormatBytes(wastedBytes))
+	fmt.Fprintf(w, "%s\t%s\n", i18n.T("Potential Waste:"), utils.FormatBytes(wastedBytes))
 	efficiency := 100.0
 	if report.ImageInfo.Size > 0 {
 		efficiency = 100.0 * float64(report.ImageInfo.Size-wastedBytes) / float64(report.ImageInfo.Size)
 	}
-	fmt.Fprintf(w, "Image Efficiency:\t%.2f%%\n", efficiency)
+	fmt.Fprintf(w, "%s\t%.2f%%\n", i18n.T("Image Efficiency:"), efficiency)
 	fmt.Fprintln(w, "\t")
 	w.Flush()
 }
@@ -74,9 +75,9 @@ func PrintAnalysisStats(report *types.AnalysisReport) {
 func PrintRecommendations(recs []types.Recommendation) {
 	if len(recs) > 0 {
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-		fmt.Fprintln(w, "RECOMMENDATIONS")
+		fmt.Fprintln(w, i18n.T("RECOMMENDATIONS"))
 		fmt.Fprintln(w, "---------------")
-		fmt.Fprintln(w, "LEVEL\tID\tSAVINGS\tDESCRIPTION\tCOMMAND")
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", i18n.T("LEVEL"), i18n.T("ID"), i18n.T("SAVINGS"), i18n.T("DESCRIPTION"), i18n.T("COMMAND"))
 		for _, r := range recs {
 			msg := r.Message
 			if len(r.MatchedItems) > 0 {

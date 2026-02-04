@@ -15,3 +15,7 @@ import _ "embed"
 
 //go:embed default_rules.yaml
 var DefaultRules []byte
+
+//go:embed default_rules_zh.yaml
+var DefaultRulesZH []byte
+

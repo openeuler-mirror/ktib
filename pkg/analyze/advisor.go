@@ -26,10 +26,15 @@ import (
 var DefaultRulesPath = "/etc/ktib/default_rules.yaml"
 
 // LoadRules loads default rules and optionally merges user provided rules
-func LoadRules(path string) (*types.Config, error) {
+func LoadRules(path string, lang string) (*types.Config, error) {
 	// 1. Load defaults
 	var cfg types.Config
-	if err := yaml.Unmarshal(rules.DefaultRules, &cfg); err != nil {
+	defaultData := rules.DefaultRules
+	if lang == "zh" || lang == "zh_cn" || lang == "zh_CN" {
+		defaultData = rules.DefaultRulesZH
+	}
+
+	if err := yaml.Unmarshal(defaultData, &cfg); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal default rules: %w", err)
 	}
 
