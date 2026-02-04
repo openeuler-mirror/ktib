@@ -92,3 +92,26 @@ func TestDecompressStream_InvalidInput(t *testing.T) {
 		t.Fatalf("expected decompression read error")
 	}
 }
+
+func TestEnsureCompatShellLinks(t *testing.T) {
+	t.Parallel()
+
+	rootfs := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(rootfs, "usr", "bin"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(rootfs, "usr", "bin", "bash"), []byte("x"), 0o755); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	ensureCompatShellLinks(rootfs)
+
+	linkPath := filepath.Join(rootfs, "bin", "bash")
+	target, err := os.Readlink(linkPath)
+	if err != nil {
+		t.Fatalf("readlink: %v", err)
+	}
+	if target != "/usr/bin/bash" {
+		t.Fatalf("unexpected symlink target: %q", target)
+	}
+}

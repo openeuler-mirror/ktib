@@ -10,9 +10,16 @@
 */
 package project
 
-import "testing"
+import (
+	"os"
+	"testing"
+)
 
 func TestInstallPackages(t *testing.T) {
+	if os.Getenv("KTIB_RUN_INTEGRATION_TESTS") != "1" {
+		t.Skip("set KTIB_RUN_INTEGRATION_TESTS=1 to enable this test")
+	}
+
 	type args struct {
 		yumConfig string
 		target    string
