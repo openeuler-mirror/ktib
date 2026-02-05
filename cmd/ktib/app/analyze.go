@@ -138,6 +138,9 @@ Key Features:
 				)
 				report.Recommendations = recs
 
+				// Prune report for cleaner output
+				pruneReport(&report)
+
 				// Output
 				if outputFile != "" {
 					file, err := os.Create(outputFile)
@@ -239,6 +242,9 @@ Key Features:
 				waitFunc()
 			}
 
+			// Prune report for cleaner output
+			pruneReport(report)
+
 			// 1. Handle File Output
 			if outputFile != "" {
 				file, err := os.Create(outputFile)
@@ -268,7 +274,7 @@ Key Features:
 		},
 	}
 	cmd.Flags().StringVarP(&outputFormat, "output", "o", "summary", "Output format (summary|json)")
-	cmd.Flags().StringVarP(&outputFile, "file", "f", "", "Output report to file")
+	cmd.Flags().StringVarP(&outputFile, "file", "f", "", "Save report to file (e.g. report.json)")
 	cmd.Flags().BoolVar(&fastMode, "fast", false, "Enable fast mode (skip checksums and deep inspection)")
 	cmd.Flags().StringVar(&rulesPath, "rules", "", "Path to custom rules file")
 	cmd.Flags().Lookup("rules").NoOptDefVal = "/etc/ktib/default_rules.yaml"
@@ -279,4 +285,17 @@ Key Features:
 	cmd.Flags().StringVar(&lang, "lang", "en", "Output language (en|zh)")
 
 	return cmd
+}
+
+func pruneReport(report *types.AnalysisReport) {
+	for i := range report.Analysis.Packages.RPM {
+		report.Analysis.Packages.RPM[i].Requires = nil
+		report.Analysis.Packages.RPM[i].Provides = nil
+		report.Analysis.Packages.RPM[i].Files = nil
+	}
+	for i := range report.Analysis.Packages.Python {
+		report.Analysis.Packages.Python[i].Requires = nil
+		report.Analysis.Packages.Python[i].Provides = nil
+		report.Analysis.Packages.Python[i].Files = nil
+	}
 }

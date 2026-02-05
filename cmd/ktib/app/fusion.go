@@ -24,7 +24,6 @@ import (
 	"gitee.com/openeuler/ktib/pkg/types"
 	"gitee.com/openeuler/ktib/pkg/utils"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 )
 
 func newCmdFusion() *cobra.Command {
@@ -42,10 +41,18 @@ func newCmdFusion() *cobra.Command {
 		Long: `Fusion is a powerful tool to slim down container images by keeping only necessary dependencies.
 It uses advanced dependency solving and RPM DB reconstruction to create a minimal, valid rootfs.
 
-Example:
-  ktib fusion --dump-config fusion.yaml --lang en
-  ktib fusion myimage:latest --config fusion.yaml --tag myimage:slim --lang zh
-  ktib fusion myimage:latest --config fusion.yaml --tag myimage:slim --from-data analysis.json --output-dir ./output --lang zh
+Workflow:
+  1. Generate a default configuration file:
+     ktib fusion --dump-config fusion.yaml
+
+  2. Edit fusion.yaml to specify which packages/files to keep.
+
+  3. Run fusion to generate a new slim image:
+     ktib fusion myimage:latest --config fusion.yaml --tag myimage:slim
+
+  4. (Optional) Use analysis data to speed up repeated runs:
+     ktib analyze myimage:latest --save-data data.json
+     ktib fusion --from-data data.json --config fusion.yaml --tag myimage:slim
 `,
 		Args: func(cmd *cobra.Command, args []string) error {
 			if cmd.Flags().Changed("dump-config") {
@@ -64,9 +71,7 @@ Example:
 			i18n.SetLanguage(lang)
 
 			if cmd.Flags().Changed("dump-config") {
-				cfg := config.NewExampleConfig()
-				data, err := yaml.Marshal(cfg)
-				utils.CheckErr(err)
+				data := []byte(fusionConfigTemplate)
 
 				if dumpConfig == "-" {
 					fmt.Print(string(data))
@@ -167,3 +172,42 @@ func inferImageRefFromData(path string) (string, error) {
 	}
 	return report.ImageInfo.Ref, nil
 }
+
+const fusionConfigTemplate = `# Fusion Configuration File
+# This file controls how ktib fusion optimizes the image.
+
+fusion:
+  # Packages to explicitly keep in the final image.
+  # Dependencies of these packages will be automatically resolved and kept.
+  keep_packages:
+    - bash
+    - coreutils
+    - systemd
+    # - nginx
+    # - openssl
+
+  # Files to explicitly keep (absolute paths).
+  # Use this for files not owned by any RPM package (e.g. app binaries, config files).
+  keep_files:
+    # - /app/my-app
+    # - /etc/my-app/config.json
+
+  # Packages to explicitly remove.
+  drop_packages:
+    # - vim
+    # - curl
+
+  behavior:
+    # Whether to retain documentation files (man pages, /usr/share/doc, etc.)
+    retain_docs: false
+
+    # Whether to retain weak dependencies (Recommends/Suggests)
+    retain_weak_deps: false
+
+    # Whether to attempt automatic recovery if broken shared libraries are detected
+    auto_heal_libs: true
+
+    # Whether to keep files not owned by any RPM package (default: true)
+    # Set to false to remove all unowned files unless specified in keep_files
+    retain_unowned: true
+`

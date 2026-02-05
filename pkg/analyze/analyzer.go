@@ -15,6 +15,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"strings"
 	"time"
 
 	"gitee.com/openeuler/ktib/pkg/builder"
@@ -177,7 +178,7 @@ func (a *Analyzer) Analyze(ctx context.Context, onProgress func(step string, don
 			Size:         totalSize,
 			Created:      time.Now(), // TODO: Get from image metadata
 			OS:           "linux",    // TODO: Get from image metadata
-			Architecture: arch,
+			Architecture: sanitizeArch(arch),
 			Config:       imgConfig,
 		},
 		Analysis: types.AnalysisData{
@@ -189,6 +190,16 @@ func (a *Analyzer) Analyze(ctx context.Context, onProgress func(step string, don
 	}
 
 	return report, mountPoint, entrypoints, cleanup, nil
+}
+
+func sanitizeArch(arch string) string {
+	switch strings.ToUpper(arch) {
+	case "EM_X86_64":
+		return "x86_64"
+	case "EM_AARCH64":
+		return "aarch64"
+	}
+	return arch
 }
 
 func (a *Analyzer) mount() (*builder.Builder, string, error) {

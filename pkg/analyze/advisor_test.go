@@ -11,7 +11,7 @@ import (
 
 func TestLoadRules(t *testing.T) {
 	// Test Default Rules Loading
-	cfg, err := LoadRules("")
+	cfg, err := LoadRules("", "en")
 	assert.NoError(t, err)
 	assert.NotEmpty(t, cfg.Rules)
 	assert.Contains(t, cfg.Strategy.EnableLevels, "SAFE")
@@ -32,7 +32,7 @@ rules:
 	err = os.WriteFile(tmpFile, []byte(userYaml), 0644)
 	assert.NoError(t, err)
 
-	cfg, err = LoadRules(tmpFile)
+	cfg, err = LoadRules(tmpFile, "en")
 	assert.NoError(t, err)
 	assert.Contains(t, cfg.Strategy.EnableLevels, "EXPERIMENTAL")
 
@@ -196,7 +196,7 @@ rules: []
 	assert.NoError(t, err)
 
 	// Test loading with empty path (should pick up system default)
-	cfg, err := LoadRules("")
+	cfg, err := LoadRules("", "en")
 	assert.NoError(t, err)
 	assert.Contains(t, cfg.Strategy.EnableLevels, "SYSTEM_DEFAULT")
 }

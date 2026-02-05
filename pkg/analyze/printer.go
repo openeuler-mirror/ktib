@@ -73,10 +73,13 @@ func PrintAnalysisStats(report *types.AnalysisReport) {
 
 // PrintRecommendations prints the recommendations part of the analysis report
 func PrintRecommendations(recs []types.Recommendation) {
-	if len(recs) > 0 {
-		w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-		fmt.Fprintln(w, i18n.T("RECOMMENDATIONS"))
-		fmt.Fprintln(w, "---------------")
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
+	fmt.Fprintln(w, i18n.T("RECOMMENDATIONS"))
+	fmt.Fprintln(w, "---------------")
+
+	if len(recs) == 0 {
+		fmt.Fprintln(w, i18n.T("No recommendations found for current level. Use '--level ALL' to see more potential optimizations."))
+	} else {
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", i18n.T("LEVEL"), i18n.T("ID"), i18n.T("SAVINGS"), i18n.T("DESCRIPTION"), i18n.T("COMMAND"))
 		for _, r := range recs {
 			msg := r.Message
@@ -93,6 +96,6 @@ func PrintRecommendations(recs []types.Recommendation) {
 			}
 			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", r.Level, r.Code, r.Saving, msg, r.Command)
 		}
-		w.Flush()
 	}
+	w.Flush()
 }
