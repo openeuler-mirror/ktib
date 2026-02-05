@@ -6,6 +6,7 @@ KTIB 文档目录
 
 命令模块
 - `project` 项目管理 → `commands/project.md`
+- `analyze` 镜像分析 → `commands/analyze.md`
 - `scan` 扫描审计 → `commands/scan.md`
 - `builders` 构建器操作 → `commands/builders.md`
 - `images` 镜像管理 → `commands/images.md`

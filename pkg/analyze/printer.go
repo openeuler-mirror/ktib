@@ -14,6 +14,7 @@ package analyze
 import (
 	"fmt"
 	"os"
+	"strings"
 	"text/tabwriter"
 
 	"gitee.com/openeuler/ktib/pkg/types"
@@ -22,6 +23,13 @@ import (
 
 // PrintSummary prints the analysis report summary to stdout
 func PrintSummary(report *types.AnalysisReport) {
+	PrintAnalysisStats(report)
+	PrintRecommendations(report.Recommendations)
+	fmt.Println("\nTip: Use '-o json' or '-f <file>' for detailed report.")
+}
+
+// PrintAnalysisStats prints the statistical part of the analysis report
+func PrintAnalysisStats(report *types.AnalysisReport) {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
 	fmt.Fprintln(w, "IMAGE ANALYSIS SUMMARY")
 	fmt.Fprintln(w, "======================")
@@ -59,14 +67,31 @@ func PrintSummary(report *types.AnalysisReport) {
 	}
 	fmt.Fprintf(w, "Image Efficiency:\t%.2f%%\n", efficiency)
 	fmt.Fprintln(w, "\t")
+	w.Flush()
+}
 
-	if len(report.Recommendations) > 0 {
+// PrintRecommendations prints the recommendations part of the analysis report
+func PrintRecommendations(recs []types.Recommendation) {
+	if len(recs) > 0 {
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
 		fmt.Fprintln(w, "RECOMMENDATIONS")
 		fmt.Fprintln(w, "---------------")
-		for _, r := range report.Recommendations {
-			fmt.Fprintf(w, "[%s] %s: %s (Save: %s)\n", r.Level, r.Code, r.Message, r.Saving)
+		fmt.Fprintln(w, "LEVEL\tID\tSAVINGS\tDESCRIPTION\tCOMMAND")
+		for _, r := range recs {
+			msg := r.Message
+			if len(r.MatchedItems) > 0 {
+				limit := 3
+				var displayItems []string
+				if len(r.MatchedItems) > limit {
+					displayItems = r.MatchedItems[:limit]
+					displayItems = append(displayItems, fmt.Sprintf("... +%d more", len(r.MatchedItems)-limit))
+				} else {
+					displayItems = r.MatchedItems
+				}
+				msg = fmt.Sprintf("%s (%s)", msg, strings.Join(displayItems, ", "))
+			}
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", r.Level, r.Code, r.Saving, msg, r.Command)
 		}
+		w.Flush()
 	}
-
-	w.Flush()
 }
