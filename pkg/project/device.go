@@ -15,7 +15,6 @@ package project
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"syscall"
 )
@@ -75,7 +74,7 @@ func mknod(path, nodeType string, major, minor uint32) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err
 	}
-	cmd := exec.Command("/usr/bin/mknod", "-m", "666", path, nodeType, fmt.Sprint(major), fmt.Sprint(minor))
+	cmd := execCommand("/usr/bin/mknod", "-m", "666", path, nodeType, fmt.Sprint(major), fmt.Sprint(minor))
 	cmd.Stdout = nil
 	cmd.Stderr = nil
 	return cmd.Run()

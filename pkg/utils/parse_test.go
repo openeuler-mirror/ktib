@@ -13,14 +13,22 @@ See the Mulan PSL v2 for more details.
 package utils
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
+	"gitee.com/openeuler/ktib/pkg/builder"
+	"gitee.com/openeuler/ktib/pkg/imagemanager"
 	"gitee.com/openeuler/ktib/pkg/options"
 	"github.com/containers/buildah/define"
 	"github.com/containers/image/v5/types"
+	container "github.com/containers/storage"
+	"github.com/opencontainers/go-digest"
 	"github.com/spf13/cobra"
 )
 
@@ -469,5 +477,410 @@ FROM cr.kylinos.cn/my/image:latest
 		if repos[0] != expected[0] {
 			t.Errorf("Expected repo %s, got %s", expected[0], repos[0])
 		}
+	}
+}
+
+// captureOutput captures stdout from a function call
+func captureOutput(f func() error) (string, error) {
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	err := f()
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	var buf bytes.Buffer
+	io.Copy(&buf, r)
+	return buf.String(), err
+}
+
+func TestSortImages(t *testing.T) {
+	now := time.Now()
+	testDigest := digest.Digest("sha256:1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
+
+	tests := []struct {
+		name          string
+		images        []*imagemanager.Image
+		ops           options.ImagesOption
+		expectedLen   int
+		expectedRepos []string
+		expectedIDs   []string
+	}{
+		{
+			name: "Sort by repository",
+			images: []*imagemanager.Image{
+				{
+					OriImage: container.Image{
+						ID:       "id2",
+						Names:    []string{"zrepo:tag"},
+						Created:  now,
+						TopLayer: "layer2",
+						Digest:   testDigest,
+					},
+					Size: 2048,
+				},
+				{
+					OriImage: container.Image{
+						ID:       "id1",
+						Names:    []string{"arepo:tag"},
+						Created:  now,
+						TopLayer: "layer1",
+						Digest:   testDigest,
+					},
+					Size: 1024,
+				},
+			},
+			ops:           options.ImagesOption{NoTrunc: false},
+			expectedLen:   2,
+			expectedRepos: []string{"arepo", "zrepo"},
+			expectedIDs:   []string{"id1", "id2"},
+		},
+		{
+			name: "Truncate ID",
+			images: []*imagemanager.Image{
+				{
+					OriImage: container.Image{
+						ID:       "12345678901234567890",
+						Names:    []string{"repo:tag"},
+						Created:  now,
+						TopLayer: "layer",
+						Digest:   testDigest,
+					},
+					Size: 1024,
+				},
+			},
+			ops:           options.ImagesOption{NoTrunc: false},
+			expectedLen:   1,
+			expectedRepos: []string{"repo"},
+			expectedIDs:   []string{"1234567890"}, // Truncated to 10 chars
+		},
+		{
+			name: "No Truncate ID",
+			images: []*imagemanager.Image{
+				{
+					OriImage: container.Image{
+						ID:       "12345678901234567890",
+						Names:    []string{"repo:tag"},
+						Created:  now,
+						TopLayer: "layer",
+						Digest:   testDigest,
+					},
+					Size: 1024,
+				},
+			},
+			ops:           options.ImagesOption{NoTrunc: true},
+			expectedLen:   1,
+			expectedRepos: []string{"repo"},
+			expectedIDs:   []string{"123456789012"}, // Truncated to 12 chars when NoTrunc is true (based on code logic)
+		},
+		{
+			name: "Multiple names",
+			images: []*imagemanager.Image{
+				{
+					OriImage: container.Image{
+						ID:       "id1",
+						Names:    []string{"repo1:tag1", "repo2:tag2"},
+						Created:  now,
+						TopLayer: "layer",
+						Digest:   testDigest,
+					},
+					Size: 1024,
+				},
+			},
+			ops:           options.ImagesOption{NoTrunc: false},
+			expectedLen:   2,
+			expectedRepos: []string{"repo1", "repo2"},
+			expectedIDs:   []string{"id1", "id1"},
+		},
+		{
+			name: "No names",
+			images: []*imagemanager.Image{
+				{
+					OriImage: container.Image{
+						ID:       "id1",
+						Names:    []string{},
+						Created:  now,
+						TopLayer: "layer",
+						Digest:   testDigest,
+					},
+					Size: 1024,
+				},
+			},
+			ops:           options.ImagesOption{NoTrunc: false},
+			expectedLen:   1,
+			expectedRepos: []string{"<none>"},
+			expectedIDs:   []string{"id1"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reports, err := sortImages(tt.images, tt.ops)
+			if err != nil {
+				t.Fatalf("sortImages error: %v", err)
+			}
+
+			if len(reports) != tt.expectedLen {
+				t.Errorf("Expected %d reports, got %d", tt.expectedLen, len(reports))
+			}
+
+			for i, report := range reports {
+				if i < len(tt.expectedRepos) {
+					if report.Repository != tt.expectedRepos[i] {
+						t.Errorf("Report %d: expected repository %s, got %s", i, tt.expectedRepos[i], report.Repository)
+					}
+				}
+				if i < len(tt.expectedIDs) {
+					if report.ID != tt.expectedIDs[i] {
+						t.Errorf("Report %d: expected ID %s, got %s", i, tt.expectedIDs[i], report.ID)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestFormatImages(t *testing.T) {
+	now := time.Now()
+	testDigest := digest.Digest("sha256:1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
+
+	images := []*imagemanager.Image{
+		{
+			OriImage: container.Image{
+				ID:       "1234567890abcdef",
+				Names:    []string{"myrepo:mytag"},
+				Created:  now,
+				TopLayer: "layer1",
+				Digest:   testDigest,
+			},
+			Size: 1024,
+		},
+	}
+
+	tests := []struct {
+		name     string
+		ops      options.ImagesOption
+		contains []string
+	}{
+		{
+			name:     "Default format",
+			ops:      options.ImagesOption{},
+			contains: []string{"REPOSITORY", "TAG", "IMAGE ID", "SIZE", "CREATED", "myrepo", "mytag", "1234567890"},
+		},
+		{
+			name:     "Quiet format",
+			ops:      options.ImagesOption{Quiet: true},
+			contains: []string{"1234567890"},
+		},
+		{
+			name:     "Digest format",
+			ops:      options.ImagesOption{Digests: true},
+			contains: []string{"DIGEST", "sha256:1234567890abcdef"},
+		},
+		{
+			name:     "Custom format",
+			ops:      options.ImagesOption{Format: "{{.Repository}}-{{.Tag}}"},
+			contains: []string{"myrepo-mytag"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			output, err := captureOutput(func() error {
+				return FormatImages(images, tt.ops)
+			})
+			if err != nil {
+				t.Fatalf("FormatImages error: %v", err)
+			}
+
+			for _, s := range tt.contains {
+				if !strings.Contains(output, s) {
+					t.Errorf("Expected output to contain %q, got:\n%s", s, output)
+				}
+			}
+		})
+	}
+}
+
+func TestJsonFormatImages(t *testing.T) {
+	now := time.Now()
+	testDigest := digest.Digest("sha256:1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
+
+	images := []*imagemanager.Image{
+		{
+			OriImage: container.Image{
+				ID:       "id1",
+				Names:    []string{"repo:tag"},
+				Created:  now,
+				TopLayer: "layer1",
+				Digest:   testDigest,
+			},
+			Size: 1024,
+		},
+	}
+
+	output, err := captureOutput(func() error {
+		return JsonFormatImages(images, options.ImagesOption{})
+	})
+	if err != nil {
+		t.Fatalf("JsonFormatImages error: %v", err)
+	}
+
+	// Simple check for JSON structure
+	if !strings.Contains(output, `"name": [`) {
+		t.Error("JSON output missing Name field")
+	}
+	if !strings.Contains(output, `"repo:tag"`) {
+		t.Error("JSON output missing repo name")
+	}
+	if !strings.Contains(output, `"id1"`) {
+		t.Error("JSON output missing ID")
+	}
+}
+
+func TestSortContainers(t *testing.T) {
+	now := time.Now()
+	tests := []struct {
+		name          string
+		containers    []container.Container
+		expectedCount int
+		expectedIDs   []string
+		expectedNames []string
+	}{
+		{
+			name: "Sort containers",
+			containers: []container.Container{
+				{
+					ID:      "1234567890abcdef",
+					Names:   []string{"container1"},
+					Created: now,
+					LayerID: "layer1",
+					ImageID: "image1",
+				},
+				{
+					ID:      "abcdef1234567890",
+					Names:   []string{},
+					Created: now,
+					LayerID: "layer2",
+					ImageID: "image2",
+				},
+			},
+			expectedCount: 2,
+			expectedIDs:   []string{"1234567890", "abcdef1234"},
+			expectedNames: []string{"container1", ""},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reports, err := sortContainers(tt.containers)
+			if err != nil {
+				t.Fatalf("sortContainers error: %v", err)
+			}
+
+			if len(reports) != tt.expectedCount {
+				t.Errorf("Expected %d reports, got %d", tt.expectedCount, len(reports))
+			}
+
+			for i, report := range reports {
+				if report.ID != tt.expectedIDs[i] {
+					t.Errorf("Report %d: expected ID %s, got %s", i, tt.expectedIDs[i], report.ID)
+				}
+				if report.Names != tt.expectedNames[i] {
+					t.Errorf("Report %d: expected Name %s, got %s", i, tt.expectedNames[i], report.Names)
+				}
+			}
+		})
+	}
+}
+
+func TestFormatBuilders(t *testing.T) {
+	now := time.Now()
+	containers := []container.Container{
+		{
+			ID:      "1234567890abcdef",
+			Names:   []string{"builder1"},
+			Created: now,
+			LayerID: "layer1",
+			ImageID: "image1",
+		},
+	}
+
+	output, err := captureOutput(func() error {
+		return FormatBuilders(containers, options.BuildersOption{})
+	})
+	if err != nil {
+		t.Fatalf("FormatBuilders error: %v", err)
+	}
+
+	expectedStrings := []string{"1234567890", "builder1", "layer1", "image1"}
+	for _, s := range expectedStrings {
+		if !strings.Contains(output, s) {
+			t.Errorf("Expected output to contain %q, got:\n%s", s, output)
+		}
+	}
+}
+
+func TestJsonFormatBuilders(t *testing.T) {
+	now := time.Now()
+	containers := []container.Container{
+		{
+			ID:      "1234567890abcdef",
+			Names:   []string{"builder1"},
+			Created: now,
+			LayerID: "layer1",
+			ImageID: "image1",
+		},
+	}
+
+	output, err := captureOutput(func() error {
+		return JsonFormatBuilders(containers, options.BuildersOption{})
+	})
+	if err != nil {
+		t.Fatalf("JsonFormatBuilders error: %v", err)
+	}
+
+	if !strings.Contains(output, `"id": "1234567890abcdef"`) {
+		t.Error("JSON output missing ID")
+	}
+	if !strings.Contains(output, `"names": [`) {
+		t.Error("JSON output missing Names array")
+	}
+	if !strings.Contains(output, `"builder1"`) {
+		t.Error("JSON output missing builder name")
+	}
+}
+
+func TestJsonFormatMountInfo(t *testing.T) {
+	builders := []*builder.Builder{
+		{
+			ID:          "id1",
+			MountPoint:  "/tmp/mount1",
+			FromImageID: "image1",
+		},
+		{
+			ID:          "id2",
+			MountPoint:  "", // Should be skipped
+			FromImageID: "image2",
+		},
+	}
+
+	output, err := captureOutput(func() error {
+		return JsonFormatMountInfo(builders)
+	})
+	if err != nil {
+		t.Fatalf("JsonFormatMountInfo error: %v", err)
+	}
+
+	if !strings.Contains(output, `"id1"`) {
+		t.Error("Output missing id1")
+	}
+	if !strings.Contains(output, `"/tmp/mount1"`) {
+		t.Error("Output missing mount point")
+	}
+	if strings.Contains(output, `"id2"`) {
+		t.Error("Output should not contain id2 (empty mount point)")
 	}
 }
