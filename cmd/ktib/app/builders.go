@@ -21,7 +21,6 @@ func newCmdBuilder() *cobra.Command {
 		Use:     "builders",
 		Aliases: []string{"b", "containers"},
 		Short:   "Run this command in order to operate images at local or remote",
-		// TODO Check container dependency files, and whether software packages are installed
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			return nil
 		},
