@@ -12,10 +12,15 @@
 package solver
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 
+	"gitee.com/openeuler/ktib/pkg/fusion/config"
 	coretypes "gitee.com/openeuler/ktib/pkg/types"
 )
 
@@ -164,4 +169,64 @@ func TestResolveAppAnchors(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSolve_DataIntegrity(t *testing.T) {
+	// Create a temporary pruned report
+	report := coretypes.AnalysisReport{
+		ImageInfo: coretypes.ImageInfo{Ref: "test:latest"},
+		Analysis: coretypes.AnalysisData{
+			Packages: coretypes.PackageInfo{
+				RPM: []coretypes.Package{
+					{Name: "pkgA", Version: "1.0", Files: nil, Requires: nil}, // Missing metadata
+					{Name: "pkgB", Version: "1.0", Files: nil, Requires: nil},
+				},
+			},
+		},
+	}
+
+	tmpDir := t.TempDir()
+	prunedFile := filepath.Join(tmpDir, "pruned.json")
+	err := saveTestAnalysisReport(prunedFile, &report)
+	if err != nil {
+		t.Fatalf("failed to save pruned report: %v", err)
+	}
+
+	// Create a temporary valid report
+	validReport := report
+	validReport.Analysis.Packages.RPM[0].Files = []string{"/bin/a"}
+	validReport.Analysis.Packages.RPM[0].Requires = []string{"pkgB"}
+	validFile := filepath.Join(tmpDir, "valid.json")
+	err = saveTestAnalysisReport(validFile, &validReport)
+	if err != nil {
+		t.Fatalf("failed to save valid report: %v", err)
+	}
+
+	solver := &DefaultSolver{}
+
+	// Test 1: Pruned report should fail
+	solver.FromData = prunedFile
+	_, err = solver.Solve("test:latest", &config.FusionConfig{})
+	if err == nil {
+		t.Error("expected error for pruned report, got nil")
+	} else if !strings.Contains(err.Error(), "pruned report") {
+		t.Errorf("expected pruned report error, got: %v", err)
+	}
+
+	// Test 2: Valid report should pass (or fail later at graph step, but not integrity check)
+	solver.FromData = validFile
+	_, err = solver.Solve("test:latest", &config.FusionConfig{})
+	// It might fail because packages don't exist in graph etc, but error should NOT be integrity error
+	if err != nil && strings.Contains(err.Error(), "pruned report") {
+		t.Errorf("got integrity error for valid report: %v", err)
+	}
+}
+
+func saveTestAnalysisReport(path string, report *coretypes.AnalysisReport) error {
+	file, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	return json.NewEncoder(file).Encode(report)
 }

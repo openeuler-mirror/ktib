@@ -532,3 +532,35 @@ type errorReader struct {
 func (e *errorReader) Read(p []byte) (n int, err error) {
 	return 0, e.err
 }
+
+func TestParsePythonMetadata_WithDependencies(t *testing.T) {
+	tmpDir, err := ioutil.TempDir("", "py-dep-test")
+	assert.NoError(t, err)
+	defer os.RemoveAll(tmpDir)
+
+	distDir := filepath.Join(tmpDir, "usr/lib/python3.9/site-packages/pkg1-1.0.0.dist-info")
+	assert.NoError(t, os.MkdirAll(distDir, 0755))
+
+	metaContent := `Name: pkg1
+Version: 1.0.0
+License: MIT
+Requires-Dist: requests (>= 2.25.0)
+Requires-Dist: numpy; python_version < "3.8"
+Requires-Dist: pandas[all]
+Requires-Dist: simplejson>=3.0
+`
+	assert.NoError(t, ioutil.WriteFile(filepath.Join(distDir, "METADATA"), []byte(metaContent), 0644))
+
+	pkgs, err := scanPython(tmpDir)
+	assert.NoError(t, err)
+	assert.Len(t, pkgs, 1)
+
+	p := pkgs[0]
+	assert.Equal(t, "pkg1", p.Name)
+	assert.Contains(t, p.Provides, "pkg1")
+
+	expectedDeps := []string{"requests", "numpy", "pandas", "simplejson"}
+	for _, dep := range expectedDeps {
+		assert.Contains(t, p.Requires, dep)
+	}
+}

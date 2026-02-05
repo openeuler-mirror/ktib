@@ -89,7 +89,7 @@ func (s *DefaultSolver) Solve(imageRef string, cfg *config.FusionConfig) (*types
 	} else {
 		// 1. Analyze Image to get package list
 		// Use fast mode (true) to skip heavy checksums as we only need RPM metadata
-		analyzer, err := analyze.NewAnalyzer(s.Store, imageRef, "", nil, true)
+		analyzer, err := analyze.NewAnalyzer(s.Store, imageRef, "", nil, true, "")
 		if err != nil {
 			return nil, fmt.Errorf("failed to create analyzer: %w", err)
 		}
@@ -123,6 +123,25 @@ func (s *DefaultSolver) Solve(imageRef string, cfg *config.FusionConfig) (*types
 			if err := saveAnalysisReport(s.SaveData, report); err != nil {
 				return nil, err
 			}
+		}
+	}
+
+	// Validate data integrity (check if it's a pruned report)
+	if len(allPackages) > 0 {
+		// Check the first few packages to see if they have essential metadata
+		hasMetadata := false
+		checks := 5
+		if len(allPackages) < checks {
+			checks = len(allPackages)
+		}
+		for i := 0; i < checks; i++ {
+			if len(allPackages[i].Files) > 0 || len(allPackages[i].Requires) > 0 {
+				hasMetadata = true
+				break
+			}
+		}
+		if !hasMetadata {
+			return nil, fmt.Errorf("loaded analysis data appears to be a pruned report (missing dependency/file info). Please use 'ktib analyze --save-data' to generate full data for fusion")
 		}
 	}
 
@@ -281,16 +300,16 @@ func (s *DefaultSolver) resolveAppAnchors(cfg coretypes.ImageConfig, allPackages
 					// foo.bar -> foo/bar/__init__.py or foo/bar.py or foo/__init__.py (if bar is function)
 					// We just search for simple mapping first:
 					// foo -> foo/__init__.py or foo.py
-					
+
 					// Convert module to path segments
 					modPath := strings.ReplaceAll(moduleName, ".", "/")
-					
+
 					// Candidates to search in Files
 					candidates := []string{
 						modPath + ".py",
 						modPath + "/__init__.py",
 					}
-					
+
 					// Scan all packages
 					found := false
 					for _, p := range allPackages {
@@ -303,9 +322,13 @@ func (s *DefaultSolver) resolveAppAnchors(cfg coretypes.ImageConfig, allPackages
 									break
 								}
 							}
-							if found { break }
+							if found {
+								break
+							}
 						}
-						if found { break }
+						if found {
+							break
+						}
 					}
 				}
 				// python script.py

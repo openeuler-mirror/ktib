@@ -13,8 +13,10 @@ package analyze
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
-	"math/rand"
+	"strings"
 	"time"
 
 	"gitee.com/openeuler/ktib/pkg/builder"
@@ -32,8 +34,8 @@ type Analyzer struct {
 	Fast     bool
 }
 
-func NewAnalyzer(store storage.Store, imageRef string, rulesPath string, levels []string, fast bool) (*Analyzer, error) {
-	rules, err := LoadRules(rulesPath)
+func NewAnalyzer(store storage.Store, imageRef string, rulesPath string, levels []string, fast bool, lang string) (*Analyzer, error) {
+	rules, err := LoadRules(rulesPath, lang)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load rules: %w", err)
 	}
@@ -73,7 +75,7 @@ func (a *Analyzer) Run(ctx context.Context, onProgress func(step string, done bo
 
 	startTime := time.Now()
 	notifyProgress(stepName, false, startTime)
-	
+
 	recs := a.GenerateRecommendations(
 		report.Analysis.Layers,
 		report.Analysis.Packages,
@@ -83,13 +85,13 @@ func (a *Analyzer) Run(ctx context.Context, onProgress func(step string, done bo
 		entrypoints,
 	)
 	report.Recommendations = recs
-	
+
 	notifyProgress(stepName, true, startTime)
 
 	return report, nil
 }
 
-// Analyze performs the data collection phase. 
+// Analyze performs the data collection phase.
 // It returns the report, mount point, entrypoints, a cleanup function, and any error.
 // The caller IS RESPONSIBLE for calling the cleanup function to unmount the image.
 func (a *Analyzer) Analyze(ctx context.Context, onProgress func(step string, done bool, duration time.Duration)) (*types.AnalysisReport, string, []string, func(), error) {
@@ -177,7 +179,7 @@ func (a *Analyzer) Analyze(ctx context.Context, onProgress func(step string, don
 			Size:         totalSize,
 			Created:      time.Now(), // TODO: Get from image metadata
 			OS:           "linux",    // TODO: Get from image metadata
-			Architecture: arch,
+			Architecture: sanitizeArch(arch),
 			Config:       imgConfig,
 		},
 		Analysis: types.AnalysisData{
@@ -191,9 +193,22 @@ func (a *Analyzer) Analyze(ctx context.Context, onProgress func(step string, don
 	return report, mountPoint, entrypoints, cleanup, nil
 }
 
+func sanitizeArch(arch string) string {
+	switch strings.ToUpper(arch) {
+	case "EM_X86_64":
+		return "x86_64"
+	case "EM_AARCH64":
+		return "aarch64"
+	}
+	return arch
+}
+
 func (a *Analyzer) mount() (*builder.Builder, string, error) {
-	rand.Seed(time.Now().UnixNano())
-	containerName := fmt.Sprintf("%s-analyze-%d", "ktib", rand.Int())
+	suffix := make([]byte, 4)
+	if _, err := rand.Read(suffix); err != nil {
+		return nil, "", fmt.Errorf("failed to generate random suffix: %w", err)
+	}
+	containerName := fmt.Sprintf("%s-analyze-%s", "ktib", hex.EncodeToString(suffix))
 
 	opts := builder.BuilderOptions{
 		FromImage: a.ImageRef,

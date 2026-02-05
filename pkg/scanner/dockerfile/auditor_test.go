@@ -158,3 +158,11 @@ func (r *MockPolicyRule) Describe() string {
 func (r *MockPolicyRule) Test(directives map[string][]DfDirective) *[]Rule {
 	return &[]Rule{}
 }
+
+func TestAuditException_Error(t *testing.T) {
+	msg := "test error message"
+	err := &AuditException{Message: msg}
+	if err.Error() != msg {
+		t.Errorf("Error() = %v, want %v", err.Error(), msg)
+	}
+}

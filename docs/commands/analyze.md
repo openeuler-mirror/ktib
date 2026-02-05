@@ -69,7 +69,7 @@ ktib analyze myimage:latest --fast
 | 选项 | 简写 | 描述 | 默认值 |
 | :--- | :--- | :--- | :--- |
 | `--output` | `-o` | 输出格式 (summary, json) | `summary` |
-| `--file` | `-f` | 将分析报告输出到指定文件 | `""` |
+| `--file` | `-f` | 将分析报告保存到指定文件 (例如 report.json) | `""` |
 | `--fast` | | 启用快速模式（跳过文件校验和计算与深度检查） | `false` |
 | `--rules` | | 指定自定义规则文件路径（YAML格式）。如果不指定且 `/etc/ktib/default_rules.yaml` 存在，则加载该文件；否则使用内置规则。 | `""` |
 | `--level` | | 覆盖运行等级，多个等级用逗号分隔 (如 "SAFE,STANDARD") | `""` (使用规则文件定义) |
@@ -78,7 +78,7 @@ ktib analyze myimage:latest --fast
 | `--from-data` | | 从指定 JSON 文件加载分析数据并生成建议（离线模式，跳过镜像扫描） | `""` |
 
 ## 输出字段说明 (JSON)
-JSON 报告包含以下主要字段：
+JSON 报告已进行精简优化，移除了冗余的依赖链信息，包含以下主要字段：
 - `image_info`: 镜像基本信息（Ref, Size, OS, Created, Architecture）。
 - `analysis`:
   - `layers`: 层级详细信息（Digest, Size, Command, Added/Deleted/Modified Files）。

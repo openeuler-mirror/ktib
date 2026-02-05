@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"gitee.com/openeuler/ktib/pkg/analyze"
+	"gitee.com/openeuler/ktib/pkg/i18n"
 	"gitee.com/openeuler/ktib/pkg/types"
 	"gitee.com/openeuler/ktib/pkg/utils"
 	"github.com/spf13/cobra"
@@ -34,6 +35,7 @@ func newCmdAnalyze() *cobra.Command {
 	var defaultRules bool
 	var saveData string
 	var fromData string
+	var lang string
 
 	cmd := &cobra.Command{
 		Use:   "analyze <image>",
@@ -87,6 +89,9 @@ Key Features:
 			return nil
 		},
 		Run: func(cmd *cobra.Command, args []string) {
+			// Initialize i18n
+			i18n.SetLanguage(lang)
+
 			if defaultRules {
 				// Dump to default system path (e.g. /etc/ktib/default_rules.yaml)
 				// If rulesPath is provided, we could use it, but flag says dump default rules.
@@ -119,7 +124,7 @@ Key Features:
 				utils.CheckErr(err)
 
 				// Initialize Analyzer with nil store for offline mode
-				analyzer, err := analyze.NewAnalyzer(nil, "", rulesPath, levelList, fastMode)
+				analyzer, err := analyze.NewAnalyzer(nil, "", rulesPath, levelList, fastMode, lang)
 				utils.CheckErr(err)
 
 				// Run Advisor (Offline)
@@ -132,6 +137,9 @@ Key Features:
 					nil, // No entrypoints (skips dependency check)
 				)
 				report.Recommendations = recs
+
+				// Prune report for cleaner output
+				pruneReport(&report)
 
 				// Output
 				if outputFile != "" {
@@ -175,7 +183,7 @@ Key Features:
 			}
 			progressFunc, waitFunc := analyze.NewAnalysisProgressBar(totalSteps)
 
-			analyzer, err := analyze.NewAnalyzer(store, imageRef, rulesPath, levelList, fastMode)
+			analyzer, err := analyze.NewAnalyzer(store, imageRef, rulesPath, levelList, fastMode, lang)
 			utils.CheckErr(err)
 
 			report, mountPoint, entrypoints, cleanup, err := analyzer.Analyze(cmd.Context(), func(step string, done bool, duration time.Duration) {
@@ -204,8 +212,8 @@ Key Features:
 				enc.SetIndent("", "  ")
 				err = enc.Encode(report)
 				utils.CheckErr(err)
-				fmt.Printf("Analysis data saved to %s\n", saveData)
-				return
+				fmt.Printf("Analysis data (full) saved to %s\n", saveData)
+				// Do not return here, continue to generate recommendations
 			}
 
 			// --- 3. Advisor (Standard Flow) ---
@@ -233,6 +241,9 @@ Key Features:
 			if waitFunc != nil {
 				waitFunc()
 			}
+
+			// Prune report for cleaner output
+			pruneReport(report)
 
 			// 1. Handle File Output
 			if outputFile != "" {
@@ -263,7 +274,7 @@ Key Features:
 		},
 	}
 	cmd.Flags().StringVarP(&outputFormat, "output", "o", "summary", "Output format (summary|json)")
-	cmd.Flags().StringVarP(&outputFile, "file", "f", "", "Output report to file")
+	cmd.Flags().StringVarP(&outputFile, "file", "f", "", "Save report to file (e.g. report.json)")
 	cmd.Flags().BoolVar(&fastMode, "fast", false, "Enable fast mode (skip checksums and deep inspection)")
 	cmd.Flags().StringVar(&rulesPath, "rules", "", "Path to custom rules file")
 	cmd.Flags().Lookup("rules").NoOptDefVal = "/etc/ktib/default_rules.yaml"
@@ -271,6 +282,20 @@ Key Features:
 	cmd.Flags().BoolVar(&defaultRules, "default-rules", false, "Dump default rules to default_rules.yaml")
 	cmd.Flags().StringVar(&saveData, "save-data", "", "Save analysis data to JSON file (skips advisor)")
 	cmd.Flags().StringVar(&fromData, "from-data", "", "Load analysis data from JSON file to generate recommendations (skips image scan)")
+	cmd.Flags().StringVar(&lang, "lang", "en", "Output language (en|zh)")
 
 	return cmd
+}
+
+func pruneReport(report *types.AnalysisReport) {
+	for i := range report.Analysis.Packages.RPM {
+		report.Analysis.Packages.RPM[i].Requires = nil
+		report.Analysis.Packages.RPM[i].Provides = nil
+		report.Analysis.Packages.RPM[i].Files = nil
+	}
+	for i := range report.Analysis.Packages.Python {
+		report.Analysis.Packages.Python[i].Requires = nil
+		report.Analysis.Packages.Python[i].Provides = nil
+		report.Analysis.Packages.Python[i].Files = nil
+	}
 }

@@ -23,6 +23,7 @@ import (
 	"gitee.com/openeuler/ktib/pkg/fusion/solver"
 	"gitee.com/openeuler/ktib/pkg/fusion/types"
 	"gitee.com/openeuler/ktib/pkg/fusion/verify"
+	"gitee.com/openeuler/ktib/pkg/i18n"
 	"github.com/containers/storage"
 	"github.com/sirupsen/logrus"
 )
@@ -35,6 +36,7 @@ type FusionManager struct {
 	FS     types.FSSynthesizer
 	Verify types.Verifier
 	Commit commit.Committer
+	Lang   string
 
 	OnProgress func(step string, done bool, duration time.Duration)
 }
@@ -74,7 +76,7 @@ func (m *FusionManager) Run(imageRef string, outputDir string, targetTag string)
 	}
 
 	// Phase 1: Solve Dependencies
-	phaseName := "Phase 1: Solving dependencies"
+	phaseName := i18n.T("Phase 1: Solving dependencies")
 	startTime := time.Now()
 	notifyProgress(phaseName, false, startTime)
 	logrus.Info(phaseName + "...")
@@ -89,7 +91,7 @@ func (m *FusionManager) Run(imageRef string, outputDir string, targetTag string)
 	logrus.Infof("Identified %d packages and %d files to keep", len(plan.KeptPackages), len(plan.KeptFiles))
 
 	// Phase 2: Synthesize Filesystem
-	phaseName = "Phase 2: Synthesizing Filesystem"
+	phaseName = i18n.T("Phase 2: Synthesizing Filesystem")
 	startTime = time.Now()
 	notifyProgress(phaseName, false, startTime)
 	logrus.Info(phaseName + "...")
@@ -99,7 +101,7 @@ func (m *FusionManager) Run(imageRef string, outputDir string, targetTag string)
 	notifyProgress(phaseName, true, startTime)
 
 	// Phase 3: Reconstruct RPM DB (Best Effort)
-	phaseName = "Phase 3: Reconstructing RPM Database"
+	phaseName = i18n.T("Phase 3: Reconstructing RPM Database")
 	startTime = time.Now()
 	notifyProgress(phaseName, false, startTime)
 	logrus.Info(phaseName + "...")
@@ -121,7 +123,7 @@ func (m *FusionManager) Run(imageRef string, outputDir string, targetTag string)
 	notifyProgress(phaseName, true, startTime)
 
 	// Phase 4: Verify
-	phaseName = "Phase 4: Verifying result"
+	phaseName = i18n.T("Phase 4: Verifying result")
 	startTime = time.Now()
 	notifyProgress(phaseName, false, startTime)
 	logrus.Info(phaseName + "...")
@@ -132,7 +134,7 @@ func (m *FusionManager) Run(imageRef string, outputDir string, targetTag string)
 
 	// Phase 5: Commit (Optional)
 	if targetTag != "" {
-		phaseName = "Phase 5: Committing to new image"
+		phaseName = i18n.T("Phase 5: Committing to new image")
 		startTime = time.Now()
 		notifyProgress(phaseName, false, startTime)
 		logrus.Info(phaseName + "...")

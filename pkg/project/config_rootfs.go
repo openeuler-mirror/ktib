@@ -22,6 +22,8 @@ import (
 	"gitee.com/openeuler/ktib/pkg/templates"
 )
 
+var execCommand = exec.Command
+
 var unnecessaryFiles = []string{
 	// **************locales**********************
 	"/usr/lib/locale",
@@ -119,7 +121,7 @@ func ConfigureRootfs(target string, config Config) error {
 		}
 
 		// Create symlink
-		cmd := exec.Command("/usr/bin/ln", "-sf", timezonePath, localtimePath)
+		cmd := execCommand("/usr/bin/ln", "-sf", timezonePath, localtimePath)
 		if err := cmd.Run(); err != nil {
 			return fmt.Errorf("error setting timezone: %v", err) // Add return
 		}
@@ -148,7 +150,7 @@ func ConfigureRootfs(target string, config Config) error {
 
 func addCommandToScriptAndRun(target string, config Config) error {
 	// Copy bash configuration files
-	bashCmd := exec.Command("/usr/bin/sh", "-c", fmt.Sprintf("cp /etc/skel/.bash* %s/root/", target))
+	bashCmd := execCommand("/usr/bin/sh", "-c", fmt.Sprintf("cp /etc/skel/.bash* %s/root/", target))
 	if err := bashCmd.Run(); err != nil {
 		return fmt.Errorf("failed to copy bash configuration files: %v", err)
 	}
@@ -303,7 +305,7 @@ func RemoveUnnecessaryPackages(target string, imageType string, removeMinimalLis
 	fmt.Println("Executing package removal script...")
 
 	// Execute the script
-	cmd := exec.Command("chroot", target, "/remove_packages.sh")
+	cmd := execCommand("chroot", target, "/remove_packages.sh")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	err = cmd.Run()
@@ -354,7 +356,7 @@ func UnmaskServices(target string, unmaskServicePath string) error {
 	fmt.Println("Executing service unmasking script...")
 
 	// Execute the script
-	cmd := exec.Command("chroot", target, "/unmask_services.sh")
+	cmd := execCommand("chroot", target, "/unmask_services.sh")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	err = cmd.Run()
@@ -381,7 +383,7 @@ func ConfigurePipAndRemovePycache(target string, imageType string) error {
 	if err := os.WriteFile(scriptPath, []byte(scriptContent), 0755); err != nil {
 		return fmt.Errorf("unable to create Python configuration script: %v", err)
 	}
-	cmd := exec.Command("/usr/sbin/chroot", target, "/configure_python.sh")
+	cmd := execCommand("/usr/sbin/chroot", target, "/configure_python.sh")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	err := cmd.Run()

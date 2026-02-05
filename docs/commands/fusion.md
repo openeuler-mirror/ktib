@@ -5,6 +5,12 @@
 
 该命令通过解析镜像的依赖关系（RPM 包依赖和文件级依赖），生成一份“保留列表”，然后基于该列表重建 RPM 数据库并合成新的 Rootfs，从而实现极致的镜像瘦身。
 
+## 工作流
+1. **生成配置**：使用 `ktib fusion --dump-config fusion.yaml` 生成包含详细注释的默认配置文件。
+2. **编辑策略**：根据镜像特点，编辑 `fusion.yaml`，指定需要保留的包 (`keep_packages`) 或文件 (`keep_files`)，以及需要移除的包 (`drop_packages`)。
+3. **执行融合**：运行 `ktib fusion <image> --config fusion.yaml --tag <new-tag>` 生成精简镜像。
+4. **验证结果**：使用 `ktib analyze` 对比新旧镜像，确认体积缩减效果。
+
 ## 用法
 ```bash
 ktib fusion [image] [flags]
@@ -19,20 +25,49 @@ ktib fusion [image] [flags]
 | `--dump-config` |  | 导出默认融合配置到文件（传 `-` 输出到 stdout；不带参数时写入 `fusion.yaml`） | "" |
 | `--save-data` |  | 保存分析数据到 JSON 文件（便于后续复用） | "" |
 | `--from-data` |  | 从 JSON 文件加载分析数据以跳过镜像扫描（可不传 image 参数） | "" |
+| `--lang` |  | 输出语言 (en, zh) | "en" |
 
 ## 配置文件示例 (fusion.yaml)
+生成的默认配置文件包含详细注释，帮助您理解每个字段的作用：
+
 ```yaml
+# Fusion Configuration File
+# This file controls how ktib fusion optimizes the image.
+
 fusion:
+  # Packages to explicitly keep in the final image.
+  # Dependencies of these packages will be automatically resolved and kept.
   keep_packages:
-    - nginx
-    - openssl
+    - bash
+    - coreutils
+    - systemd
+    # - nginx
+    # - openssl
+
+  # Files to explicitly keep (absolute paths).
+  # Use this for files not owned by any RPM package (e.g. app binaries, config files).
+  keep_files:
+    # - /app/my-app
+    # - /etc/my-app/config.json
+
+  # Packages to explicitly remove.
   drop_packages:
-    - vim
-    - curl
+    # - vim
+    # - curl
+
   behavior:
+    # Whether to retain documentation files (man pages, /usr/share/doc, etc.)
     retain_docs: false
+
+    # Whether to retain weak dependencies (Recommends/Suggests)
     retain_weak_deps: false
+
+    # Whether to attempt automatic recovery if broken shared libraries are detected
     auto_heal_libs: true
+
+    # Whether to keep files not owned by any RPM package (default: true)
+    # Set to false to remove all unowned files unless specified in keep_files
+    retain_unowned: true
 ```
 
 ## 示例
