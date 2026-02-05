@@ -16,7 +16,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
+	"strings"
 
+	fusionrpm "gitee.com/openeuler/ktib/pkg/fusion/rpm"
 	rpmdb "github.com/knqyf263/go-rpmdb/pkg"
 	"github.com/sirupsen/logrus"
 )
@@ -33,24 +36,13 @@ func NewDefaultVerifier() *DefaultVerifier {
 func (v *DefaultVerifier) Verify(rootfsPath string) error {
 	logrus.Infof("Verifying rootfs at %s", rootfsPath)
 
-	// 1. Locate RPM DB
-	dbPath := filepath.Join(rootfsPath, "var/lib/rpm")
-	candidates := []string{"Packages", "rpmdb.sqlite", "Packages.db"}
-	var dbFile string
-	for _, f := range candidates {
-		p := filepath.Join(dbPath, f)
-		if _, err := os.Stat(p); err == nil {
-			dbFile = p
-			break
-		}
-	}
-
-	if dbFile == "" {
-		return fmt.Errorf("RPM database not found in %s", dbPath)
+	loc, err := fusionrpm.FindRPMDB(rootfsPath)
+	if err != nil {
+		return fmt.Errorf("RPM database not found: %w", err)
 	}
 
 	// 2. Open DB
-	db, err := rpmdb.Open(dbFile)
+	db, err := rpmdb.Open(loc.FilePath)
 	if err != nil {
 		return fmt.Errorf("failed to open rpmdb: %w", err)
 	}
@@ -65,6 +57,7 @@ func (v *DefaultVerifier) Verify(rootfsPath string) error {
 	logrus.Infof("Verifying %d packages...", len(pkgList))
 	errors := 0
 	warnings := 0
+	missingByPkg := make(map[string]int)
 
 	for _, p := range pkgList {
 		files, err := p.InstalledFiles()
@@ -84,6 +77,7 @@ func (v *DefaultVerifier) Verify(rootfsPath string) error {
 				logrus.Debugf("Missing file: %s (pkg: %s)", f.Path, p.Name)
 				// errors++ // Too strict for now, maybe just warn
 				warnings++
+				missingByPkg[p.Name]++
 			}
 		}
 	}
@@ -92,7 +86,34 @@ func (v *DefaultVerifier) Verify(rootfsPath string) error {
 		return fmt.Errorf("verification failed with %d errors", errors)
 	}
 	if warnings > 0 {
-		logrus.Warnf("Verification completed with %d missing files (likely intentional cuts)", warnings)
+		type kv struct {
+			name  string
+			count int
+		}
+		var items []kv
+		for n, c := range missingByPkg {
+			items = append(items, kv{name: n, count: c})
+		}
+		sort.Slice(items, func(i, j int) bool {
+			if items[i].count == items[j].count {
+				return items[i].name < items[j].name
+			}
+			return items[i].count > items[j].count
+		})
+		topN := 10
+		if len(items) < topN {
+			topN = len(items)
+		}
+		var parts []string
+		for i := 0; i < topN; i++ {
+			parts = append(parts, fmt.Sprintf("%s(%d)", items[i].name, items[i].count))
+		}
+
+		if len(parts) > 0 {
+			logrus.Warnf("Verification completed with %d missing files (likely intentional cuts). Top missing packages: %s", warnings, strings.Join(parts, ", "))
+		} else {
+			logrus.Warnf("Verification completed with %d missing files (likely intentional cuts)", warnings)
+		}
 	} else {
 		logrus.Info("Verification passed: All files present.")
 	}
@@ -109,7 +130,15 @@ func (v *DefaultVerifier) Verify(rootfsPath string) error {
 		// We'll run it and log output if it fails.
 		output, err := cmd.CombinedOutput()
 		if err != nil {
-			logrus.Warnf("rpm -Va reported issues (expected for fused images):\n%s", string(output))
+			outStr := strings.TrimSpace(string(output))
+			logrus.Debugf("rpm -Va full output:\n%s", outStr)
+
+			totalLines, snippet := summarizeLines(outStr, 5)
+			if snippet == "" {
+				logrus.Warn("rpm -Va reported issues (expected for fused images), but produced no output")
+			} else {
+				logrus.Warnf("rpm -Va reported issues (expected for fused images). Issues lines=%d, sample=%s (set log level to debug for full output)", totalLines, snippet)
+			}
 		} else {
 			logrus.Info("rpm -Va passed cleanly.")
 		}
@@ -137,4 +166,17 @@ func (v *DefaultVerifier) Verify(rootfsPath string) error {
 	}
 
 	return nil
+}
+
+func summarizeLines(s string, maxLines int) (int, string) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0, ""
+	}
+	lines := strings.Split(s, "\n")
+	total := len(lines)
+	if maxLines > 0 && total > maxLines {
+		lines = lines[:maxLines]
+	}
+	return total, strings.Join(lines, " | ")
 }

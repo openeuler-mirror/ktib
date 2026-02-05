@@ -34,6 +34,8 @@ func TestLoadConfig(t *testing.T) {
 fusion:
   keep_packages:
     - nginx
+  keep_files:
+    - /etc/hosts
   behavior:
     retain_docs: true
 `
@@ -44,11 +46,19 @@ fusion:
 	cfg, err = LoadConfig(tmpFile.Name())
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"nginx"}, cfg.Fusion.KeepPackages)
+	assert.Equal(t, []string{"/etc/hosts"}, cfg.Fusion.KeepFiles)
 	assert.True(t, cfg.Fusion.Behavior.RetainDocs)
-	// Default value for unspecified field (should be false/zero value of type if not merged properly, 
-	// but yaml.Unmarshal overwrites. Our LoadConfig currently creates default then unmarshals, 
-	// so fields not in yaml remain default? 
+	// Default value for unspecified field (should be false/zero value of type if not merged properly,
+	// but yaml.Unmarshal overwrites. Our LoadConfig currently creates default then unmarshals,
+	// so fields not in yaml remain default?
 	// Wait, yaml.Unmarshal into struct with values might overwrite them with zero if not present?
 	// No, Unmarshal only updates fields present in YAML.
 	assert.True(t, cfg.Fusion.Behavior.AutoHealLibs) // This ensures merge logic works (initialized with defaults)
+}
+
+func TestNewExampleConfig(t *testing.T) {
+	cfg := NewExampleConfig()
+	assert.NotNil(t, cfg)
+	assert.Contains(t, cfg.Fusion.KeepPackages, "bash")
+	assert.Contains(t, cfg.Fusion.KeepFiles, "/etc/resolv.conf")
 }

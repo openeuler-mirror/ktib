@@ -25,10 +25,11 @@ import (
 
 // Allow mocking for tests
 var execCommand = exec.Command
+var lookPath = exec.LookPath
 
 // DefaultReconstructor is an implementation of DBReconstructor
 type DefaultReconstructor struct {
-	SourceRPMDBPath string // Path to the source RPM DB directory (e.g., /var/lib/rpm)
+	SourceRPMDBPath string
 }
 
 // NewDefaultReconstructor creates a new DefaultReconstructor
@@ -45,32 +46,21 @@ func (r *DefaultReconstructor) Reconstruct(sourcePath string, plan *types.Fusion
 	}
 	logrus.Infof("Reconstructing RPM DB in %s for %d packages", outputDir, len(plan.KeptPackages))
 
-	// 1. Ensure output directory exists
-	if err := os.MkdirAll(outputDir, 0755); err != nil {
+	loc, err := FindRPMDB(r.SourceRPMDBPath)
+	if err != nil {
+		return err
+	}
+
+	targetDir := filepath.Join(outputDir, loc.RelDir)
+	if err := os.MkdirAll(targetDir, 0755); err != nil {
 		return fmt.Errorf("failed to create output dir: %w", err)
 	}
 
-	// 2. Identify the database format and file
-	// We prioritize SQLite as it is the standard for openEuler/Kylin
-	candidates := []string{"rpmdb.sqlite", "Packages.db", "Packages"}
-	var dbFile string
-	for _, f := range candidates {
-		p := filepath.Join(r.SourceRPMDBPath, f)
-		if _, err := os.Stat(p); err == nil {
-			dbFile = f
-			break
-		}
-	}
-
-	if dbFile == "" {
-		return fmt.Errorf("no RPM database found in %s", r.SourceRPMDBPath)
-	}
-
-	sourceFilePath := filepath.Join(r.SourceRPMDBPath, dbFile)
-	targetPath := filepath.Join(outputDir, dbFile)
+	sourceFilePath := loc.FilePath
+	targetPath := filepath.Join(targetDir, loc.FileName)
 
 	// 3. Handle by format
-	if dbFile == "Packages" {
+	if loc.FileName == "Packages" {
 		// This is likely BerkeleyDB (BDB).
 		// For now, we return an error as BDB is hard to manipulate in pure Go without CGO.
 		return fmt.Errorf("BerkeleyDB (BDB) format is not supported for reconstruction yet. Please use SQLite-based images")
@@ -83,6 +73,8 @@ func (r *DefaultReconstructor) Reconstruct(sourcePath string, plan *types.Fusion
 	if err := copyFile(sourceFilePath, targetPath); err != nil {
 		return fmt.Errorf("failed to copy RPM DB: %w", err)
 	}
+	_ = copyFileIfExists(sourceFilePath+"-wal", targetPath+"-wal")
+	_ = copyFileIfExists(sourceFilePath+"-shm", targetPath+"-shm")
 
 	// 5. Prune the target DB using CLI or other means
 	if err := r.pruneDB(targetPath, plan.KeptPackages); err != nil {
@@ -94,6 +86,12 @@ func (r *DefaultReconstructor) Reconstruct(sourcePath string, plan *types.Fusion
 }
 
 func (r *DefaultReconstructor) pruneDB(dbFile string, keptPackages []string) error {
+	rpmPath, err := lookPath("rpm")
+	if err != nil {
+		logrus.Warn("rpm command not found. Skipping RPM DB pruning. The resulting DB will contain all original packages.")
+		return nil
+	}
+
 	// 1. List all packages in the copied DB
 	db, err := rpmdb.Open(dbFile)
 	if err != nil {
@@ -128,13 +126,6 @@ func (r *DefaultReconstructor) pruneDB(dbFile string, keptPackages []string) err
 	logrus.Infof("Identifying %d packages to prune from RPM DB", len(toRemove))
 
 	// 3. Use rpm CLI to remove packages
-	// Check if rpm is available
-	rpmPath, err := exec.LookPath("rpm")
-	if err != nil {
-		logrus.Warn("rpm command not found. Skipping RPM DB pruning. The resulting DB will contain all original packages.")
-		return nil
-	}
-
 	// We need to run rpm --dbpath <dir> -e --justdb --nodeps --noscripts --notriggers <pkgs>
 	// dbFile is the file path (e.g. /path/to/rpmdb.sqlite), we need the directory.
 	dbDir, _ := filepath.Abs(filepath.Dir(dbFile))
@@ -194,4 +185,11 @@ func copyFile(src, dst string) error {
 		return err
 	}
 	return os.Chmod(dst, sourceInfo.Mode())
+}
+
+func copyFileIfExists(src, dst string) error {
+	if _, err := os.Stat(src); err != nil {
+		return nil
+	}
+	return copyFile(src, dst)
 }

@@ -19,8 +19,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	fusionrpm "gitee.com/openeuler/ktib/pkg/fusion/rpm"
 	"gitee.com/openeuler/ktib/pkg/fusion/types"
 	"github.com/containers/storage"
+	csarchive "github.com/containers/storage/pkg/archive"
 	rpmdb "github.com/knqyf263/go-rpmdb/pkg"
 	"github.com/sirupsen/logrus"
 )
@@ -79,24 +81,12 @@ func (s *DefaultSynthesizer) buildFileWhitelist(imageRef string, plan *types.Fus
 		return nil, fmt.Errorf("failed to extract RPM DB: %w", err)
 	}
 
-	// Now read the DB
-	dbPath := filepath.Join(tmpDir, "var/lib/rpm")
-	// Try to find the DB file
-	candidates := []string{"Packages", "rpmdb.sqlite", "Packages.db"}
-	var dbFile string
-	for _, f := range candidates {
-		p := filepath.Join(dbPath, f)
-		if _, err := os.Stat(p); err == nil {
-			dbFile = p
-			break
-		}
+	loc, err := fusionrpm.FindRPMDB(tmpDir)
+	if err != nil {
+		return nil, fmt.Errorf("RPM database not found in image: %w", err)
 	}
 
-	if dbFile == "" {
-		return nil, fmt.Errorf("RPM database not found in image")
-	}
-
-	db, err := rpmdb.Open(dbFile)
+	db, err := rpmdb.Open(loc.FilePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open rpmdb: %w", err)
 	}
@@ -140,7 +130,7 @@ func (s *DefaultSynthesizer) ExtractRPMDB(imageRef string, dest string) error {
 	// and we want the *latest* version of it (Top layer wins)
 	// But RPM DB usually is modified in place.
 	return s.extractLayersWithFilter(imageRef, dest, func(path string) bool {
-		return strings.HasPrefix(path, "/var/lib/rpm")
+		return strings.HasPrefix(path, "/var/lib/rpm") || strings.HasPrefix(path, "/usr/lib/sysimage/rpm")
 	})
 }
 
@@ -185,13 +175,21 @@ func (s *DefaultSynthesizer) extractLayersWithFilter(imageRef string, outputDir 
 		// This is exactly what we want (the content of this layer).
 		rc, err := s.Store.Diff("", lid, nil)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to get diff stream for layer %s: %w", lid, err)
 		}
-		defer rc.Close()
+		decompressed, err := csarchive.DecompressStream(rc)
+		if err != nil {
+			rc.Close()
+			return fmt.Errorf("failed to decompress layer %s: %w", lid, err)
+		}
 
-		if err := applyTarWithFilter(rc, outputDir, filter); err != nil {
-			return err
+		if err := applyTarWithFilter(decompressed, outputDir, filter); err != nil {
+			decompressed.Close()
+			rc.Close()
+			return fmt.Errorf("failed to apply layer %s: %w", lid, err)
 		}
+		decompressed.Close()
+		rc.Close()
 	}
 	return nil
 }

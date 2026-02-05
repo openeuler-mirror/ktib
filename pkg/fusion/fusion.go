@@ -14,6 +14,7 @@ package fusion
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"gitee.com/openeuler/ktib/pkg/fusion/commit"
 	"gitee.com/openeuler/ktib/pkg/fusion/config"
@@ -34,6 +35,8 @@ type FusionManager struct {
 	FS     types.FSSynthesizer
 	Verify types.Verifier
 	Commit commit.Committer
+
+	OnProgress func(step string, done bool, duration time.Duration)
 }
 
 // NewFusionManager creates a new FusionManager
@@ -41,10 +44,10 @@ func NewFusionManager(cfg *config.FusionConfig, store storage.Store) *FusionMana
 	return &FusionManager{
 		Config: cfg,
 		Solver: solver.NewDefaultSolver(store),
-		RPM:    rpm.NewDefaultReconstructor(store.GraphRoot()), // Pass graph root if needed by Reconstructor, or adapt
+		RPM:    rpm.NewDefaultReconstructor(""),
 		FS:     fs.NewDefaultSynthesizer(store),
 		Verify: verify.NewDefaultVerifier(),
-		Commit: commit.NewBuildahCommitter(),
+		Commit: commit.NewImageBuildahCommitter(store),
 	}
 }
 
@@ -52,18 +55,55 @@ func NewFusionManager(cfg *config.FusionConfig, store storage.Store) *FusionMana
 func (m *FusionManager) Run(imageRef string, outputDir string, targetTag string) error {
 	logrus.Infof("Starting fusion for image: %s", imageRef)
 
+	notifyProgress := func(step string, done bool, start time.Time) {
+		if m.OnProgress == nil {
+			return
+		}
+		var d time.Duration
+		if done {
+			d = time.Since(start)
+		}
+		m.OnProgress(step, done, d)
+	}
+
+	updateStep := func(step string) {
+		if m.OnProgress == nil {
+			return
+		}
+		m.OnProgress(step, false, 0)
+	}
+
 	// Phase 1: Solve Dependencies
-	logrus.Info("Phase 1: Solving dependencies...")
+	phaseName := "Phase 1: Solving dependencies"
+	startTime := time.Now()
+	notifyProgress(phaseName, false, startTime)
+	logrus.Info(phaseName + "...")
+	if s, ok := m.Solver.(interface{ SetStepUpdater(func(string)) }); ok {
+		s.SetStepUpdater(updateStep)
+	}
 	plan, err := m.Solver.Solve(imageRef, m.Config)
 	if err != nil {
 		return fmt.Errorf("dependency solving failed: %w", err)
 	}
+	notifyProgress(phaseName, true, startTime)
 	logrus.Infof("Identified %d packages and %d files to keep", len(plan.KeptPackages), len(plan.KeptFiles))
 
-	// Phase 2: Reconstruct RPM DB
-	logrus.Info("Phase 2: Reconstructing RPM Database...")
+	// Phase 2: Synthesize Filesystem
+	phaseName = "Phase 2: Synthesizing Filesystem"
+	startTime = time.Now()
+	notifyProgress(phaseName, false, startTime)
+	logrus.Info(phaseName + "...")
+	if err := m.FS.Synthesize(imageRef, plan, outputDir); err != nil {
+		return fmt.Errorf("filesystem synthesis failed: %w", err)
+	}
+	notifyProgress(phaseName, true, startTime)
 
-	// Extract original RPM DB to a temp directory
+	// Phase 3: Reconstruct RPM DB (Best Effort)
+	phaseName = "Phase 3: Reconstructing RPM Database"
+	startTime = time.Now()
+	notifyProgress(phaseName, false, startTime)
+	logrus.Info(phaseName + "...")
+
 	tempRPMDB, err := os.MkdirTemp("", "ktib-fusion-rpmdb-src-")
 	if err != nil {
 		return fmt.Errorf("failed to create temp dir for RPM DB: %w", err)
@@ -76,29 +116,30 @@ func (m *FusionManager) Run(imageRef string, outputDir string, targetTag string)
 	}
 
 	if err := m.RPM.Reconstruct(tempRPMDB, plan, outputDir); err != nil {
-		logrus.Warnf("RPM DB reconstruction failed: %v", err)
-		// We don't fail hard here because in some cases (e.g. BDB) it's expected to fail if not supported.
-		// But ideally we should.
+		logrus.Warnf("RPM DB reconstruction failed (fallback to extracted rpmdb): %v", err)
 	}
-
-	// Phase 3: Synthesize Filesystem
-	logrus.Info("Phase 3: Synthesizing Filesystem...")
-	if err := m.FS.Synthesize(imageRef, plan, outputDir); err != nil {
-		return fmt.Errorf("filesystem synthesis failed: %w", err)
-	}
+	notifyProgress(phaseName, true, startTime)
 
 	// Phase 4: Verify
-	logrus.Info("Phase 4: Verifying result...")
+	phaseName = "Phase 4: Verifying result"
+	startTime = time.Now()
+	notifyProgress(phaseName, false, startTime)
+	logrus.Info(phaseName + "...")
 	if err := m.Verify.Verify(outputDir); err != nil {
 		return fmt.Errorf("verification failed: %w", err)
 	}
+	notifyProgress(phaseName, true, startTime)
 
 	// Phase 5: Commit (Optional)
 	if targetTag != "" {
-		logrus.Info("Phase 5: Committing to new image...")
+		phaseName = "Phase 5: Committing to new image"
+		startTime = time.Now()
+		notifyProgress(phaseName, false, startTime)
+		logrus.Info(phaseName + "...")
 		if err := m.Commit.Commit(outputDir, targetTag); err != nil {
 			return fmt.Errorf("commit failed: %w", err)
 		}
+		notifyProgress(phaseName, true, startTime)
 	}
 
 	logrus.Info("Fusion completed successfully!")

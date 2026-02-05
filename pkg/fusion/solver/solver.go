@@ -13,8 +13,11 @@ package solver
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
+	"time"
 
 	"gitee.com/openeuler/ktib/pkg/analyze"
 	"gitee.com/openeuler/ktib/pkg/fusion/config"
@@ -24,9 +27,18 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+type Options struct {
+	FromData string
+	SaveData string
+}
+
 // DefaultSolver is a basic implementation of DependencySolver
 type DefaultSolver struct {
-	Store storage.Store
+	Store    storage.Store
+	FromData string
+	SaveData string
+
+	stepUpdater func(string)
 }
 
 // NewDefaultSolver creates a new DefaultSolver
@@ -36,30 +48,76 @@ func NewDefaultSolver(store storage.Store) *DefaultSolver {
 	}
 }
 
+func NewDefaultSolverWithOptions(store storage.Store, opts Options) *DefaultSolver {
+	return &DefaultSolver{
+		Store:    store,
+		FromData: opts.FromData,
+		SaveData: opts.SaveData,
+	}
+}
+
+func (s *DefaultSolver) SetStepUpdater(fn func(string)) {
+	s.stepUpdater = fn
+}
+
 // Solve calculates the list of packages and files to keep
 func (s *DefaultSolver) Solve(imageRef string, cfg *config.FusionConfig) (*types.FusionPlan, error) {
 	logrus.Infof("Solving dependencies for %s", imageRef)
 
-	// 1. Analyze Image to get package list
-	// Use fast mode (true) to skip heavy checksums as we only need RPM metadata
-	analyzer, err := analyze.NewAnalyzer(s.Store, imageRef, "", nil, true)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create analyzer: %w", err)
-	}
-
 	ctx := context.Background()
 
-	// Perform analysis
-	// We capture mountPoint for ELF analysis
-	report, mountPoint, _, cleanup, err := analyzer.Analyze(ctx, nil)
-	if cleanup != nil {
-		defer cleanup()
-	}
-	if err != nil {
-		return nil, fmt.Errorf("analysis failed: %w", err)
+	var mountPoint string
+	var allPackages []coretypes.Package
+
+	if s.FromData != "" {
+		if s.stepUpdater != nil {
+			s.stepUpdater("Loading analysis data")
+		}
+		report, err := loadAnalysisReport(s.FromData)
+		if err != nil {
+			return nil, err
+		}
+		if report.ImageInfo.Ref != "" && report.ImageInfo.Ref != imageRef {
+			logrus.Warnf("from-data image ref '%s' differs from argument '%s'", report.ImageInfo.Ref, imageRef)
+		}
+		allPackages = report.Analysis.Packages.RPM
+	} else {
+		// 1. Analyze Image to get package list
+		// Use fast mode (true) to skip heavy checksums as we only need RPM metadata
+		analyzer, err := analyze.NewAnalyzer(s.Store, imageRef, "", nil, true)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create analyzer: %w", err)
+		}
+
+		// Perform analysis
+		// We capture mountPoint for ELF analysis
+		var onProgress func(step string, done bool, duration time.Duration)
+		if s.stepUpdater != nil {
+			onProgress = func(step string, done bool, duration time.Duration) {
+				if done {
+					return
+				}
+				s.stepUpdater(step)
+			}
+		}
+
+		report, mp, _, cleanup, err := analyzer.Analyze(ctx, onProgress)
+		if cleanup != nil {
+			defer cleanup()
+		}
+		if err != nil {
+			return nil, fmt.Errorf("analysis failed: %w", err)
+		}
+		mountPoint = mp
+		allPackages = report.Analysis.Packages.RPM
+
+		if s.SaveData != "" {
+			if err := saveAnalysisReport(s.SaveData, report); err != nil {
+				return nil, err
+			}
+		}
 	}
 
-	allPackages := report.Analysis.Packages.RPM
 	logrus.Infof("Found %d RPM packages in the image", len(allPackages))
 
 	if len(allPackages) == 0 {
@@ -71,22 +129,64 @@ func (s *DefaultSolver) Solve(imageRef string, cfg *config.FusionConfig) (*types
 
 	// 3. ELF Dynamic Library Analysis
 	if cfg.Fusion.Behavior.AutoHealLibs {
-		var err error
-		keptList, err = s.solveELF(mountPoint, allPackages, keptList)
-		if err != nil {
-			logrus.Warnf("ELF analysis failed: %v", err)
+		if mountPoint == "" {
+			logrus.Warn("auto_heal_libs enabled but mount point is unavailable (from-data mode); skipping ELF analysis")
+		} else {
+			var err error
+			keptList, err = s.solveELF(mountPoint, allPackages, keptList)
+			if err != nil {
+				logrus.Warnf("ELF analysis failed: %v", err)
+			}
 		}
 	}
 
 	logrus.Infof("Resolved %d packages to keep (from %d initial requests)", len(keptList), len(cfg.Fusion.KeepPackages))
 
 	// 4. Collect Files
-	keptFiles := s.collectFiles(allPackages, keptList)
+	// from-data mode does not contain per-package file lists in JSON (Files is not serialized),
+	// so we skip collecting kept files here and rely on RPMDB-driven whitelist in the FS synthesizer.
+	var keptFiles []string
+	if mountPoint != "" {
+		keptFiles = s.collectFiles(allPackages, keptList)
+	}
+	// Append explicitly kept files from config
+	if len(cfg.Fusion.KeepFiles) > 0 {
+		keptFiles = append(keptFiles, cfg.Fusion.KeepFiles...)
+	}
 
 	return &types.FusionPlan{
 		KeptPackages: keptList,
 		KeptFiles:    keptFiles,
 	}, nil
+}
+
+func loadAnalysisReport(path string) (*coretypes.AnalysisReport, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read analysis data %s: %w", path, err)
+	}
+	report := &coretypes.AnalysisReport{}
+	if err := json.Unmarshal(data, report); err != nil {
+		return nil, fmt.Errorf("failed to parse analysis data %s: %w", path, err)
+	}
+	return report, nil
+}
+
+func saveAnalysisReport(path string, report *coretypes.AnalysisReport) error {
+	file, err := os.Create(path)
+	if err != nil {
+		return fmt.Errorf("failed to create analysis data file %s: %w", path, err)
+	}
+	defer file.Close()
+
+	enc := json.NewEncoder(file)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(report); err != nil {
+		return fmt.Errorf("failed to write analysis data file %s: %w", path, err)
+	}
+	logrus.Infof("Analysis data saved to %s", path)
+	return nil
 }
 
 func (s *DefaultSolver) solveELF(mountPoint string, allPackages []coretypes.Package, keptList []string) ([]string, error) {
