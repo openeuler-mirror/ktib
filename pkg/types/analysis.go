@@ -106,4 +106,5 @@ type Recommendation struct {
 	Code    string `json:"code"`  // e.g., RM_CACHE
 	Message string `json:"message"`
 	Saving  string `json:"saving"`
+	Command string `json:"command,omitempty"`
 }

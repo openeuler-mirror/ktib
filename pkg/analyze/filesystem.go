@@ -71,7 +71,7 @@ func (a *Analyzer) AnalyzeFilesystem(ctx context.Context, rootfs string) (types.
 		}
 
 		// File Type Identification
-		ftype := identifyFileType(path, info)
+		ftype := identifyFileType(path, info, a.Fast)
 		if ftype == "ELF Binary" {
 			if arch, err := getELFArch(path); err == nil {
 				archStats[arch]++
@@ -143,9 +143,40 @@ func getELFArch(path string) (string, error) {
 	return f.Machine.String(), nil
 }
 
-func identifyFileType(path string, info os.FileInfo) string {
+func identifyFileType(path string, info os.FileInfo, fast bool) string {
 	if info.Mode()&os.ModeSymlink != 0 {
 		return "Symlink"
+	}
+	
+	// Prevent blocking on special files (FIFO, Device, etc.)
+	if !info.Mode().IsRegular() {
+		return "Special File"
+	}
+
+	ext := strings.ToLower(filepath.Ext(path))
+
+	// Fast mode: Trust extensions for common types
+	if fast {
+		switch ext {
+		case ".jar":
+			return "Java Jar"
+		case ".whl":
+			return "Python Wheel"
+		case ".py", ".pyc":
+			return "Python Source/Bytecode"
+		case ".js":
+			return "JavaScript"
+		case ".go":
+			return "Go Source"
+		case ".c", ".h", ".cpp":
+			return "C/C++ Source"
+		case ".json", ".yaml", ".yml", ".xml":
+			return "Config/Data"
+		case ".sh", ".bash":
+			return "Script"
+		case ".so":
+			return "ELF Binary" // Approximation
+		}
 	}
 
 	f, err := os.Open(path)
@@ -185,7 +216,7 @@ func identifyFileType(path string, info os.FileInfo) string {
 	}
 
 	// Extension based fallback
-	ext := strings.ToLower(filepath.Ext(path))
+	// ext is already calculated above
 	switch ext {
 	case ".py", ".pyc":
 		return "Python Source/Bytecode"

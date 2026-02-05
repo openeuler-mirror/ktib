@@ -1,0 +1,122 @@
+package analyze
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	"gitee.com/openeuler/ktib/pkg/types"
+	"github.com/stretchr/testify/assert"
+)
+
+func TestLoadRules(t *testing.T) {
+	// Test Default Rules Loading
+	cfg, err := LoadRules("")
+	assert.NoError(t, err)
+	assert.NotEmpty(t, cfg.Rules)
+	assert.Contains(t, cfg.Strategy.EnableLevels, "SAFE")
+
+	// Test User Config Override
+	userYaml := `
+version: "1.1"
+strategy:
+  enable_levels: ["EXPERIMENTAL"]
+rules:
+  - id: "TEST_RULE"
+    match:
+      paths: ["/test/path"]
+    level: "EXPERIMENTAL"
+    description: "Test Rule"
+`
+	tmpFile := filepath.Join(t.TempDir(), "rules.yaml")
+	err = os.WriteFile(tmpFile, []byte(userYaml), 0644)
+	assert.NoError(t, err)
+
+	cfg, err = LoadRules(tmpFile)
+	assert.NoError(t, err)
+	assert.Contains(t, cfg.Strategy.EnableLevels, "EXPERIMENTAL")
+
+	// Check if TEST_RULE is present
+	found := false
+	for _, r := range cfg.Rules {
+		if r.ID == "TEST_RULE" {
+			found = true
+			break
+		}
+	}
+	assert.True(t, found)
+}
+
+func TestGenerateRecommendations(t *testing.T) {
+	// Setup Analyzer with custom rules
+	cfg := types.Config{
+		Strategy: types.Strategy{
+			EnableLevels: []string{"SAFE", "WARN"},
+		},
+		Rules: []types.Rule{
+			{
+				ID: "RM_CACHE",
+				Match: types.Match{
+					Paths: []string{"/var/cache"},
+				},
+				Level:       "SAFE",
+				Description: "Remove Cache",
+				Action:      "rm -rf /var/cache",
+			},
+			{
+				ID: "RM_DOCS",
+				Match: types.Match{
+					PathGlobs: []string{"*.doc"},
+				},
+				Level:       "WARN",
+				Description: "Remove Docs",
+			},
+			{
+				ID: "RM_PKG",
+				Match: types.Match{
+					PkgNames: []string{"vim*"},
+				},
+				Level:       "SAFE",
+				Description: "Remove Pkg",
+			},
+		},
+	}
+
+	analyzer := &Analyzer{
+		Rules: cfg,
+	}
+
+	// Mock Data
+	fs := types.FilesystemInfo{
+		TopDirectories: []types.TopDirectory{
+			{Path: "/var/cache/yum", Size: 100},
+			{Path: "/usr/share/doc/readme.doc", Size: 200},
+			{Path: "/usr/bin", Size: 500},
+		},
+	}
+	pkgs := types.PackageInfo{
+		RPM: []types.Package{
+			{Name: "vim-enhanced", Size: 1000},
+			{Name: "bash", Size: 500},
+		},
+	}
+	waste := types.WasteDetection{}
+	layers := []types.LayerInfo{}
+
+	recs := analyzer.GenerateRecommendations(layers, pkgs, fs, waste)
+
+	assert.Len(t, recs, 3) // Cache, Docs, Pkg
+
+	// Check 1: Cache
+	assert.Equal(t, "RM_CACHE", recs[0].Code)
+	assert.Equal(t, "rm -rf /var/cache", recs[0].Command)
+
+	// Check 2: Docs (Globs match against filepath.Base of directory path)
+	// In the implementation, we match filepath.Base(dir.Path) against pattern.
+	// dir.Path = "/usr/share/doc/readme.doc", Base = "readme.doc", Pattern = "*.doc" -> Match!
+	assert.Equal(t, "RM_DOCS", recs[1].Code)
+
+	// Check 3: Pkg
+	// "vim-enhanced" matches "vim*"
+	assert.Equal(t, "RM_PKG", recs[2].Code)
+}

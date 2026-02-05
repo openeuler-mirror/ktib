@@ -23,7 +23,7 @@ deps:
 
 .PHONY: build
 build:
-	CGO_ENABLED=0 go build $(LDFLAGS) -tags "$(BUILDTAGS)" ./cmd/ktib
+	go build $(LDFLAGS) -tags "$(BUILDTAGS)" ./cmd/ktib
 
 .PHONY: install
 install:
