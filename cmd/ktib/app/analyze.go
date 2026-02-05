@@ -212,8 +212,8 @@ Key Features:
 				enc.SetIndent("", "  ")
 				err = enc.Encode(report)
 				utils.CheckErr(err)
-				fmt.Printf("Analysis data saved to %s\n", saveData)
-				return
+				fmt.Printf("Analysis data (full) saved to %s\n", saveData)
+				// Do not return here, continue to generate recommendations
 			}
 
 			// --- 3. Advisor (Standard Flow) ---

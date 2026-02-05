@@ -126,6 +126,25 @@ func (s *DefaultSolver) Solve(imageRef string, cfg *config.FusionConfig) (*types
 		}
 	}
 
+	// Validate data integrity (check if it's a pruned report)
+	if len(allPackages) > 0 {
+		// Check the first few packages to see if they have essential metadata
+		hasMetadata := false
+		checks := 5
+		if len(allPackages) < checks {
+			checks = len(allPackages)
+		}
+		for i := 0; i < checks; i++ {
+			if len(allPackages[i].Files) > 0 || len(allPackages[i].Requires) > 0 {
+				hasMetadata = true
+				break
+			}
+		}
+		if !hasMetadata {
+			return nil, fmt.Errorf("loaded analysis data appears to be a pruned report (missing dependency/file info). Please use 'ktib analyze --save-data' to generate full data for fusion")
+		}
+	}
+
 	logrus.Infof("Found %d packages (RPM+Python) in the image", len(allPackages))
 
 	if len(allPackages) == 0 {
