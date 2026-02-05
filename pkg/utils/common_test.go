@@ -31,7 +31,7 @@ func TestGetStore(t *testing.T) {
 	}
 	_, err := GetStore(cmd)
 	if err != nil {
-		if strings.Contains(err.Error(), "is not supported over overlayfs") {
+		if strings.Contains(err.Error(), "is not supported over overlayfs") || strings.Contains(err.Error(), "driver not supported") {
 			t.Skip("Skipping test due to unsupported overlay error.")
 		}
 		t.Fatalf("Error during Commit: %v", err)

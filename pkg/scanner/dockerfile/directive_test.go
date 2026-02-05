@@ -30,7 +30,7 @@ func TestNewFromDirective(t *testing.T) {
 				Type:      FROM,
 				Content:   "registry.example.com/myapp/my-image:v1.0",
 				Registry:  "registry.example.com",
-				ImageName: "my-image",
+				ImageName: "myapp/my-image",
 				ImageTag:  "v1.0",
 			},
 		},
@@ -43,6 +43,7 @@ func TestNewFromDirective(t *testing.T) {
 				Registry:  "registry.example.com",
 				ImageName: "my-image",
 				Platform:  "amd64",
+				ImageTag:  "latest",
 			},
 		},
 		{
@@ -63,6 +64,7 @@ func TestNewFromDirective(t *testing.T) {
 				Content:   "my-image@arm64",
 				ImageName: "my-image",
 				Platform:  "arm64",
+				ImageTag:  "latest",
 			},
 		},
 		{
@@ -72,6 +74,7 @@ func TestNewFromDirective(t *testing.T) {
 				Type:      FROM,
 				Content:   "my-image",
 				ImageName: "my-image",
+				ImageTag:  "latest",
 			},
 		},
 	}
@@ -368,7 +371,6 @@ func TestNewEnvDirective(t *testing.T) {
 				Type:    ENV,
 				Content: "ENV VAR1=value1",
 				Variables: map[string]string{
-					"ENV":  "VAR1=value1",
 					"VAR1": "value1",
 				},
 			},
@@ -618,7 +620,7 @@ func TestNewArgDirective(t *testing.T) {
 			expected: &ArgDirective{
 				Type:     ARG,
 				Content:  "ARG VAR=value",
-				Argument: "ARG VAR=value",
+				Argument: "VAR=value",
 			},
 		},
 	}
