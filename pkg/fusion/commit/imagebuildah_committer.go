@@ -27,6 +27,11 @@ import (
 	"golang.org/x/net/context"
 )
 
+// Committer defines interface for committing rootfs to image
+type Committer interface {
+	Commit(rootfs string, targetTag string) error
+}
+
 type ImageBuildahCommitter struct {
 	Store storage.Store
 }
