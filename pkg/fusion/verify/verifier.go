@@ -120,11 +120,11 @@ func (v *DefaultVerifier) Verify(rootfsPath string) error {
 
 	// 4. Run rpm -Va (External Tool Check)
 	// We run this only if rpm is available
-	if _, err := exec.LookPath("rpm"); err == nil {
+	if rpmPath, err := exec.LookPath("rpm"); err == nil {
 		logrus.Info("Running rpm -Va...")
 		// rpm --root requires absolute path
 		absRoot, _ := filepath.Abs(rootfsPath)
-		cmd := exec.Command("rpm", "--root", absRoot, "-Va")
+		cmd := exec.Command(rpmPath, "--root", absRoot, "-Va")
 		// rpm -Va output is noisy for cut images, we capture it but maybe don't fail strictly?
 		// The requirement is "Add rpm -Va check".
 		// We'll run it and log output if it fails.
@@ -147,13 +147,13 @@ func (v *DefaultVerifier) Verify(rootfsPath string) error {
 	}
 
 	// 5. Run ldconfig (Library Check)
-	if _, err := exec.LookPath("ldconfig"); err == nil {
+	if ldconfigPath, err := exec.LookPath("ldconfig"); err == nil {
 		logrus.Info("Running ldconfig check...")
 		absRoot, _ := filepath.Abs(rootfsPath)
 		// ldconfig -r checks and rebuilds cache. If libs are broken/missing deps, it might complain?
 		// ldconfig usually doesn't verify deps, just creates links.
 		// To verify, we might check if it returns 0.
-		cmd := exec.Command("ldconfig", "-r", absRoot)
+		cmd := exec.Command(ldconfigPath, "-r", absRoot)
 		output, err := cmd.CombinedOutput()
 		if err != nil {
 			logrus.Errorf("ldconfig failed:\n%s", string(output))

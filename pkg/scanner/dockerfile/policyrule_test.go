@@ -637,3 +637,205 @@ func TestNewForbidSecrets_Details(t *testing.T) {
 		t.Errorf("Expected %s, got %s", expected, testFsd.Details())
 	}
 }
+
+func TestRule_MarshalJSON(t *testing.T) {
+	rule := Rule{
+		Type:        GENERIC_POLICY,
+		Details:     "details",
+		Mitigations: "mitigations",
+		Status:      "fail",
+	}
+	expectedJSON := `{"Type":"GENERIC_POLICY","Details":"details","Mitigations":"mitigations","Status":"fail"}`
+
+	bytes, err := rule.MarshalJSON()
+	if err != nil {
+		t.Fatalf("MarshalJSON failed: %v", err)
+	}
+
+	if string(bytes) != expectedJSON {
+		t.Errorf("Expected JSON %s, got %s", expectedJSON, string(bytes))
+	}
+}
+
+func TestGenericPolicyRule_Methods(t *testing.T) {
+	rule := GenericPolicyRule{
+		Type:        GENERIC_POLICY,
+		Description: "description",
+	}
+
+	if rule.Describe() != "description" {
+		t.Errorf("Describe() = %v, want %v", rule.Describe(), "description")
+	}
+
+	if rule.GetType() != GENERIC_POLICY {
+		t.Errorf("GetType() = %v, want %v", rule.GetType(), GENERIC_POLICY)
+	}
+
+	if rule.Details() != "" {
+		t.Errorf("Details() = %v, want empty string", rule.Details())
+	}
+
+	if rule.Test(nil) != nil {
+		t.Errorf("Test(nil) = %v, want nil", rule.Test(nil))
+	}
+}
+
+func TestForbidPrivilegedPorts_getPortFromEnv(t *testing.T) {
+	rule := &ForbidPrivilegedPorts{}
+
+	directives := map[string][]DfDirective{
+		"env": {
+			&EnvDirective{
+				Variables: map[string]string{
+					"PORT_80":  "80",
+					"PORT_STR": "invalid",
+				},
+			},
+		},
+	}
+
+	// Case 1: Valid port in env
+	port := rule.getPortFromEnv("PORT_80", directives)
+	if port == nil || *port != 80 {
+		t.Errorf("getPortFromEnv(PORT_80) = %v, want 80", port)
+	}
+
+	// Case 2: Invalid port value
+	port = rule.getPortFromEnv("PORT_STR", directives)
+	if port != nil {
+		t.Errorf("getPortFromEnv(PORT_STR) = %v, want nil", port)
+	}
+
+	// Case 3: Missing env variable
+	port = rule.getPortFromEnv("PORT_MISSING", directives)
+	if port != nil {
+		t.Errorf("getPortFromEnv(PORT_MISSING) = %v, want nil", port)
+	}
+}
+
+func TestForbidPackages_getInstalledPackages(t *testing.T) {
+	rule := &ForbidPackages{}
+
+	tests := []struct {
+		name     string
+		commands [][]string
+		want     []string
+	}{
+		{
+			name: "apt-get install",
+			commands: [][]string{
+				{"apt-get", "install", "-y", "vim"},
+			},
+			want: []string{"vim"},
+		},
+		{
+			name: "apt-get install multiple",
+			commands: [][]string{
+				{"apt-get", "install", "-y", "vim", "curl"},
+			},
+			want: []string{"vim", "curl"},
+		},
+		{
+			name: "apk add",
+			commands: [][]string{
+				{"apk", "add", "--no-cache", "git"},
+			},
+			want: []string{"git"},
+		},
+		{
+			name: "yum install and remove",
+			commands: [][]string{
+				{"yum", "install", "-y", "wget"},
+				{"yum", "remove", "-y", "wget"},
+			},
+			want: []string{},
+		},
+		{
+			name: "mixed commands",
+			commands: [][]string{
+				{"apt-get", "update"},
+				{"apt-get", "install", "net-tools"},
+			},
+			want: []string{"net-tools"},
+		},
+		{
+			name: "flags in package list",
+			commands: [][]string{
+				{"apt-get", "install", "vim", "-q"},
+			},
+			want: []string{"vim"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := rule.getInstalledPackages(tt.commands)
+			if !reflect.DeepEqual(got, tt.want) {
+				if len(got) == 0 && len(tt.want) == 0 {
+					return
+				}
+				t.Errorf("getInstalledPackages() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestForbidPackages_splitSingleCommands(t *testing.T) {
+	rule := &ForbidPackages{}
+
+	tests := []struct {
+		name      string
+		directive *RunDirective
+		want      [][]string
+	}{
+		{
+			name: "Simple command",
+			directive: &RunDirective{
+				Content: "RUN apt-get update",
+			},
+			want: [][]string{
+				{"RUN", "apt-get", "update"},
+			},
+		},
+		{
+			name: "Command with &&",
+			directive: &RunDirective{
+				Content: "RUN apt-get update && apt-get install vim",
+			},
+			want: [][]string{
+				{"RUN", "apt-get", "update"},
+				{"apt-get", "install", "vim"},
+			},
+		},
+		{
+			name: "Command with ;",
+			directive: &RunDirective{
+				Content: "RUN echo hello ; echo world",
+			},
+			want: [][]string{
+				{"RUN", "echo", "hello"},
+				{"echo", "world"},
+			},
+		},
+		{
+			name: "Command with pipe",
+			directive: &RunDirective{
+				Content: "RUN cat file | grep something",
+			},
+			want: [][]string{
+				{"RUN", "cat", "file"},
+				{"grep", "something"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			directives := []DfDirective{tt.directive}
+			got := rule.splitSingleCommands(directives)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("splitSingleCommands() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
