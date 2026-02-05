@@ -44,7 +44,7 @@ const (
 	stateFile            = "ktib.json"
 	specFile             = "config.json"
 	defaultTransport     = "containers-storage:"
-	defaultruntime       = "runc"
+	defaultruntime       = "/usr/bin/runc"
 	defaultNullImageName = "none"
 )
 

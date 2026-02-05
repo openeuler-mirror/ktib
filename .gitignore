@@ -70,3 +70,8 @@ local/
 
 # Test cache
 .cache/
+
+# Agent cache
+.agent/
+AGENTS.md
+.trae/

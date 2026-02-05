@@ -48,7 +48,7 @@ func CheckVarsFile(target string) error {
 		if err != nil {
 			return fmt.Errorf("failed to create yum directory: %v", err)
 		}
-		cmd := exec.Command("cp", "-a", "/etc/yum/vars", filepath.Join(target, "etc/yum/"))
+		cmd := exec.Command("/usr/bin/cp", "-a", "/etc/yum/vars", filepath.Join(target, "etc/yum/"))
 		if err := cmd.Run(); err != nil {
 			return fmt.Errorf("failed to copy /etc/yum/vars:%v", err)
 		}
