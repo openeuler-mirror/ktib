@@ -88,6 +88,7 @@ Kylin Trusted Image Builder (ktib)
 		// todo: Not implemented yet
 		newCmdMake(),
 		newCmdAnalyze(),
+		newCmdFusion(),
 		newCmdVersion(),
 		// Add completion command
 		&cobra.Command{
