@@ -19,6 +19,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"sort"
 	"testing"
 
 	"github.com/containers/storage"
@@ -62,7 +63,16 @@ func createTar(files map[string]string) (io.ReadCloser, error) {
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
 
-	for name, content := range files {
+	// Sort keys to ensure deterministic order
+	// This is critical for opaque whiteout tests where whiteout must appear before other files in the same dir
+	var keys []string
+	for k := range files {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, name := range keys {
+		content := files[name]
 		hdr := &tar.Header{
 			Name: name,
 			Mode: 0644,
@@ -85,7 +95,7 @@ func TestExtractLayersWithFilter(t *testing.T) {
 	// Setup Mock Store
 	// Layer 1 (Base): /etc/os-release, /bin/bash
 	// Layer 2 (Top): /bin/app, /bin/bash (overwrite)
-	
+
 	layer1ID := "layer1"
 	layer2ID := "layer2"
 	imageID := "test-image"
@@ -141,7 +151,7 @@ func TestExtractLayersWithFilter(t *testing.T) {
 	whitelistSpecific := func(p string) bool {
 		return p == "/bin/app" || p == "/bin/ls"
 	}
-	
+
 	// Reset readers because they were consumed
 	tar1, _ = createTar(map[string]string{
 		"etc/os-release": "ID=kylin",
@@ -168,7 +178,7 @@ func TestExtractLayersWithFilter(t *testing.T) {
 func TestApplyTarWithFilter_Whiteout(t *testing.T) {
 	// Test whiteout handling
 	// Layer contains .wh.foo, meaning foo should be deleted
-	
+
 	tmpDir, err := ioutil.TempDir("", "wh-test-")
 	if err != nil {
 		t.Fatal(err)
@@ -183,11 +193,44 @@ func TestApplyTarWithFilter_Whiteout(t *testing.T) {
 	tarData, _ := createTar(map[string]string{
 		"etc/.wh.foo": "",
 	})
-	
+
 	err = applyTarWithFilter(tarData, tmpDir, func(p string) bool { return true })
 	assert.NoError(t, err)
 
 	assertFileMissing(t, filepath.Join(tmpDir, "etc/foo"))
+}
+
+func TestApplyTarWithFilter_OpaqueWhiteout(t *testing.T) {
+	// Test opaque whiteout handling (.wh.opq)
+	// Layer contains dir/.wh.opq, meaning dir should be emptied
+
+	tmpDir, err := ioutil.TempDir("", "opq-test-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create directory with existing files
+	dirPath := filepath.Join(tmpDir, "etc")
+	os.MkdirAll(dirPath, 0755)
+	ioutil.WriteFile(filepath.Join(dirPath, "old1"), []byte("v1"), 0644)
+	ioutil.WriteFile(filepath.Join(dirPath, "old2"), []byte("v1"), 0644)
+
+	// Tar with opaque whiteout and a new file
+	tarData, _ := createTar(map[string]string{
+		"etc/.wh..wh.opq": "",
+		"etc/new":         "v2",
+	})
+
+	err = applyTarWithFilter(tarData, tmpDir, func(p string) bool { return true })
+	assert.NoError(t, err)
+
+	// old files should be gone
+	assertFileMissing(t, filepath.Join(dirPath, "old1"))
+	assertFileMissing(t, filepath.Join(dirPath, "old2"))
+
+	// new file should exist
+	assertFileContent(t, filepath.Join(dirPath, "new"), "v2")
 }
 
 func assertFileContent(t *testing.T, path, expected string) {

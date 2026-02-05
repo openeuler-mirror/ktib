@@ -86,6 +86,16 @@ func scanRPMs(rootfs string) ([]types.Package, error) {
 
 	var pkgs []types.Package
 	for _, p := range pkgList {
+		var filePaths []string
+		files, err := p.InstalledFiles()
+		if err == nil {
+			for _, f := range files {
+				filePaths = append(filePaths, f.Path)
+			}
+		} else {
+			logrus.Debugf("Failed to get files for package %s: %v", p.Name, err)
+		}
+
 		pkgs = append(pkgs, types.Package{
 			Name:     p.Name,
 			Version:  fmt.Sprintf("%s-%s", p.Version, p.Release),
@@ -94,6 +104,7 @@ func scanRPMs(rootfs string) ([]types.Package, error) {
 			Digest:   p.SigMD5,
 			Requires: p.Requires,
 			Provides: p.Provides,
+			Files:    filePaths,
 		})
 	}
 	return pkgs, nil

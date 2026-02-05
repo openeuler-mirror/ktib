@@ -169,7 +169,7 @@ func (s *DefaultSynthesizer) extractLayersWithFilter(imageRef string, outputDir 
 		// We want Bottom-up.
 		// layers = [Top, Parent, Grandparent...]
 		// We want [Grandparent, Parent, Top]
-		
+
 		l, err := s.Store.Layer(layerID)
 		if err != nil {
 			return err
@@ -207,43 +207,59 @@ func applyTarWithFilter(r io.Reader, dest string, filter func(string) bool) erro
 			return err
 		}
 
-		name := hdr.Name
-		// Tar names are usually relative, e.g. "etc/hosts" or "./etc/hosts"
-		// We normalize to absolute path for filter check: "/etc/hosts"
-		absPath := "/" + strings.TrimPrefix(name, "./")
-		absPath = "/" + strings.TrimPrefix(absPath, "/") // ensure single leading slash
+		// Clean and normalize name
+		name := filepath.Clean(hdr.Name)
+		// Security check
+		if strings.HasPrefix(name, "../") || strings.Contains(name, "/../") {
+			continue
+		}
 
-		// Handle whiteouts
+		// Determine absolute path for whitelist check
+		// RPM files are absolute. Tar names are relative.
+		// We prepend / to match whitelist format.
+		checkName := name
+		if !strings.HasPrefix(checkName, "/") {
+			checkName = "/" + checkName
+		}
+
+		// 1. Handle Whiteouts (OverlayFS)
 		base := filepath.Base(name)
+		dir := filepath.Dir(name)
 		if strings.HasPrefix(base, ".wh.") {
-			// It's a whiteout. We need to delete the file in dest.
-			// .wh.foo means foo is deleted.
 			realName := strings.TrimPrefix(base, ".wh.")
 			if realName == ".wh.opq" {
-				// Opaque whiteout - ignore for now or handle directory opacity
+				// Opaque whiteout: clear the directory in dest
+				targetDir := filepath.Join(dest, dir)
+				os.RemoveAll(targetDir)
+				if err := os.MkdirAll(targetDir, 0755); err != nil {
+					return err
+				}
 				continue
 			}
-			
-			// Construct path to delete
-			dir := filepath.Dir(name)
+			// Explicit whiteout
 			pathToDelete := filepath.Join(dest, dir, realName)
 			os.RemoveAll(pathToDelete)
 			continue
 		}
 
-		if !filter(absPath) {
+		// 2. Filter check
+		if !filter(checkName) {
 			continue
 		}
 
 		target := filepath.Join(dest, name)
 
+		// 3. Extract Entry
 		switch hdr.Typeflag {
 		case tar.TypeDir:
 			if err := os.MkdirAll(target, 0755); err != nil {
 				return err
 			}
+			if err := setFileMetadata(target, hdr); err != nil {
+				logrus.Debugf("Failed to set metadata for dir %s: %v", target, err)
+			}
+
 		case tar.TypeReg:
-			// Ensure parent dir exists
 			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
 				return err
 			}
@@ -256,10 +272,33 @@ func applyTarWithFilter(r io.Reader, dest string, filter func(string) bool) erro
 				return err
 			}
 			f.Close()
-		case tar.TypeSymlink:
-			os.Symlink(hdr.Linkname, target)
+			if err := setFileMetadata(target, hdr); err != nil {
+				logrus.Debugf("Failed to set metadata for file %s: %v", target, err)
+			}
+
 		case tar.TypeLink:
-			os.Link(filepath.Join(dest, hdr.Linkname), target)
+			linkTarget := filepath.Join(dest, hdr.Linkname)
+			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+				return err
+			}
+			os.Remove(target)
+			if err := os.Link(linkTarget, target); err != nil {
+				return err
+			}
+			// Hard links share metadata with target, but we can try setting it if needed.
+			// Usually redundant.
+
+		case tar.TypeSymlink:
+			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+				return err
+			}
+			os.Remove(target)
+			if err := os.Symlink(hdr.Linkname, target); err != nil {
+				return err
+			}
+			if err := setFileMetadata(target, hdr); err != nil {
+				logrus.Debugf("Failed to set metadata for symlink %s: %v", target, err)
+			}
 		}
 	}
 	return nil

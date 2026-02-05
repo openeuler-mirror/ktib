@@ -69,6 +69,7 @@ type Package struct {
 	Digest   string   `json:"digest,omitempty"`
 	Requires []string `json:"requires,omitempty"`
 	Provides []string `json:"provides,omitempty"`
+	Files    []string `json:"-"` // Files installed by the package (internal use)
 }
 
 // FilesystemInfo contains filesystem statistics
@@ -105,9 +106,9 @@ type DuplicateFile struct {
 
 // Recommendation represents an actionable optimization suggestion
 type Recommendation struct {
-	Level   string `json:"level"` // e.g., WARN, INFO
-	Code    string `json:"code"`  // e.g., RM_CACHE
-	Message string `json:"message"`
+	Level        string   `json:"level"` // e.g., WARN, INFO
+	Code         string   `json:"code"`  // e.g., RM_CACHE
+	Message      string   `json:"message"`
 	Saving       string   `json:"saving"`
 	Command      string   `json:"command,omitempty"`
 	MatchedItems []string `json:"matched_items,omitempty"`
