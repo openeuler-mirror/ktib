@@ -24,13 +24,15 @@ type DependencySolver interface {
 // DBReconstructor defines the interface for reconstructing the RPM database
 type DBReconstructor interface {
 	// Reconstruct builds a new RPM DB based on the kept packages
-	Reconstruct(plan *FusionPlan, outputDir string) error
+	Reconstruct(sourcePath string, plan *FusionPlan, outputDir string) error
 }
 
 // FSSynthesizer defines the interface for synthesizing the final filesystem
 type FSSynthesizer interface {
 	// Synthesize creates the final rootfs
-	Synthesize(plan *FusionPlan, outputDir string) error
+	Synthesize(imageRef string, plan *FusionPlan, outputDir string) error
+	// ExtractRPMDB extracts the RPM DB from the image to a destination directory
+	ExtractRPMDB(imageRef string, dest string) error
 }
 
 // Verifier defines the interface for verifying the result

@@ -87,11 +87,13 @@ func scanRPMs(rootfs string) ([]types.Package, error) {
 	var pkgs []types.Package
 	for _, p := range pkgList {
 		pkgs = append(pkgs, types.Package{
-			Name:    p.Name,
-			Version: fmt.Sprintf("%s-%s", p.Version, p.Release),
-			Size:    int64(p.Size),
-			License: p.License,
-			Digest:  p.SigMD5,
+			Name:     p.Name,
+			Version:  fmt.Sprintf("%s-%s", p.Version, p.Release),
+			Size:     int64(p.Size),
+			License:  p.License,
+			Digest:   p.SigMD5,
+			Requires: p.Requires,
+			Provides: p.Provides,
 		})
 	}
 	return pkgs, nil

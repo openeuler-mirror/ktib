@@ -62,11 +62,13 @@ type PackageInfo struct {
 
 // Package describes a single software package
 type Package struct {
-	Name    string `json:"name"`
-	Version string `json:"version"`
-	Size    int64  `json:"size"`
-	License string `json:"license,omitempty"`
-	Digest  string `json:"digest,omitempty"`
+	Name     string   `json:"name"`
+	Version  string   `json:"version"`
+	Size     int64    `json:"size"`
+	License  string   `json:"license,omitempty"`
+	Digest   string   `json:"digest,omitempty"`
+	Requires []string `json:"requires,omitempty"`
+	Provides []string `json:"provides,omitempty"`
 }
 
 // FilesystemInfo contains filesystem statistics

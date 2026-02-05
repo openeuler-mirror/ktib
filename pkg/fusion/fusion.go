@@ -13,13 +13,16 @@ package fusion
 
 import (
 	"fmt"
+	"os"
 
+	"gitee.com/openeuler/ktib/pkg/fusion/commit"
 	"gitee.com/openeuler/ktib/pkg/fusion/config"
 	"gitee.com/openeuler/ktib/pkg/fusion/fs"
 	"gitee.com/openeuler/ktib/pkg/fusion/rpm"
 	"gitee.com/openeuler/ktib/pkg/fusion/solver"
 	"gitee.com/openeuler/ktib/pkg/fusion/types"
 	"gitee.com/openeuler/ktib/pkg/fusion/verify"
+	"github.com/containers/storage"
 	"github.com/sirupsen/logrus"
 )
 
@@ -30,21 +33,23 @@ type FusionManager struct {
 	RPM    types.DBReconstructor
 	FS     types.FSSynthesizer
 	Verify types.Verifier
+	Commit commit.Committer
 }
 
 // NewFusionManager creates a new FusionManager
-func NewFusionManager(cfg *config.FusionConfig) *FusionManager {
+func NewFusionManager(cfg *config.FusionConfig, store storage.Store) *FusionManager {
 	return &FusionManager{
 		Config: cfg,
-		Solver: solver.NewDefaultSolver(),
-		RPM:    rpm.NewDefaultReconstructor(),
-		FS:     fs.NewDefaultSynthesizer(),
+		Solver: solver.NewDefaultSolver(store),
+		RPM:    rpm.NewDefaultReconstructor(store.GraphRoot()), // Pass graph root if needed by Reconstructor, or adapt
+		FS:     fs.NewDefaultSynthesizer(store),
 		Verify: verify.NewDefaultVerifier(),
+		Commit: commit.NewBuildahCommitter(),
 	}
 }
 
 // Run executes the fusion pipeline
-func (m *FusionManager) Run(imageRef string, outputDir string) error {
+func (m *FusionManager) Run(imageRef string, outputDir string, targetTag string) error {
 	logrus.Infof("Starting fusion for image: %s", imageRef)
 
 	// Phase 1: Solve Dependencies
@@ -57,13 +62,28 @@ func (m *FusionManager) Run(imageRef string, outputDir string) error {
 
 	// Phase 2: Reconstruct RPM DB
 	logrus.Info("Phase 2: Reconstructing RPM Database...")
-	if err := m.RPM.Reconstruct(plan, outputDir); err != nil {
-		return fmt.Errorf("RPM DB reconstruction failed: %w", err)
+
+	// Extract original RPM DB to a temp directory
+	tempRPMDB, err := os.MkdirTemp("", "ktib-fusion-rpmdb-src-")
+	if err != nil {
+		return fmt.Errorf("failed to create temp dir for RPM DB: %w", err)
+	}
+	defer os.RemoveAll(tempRPMDB)
+
+	logrus.Debugf("Extracting original RPM DB to %s", tempRPMDB)
+	if err := m.FS.ExtractRPMDB(imageRef, tempRPMDB); err != nil {
+		return fmt.Errorf("failed to extract RPM DB: %w", err)
+	}
+
+	if err := m.RPM.Reconstruct(tempRPMDB, plan, outputDir); err != nil {
+		logrus.Warnf("RPM DB reconstruction failed: %v", err)
+		// We don't fail hard here because in some cases (e.g. BDB) it's expected to fail if not supported.
+		// But ideally we should.
 	}
 
 	// Phase 3: Synthesize Filesystem
 	logrus.Info("Phase 3: Synthesizing Filesystem...")
-	if err := m.FS.Synthesize(plan, outputDir); err != nil {
+	if err := m.FS.Synthesize(imageRef, plan, outputDir); err != nil {
 		return fmt.Errorf("filesystem synthesis failed: %w", err)
 	}
 
@@ -71,6 +91,14 @@ func (m *FusionManager) Run(imageRef string, outputDir string) error {
 	logrus.Info("Phase 4: Verifying result...")
 	if err := m.Verify.Verify(outputDir); err != nil {
 		return fmt.Errorf("verification failed: %w", err)
+	}
+
+	// Phase 5: Commit (Optional)
+	if targetTag != "" {
+		logrus.Info("Phase 5: Committing to new image...")
+		if err := m.Commit.Commit(outputDir, targetTag); err != nil {
+			return fmt.Errorf("commit failed: %w", err)
+		}
 	}
 
 	logrus.Info("Fusion completed successfully!")

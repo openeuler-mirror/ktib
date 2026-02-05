@@ -43,8 +43,12 @@ Example:
 			cfg, err := config.LoadConfig(configPath)
 			utils.CheckErr(err)
 
+			// Get Store
+			store, err := utils.GetStore(cmd)
+			utils.CheckErr(err)
+
 			// 2. Initialize Manager
-			mgr := fusion.NewFusionManager(cfg)
+			mgr := fusion.NewFusionManager(cfg, store)
 
 			// 3. Execute Fusion
 			// If outputDir is not specified, use a default one?
@@ -52,12 +56,8 @@ Example:
 				outputDir = fmt.Sprintf("fusion_output_%s", strings.ReplaceAll(imageRef, ":", "_"))
 			}
 
-			err = mgr.Run(imageRef, outputDir)
+			err = mgr.Run(imageRef, outputDir, targetTag)
 			utils.CheckErr(err)
-
-			if targetTag != "" {
-				fmt.Printf("Building new image %s from %s is not yet implemented.\n", targetTag, outputDir)
-			}
 		},
 	}
 
