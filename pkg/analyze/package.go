@@ -130,10 +130,8 @@ func scanPython(rootfs string) ([]types.Package, error) {
 			}
 			// Look for .dist-info or .egg-info directories
 			if info.IsDir() && (strings.HasSuffix(info.Name(), ".dist-info") || strings.HasSuffix(info.Name(), ".egg-info")) {
-				pkg := parsePythonMetadata(path)
+				pkg := parsePythonMetadata(rootfs, path)
 				if pkg.Name != "" {
-					// Try to estimate size (scan directory of package?)
-					// For now, keep size 0 or try to find RECORD file to sum up sizes
 					pkgs = append(pkgs, pkg)
 				}
 				return filepath.SkipDir // Don't look inside dist-info
@@ -147,7 +145,7 @@ func scanPython(rootfs string) ([]types.Package, error) {
 	return pkgs, nil
 }
 
-func parsePythonMetadata(path string) types.Package {
+func parsePythonMetadata(rootfs, path string) types.Package {
 	pkg := types.Package{}
 
 	// Priority: METADATA > PKG-INFO
@@ -183,7 +181,185 @@ func parsePythonMetadata(path string) types.Package {
 			pkg.License = strings.TrimSpace(strings.TrimPrefix(line, "License: "))
 		}
 	}
+
+	// Parse Files
+	pkg.Files = parsePythonFiles(rootfs, path, pkg.Name)
+
 	return pkg
+}
+
+func parsePythonFiles(rootfs, infoPath, pkgName string) []string {
+	var files []string
+	baseDir := filepath.Dir(infoPath) // site-packages dir
+
+	// 1. Try RECORD (.dist-info)
+	recordPath := filepath.Join(infoPath, "RECORD")
+	if _, err := os.Stat(recordPath); err == nil {
+		if recFiles, err := parseRecordFile(rootfs, baseDir, recordPath); err == nil {
+			return recFiles
+		}
+	}
+
+	// 2. Try installed-files.txt (.egg-info)
+	installedPath := filepath.Join(infoPath, "installed-files.txt")
+	if _, err := os.Stat(installedPath); err == nil {
+		if instFiles, err := parseInstalledFiles(rootfs, baseDir, installedPath); err == nil {
+			return instFiles
+		}
+	}
+
+	// 3. Try SOURCES.txt (.egg-info)
+	sourcesPath := filepath.Join(infoPath, "SOURCES.txt")
+	if _, err := os.Stat(sourcesPath); err == nil {
+		if srcFiles, err := parseInstalledFiles(rootfs, baseDir, sourcesPath); err == nil {
+			return srcFiles
+		}
+	}
+
+	// 4. Fallback: top_level.txt or heuristics
+	topLevelPath := filepath.Join(infoPath, "top_level.txt")
+	if _, err := os.Stat(topLevelPath); err == nil {
+		if topFiles, err := parseTopLevel(rootfs, baseDir, topLevelPath); err == nil {
+			return topFiles
+		}
+	}
+
+	// 5. Fallback: Package Name Directory
+	// Convert package name to possible directory name (e.g. llama_cpp -> llama_cpp)
+	// normalize: - to _
+	normName := strings.ReplaceAll(pkgName, "-", "_")
+	pkgDir := filepath.Join(baseDir, normName)
+	if _, err := os.Stat(pkgDir); err == nil {
+		if dirFiles, err := scanDirectory(rootfs, pkgDir); err == nil {
+			return dirFiles
+		}
+	}
+
+	return files
+}
+
+func parseRecordFile(rootfs, baseDir, recordPath string) ([]string, error) {
+	f, err := os.Open(recordPath)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	var files []string
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := scanner.Text()
+		// RECORD format: path,sha256,size
+		parts := strings.Split(line, ",")
+		if len(parts) > 0 {
+			relPath := parts[0]
+			// Handle absolute paths (rare in wheels, but possible)
+			if filepath.IsAbs(relPath) {
+				// If absolute, it usually refers to system root, but we are in a chroot context?
+				// Wheel spec says paths are relative to site-packages usually.
+				// But some entries might be absolute.
+				// Let's assume relative to baseDir if not absolute.
+			}
+
+			fullPath := filepath.Join(baseDir, relPath)
+			
+			// Resolve to container absolute path
+			// rootfs might be /tmp/mount/
+			// fullPath might be /tmp/mount/usr/lib/python...
+			// We need /usr/lib/python...
+			
+			containerPath, err := filepath.Rel(rootfs, fullPath)
+			if err == nil {
+				if !strings.HasPrefix(containerPath, "/") {
+					containerPath = "/" + containerPath
+				}
+				files = append(files, containerPath)
+			}
+		}
+	}
+	return files, nil
+}
+
+func parseInstalledFiles(rootfs, baseDir, path string) ([]string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	var files []string
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+		
+		fullPath := filepath.Join(baseDir, line)
+		containerPath, err := filepath.Rel(rootfs, fullPath)
+		if err == nil {
+			if !strings.HasPrefix(containerPath, "/") {
+				containerPath = "/" + containerPath
+			}
+			files = append(files, containerPath)
+		}
+	}
+	return files, nil
+}
+
+func parseTopLevel(rootfs, baseDir, path string) ([]string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	var files []string
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		modName := strings.TrimSpace(scanner.Text())
+		if modName == "" {
+			continue
+		}
+		
+		modDir := filepath.Join(baseDir, modName)
+		modPy := filepath.Join(baseDir, modName+".py")
+		
+		if info, err := os.Stat(modDir); err == nil && info.IsDir() {
+			if dirFiles, err := scanDirectory(rootfs, modDir); err == nil {
+				files = append(files, dirFiles...)
+			}
+		}
+		if _, err := os.Stat(modPy); err == nil {
+			if containerPath, err := filepath.Rel(rootfs, modPy); err == nil {
+				if !strings.HasPrefix(containerPath, "/") {
+					containerPath = "/" + containerPath
+				}
+				files = append(files, containerPath)
+			}
+		}
+	}
+	return files, nil
+}
+
+func scanDirectory(rootfs, dir string) ([]string, error) {
+	var files []string
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if !info.IsDir() {
+			containerPath, err := filepath.Rel(rootfs, path)
+			if err == nil {
+				if !strings.HasPrefix(containerPath, "/") {
+					containerPath = "/" + containerPath
+				}
+				files = append(files, containerPath)
+			}
+		}
+		return nil
+	})
+	return files, err
 }
 
 func calculateFileHash(path string) (string, error) {

@@ -43,17 +43,18 @@ func setAlias(alias, command string) error {
 }
 
 func CheckVarsFile(target string) error {
+	varsDir := filepath.Join(target, "etc", "yum", "vars")
+	if err := os.MkdirAll(varsDir, 0755); err != nil {
+		return fmt.Errorf("failed to create yum vars directory: %v", err)
+	}
+
 	if _, err := os.Stat("/etc/yum/vars"); err == nil {
-		err := os.MkdirAll(filepath.Join(target, "/etc/yum"), 0755)
-		if err != nil {
-			return fmt.Errorf("failed to create yum directory: %v", err)
-		}
-		cmd := exec.Command("/usr/bin/cp", "-a", "/etc/yum/vars", filepath.Join(target, "etc/yum/"))
+		cmd := exec.Command("/usr/bin/cp", "-a", "/etc/yum/vars/.", varsDir)
+		cmd.Stdout = nil
+		cmd.Stderr = nil
 		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("failed to copy /etc/yum/vars:%v", err)
+			return fmt.Errorf("failed to copy /etc/yum/vars: %v", err)
 		}
-	} else if os.IsNotExist(err) {
-		return fmt.Errorf("/etc/yum/vars directory does not exist :%v", err)
 	}
 	return nil
 }

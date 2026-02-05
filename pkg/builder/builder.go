@@ -69,6 +69,26 @@ type Builder struct {
 	out         io.Writer
 }
 
+func stripComments(input []byte) string {
+	if len(input) == 0 {
+		return ""
+	}
+
+	lines := strings.Split(string(input), "\n")
+	out := make([]string, 0, len(lines))
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		out = append(out, trimmed)
+	}
+	return strings.Join(out, "\n")
+}
+
 type BuilderOptions struct {
 	FromImage  string
 	Container  string
@@ -379,7 +399,7 @@ func (b *Builder) Commit(exportTo string) error {
 		}
 		nwImage, err := b.Store.CreateImage("", nname, destLayer.ID, "", imageOptions)
 		if err != nil {
-			logrus.Errorf("fail to create new image at store: %w", err)
+			logrus.Errorf("fail to create new image at store: %v", err)
 			return err
 		}
 
@@ -399,14 +419,14 @@ func (b *Builder) Commit(exportTo string) error {
 			logrus.Infof("the id is %s , and the data is %s", item, data)
 			err := b.Store.SetImageBigData(nwImage.ID, item, data, v5manifest.Digest)
 			if err != nil {
-				return fmt.Errorf("error copying data item %q", item, err)
+				return fmt.Errorf("error copying data item %q: %w", item, err)
 			}
 			logrus.Debugf("copied data item %q to %q", item, nwImage.ID)
 		}
 
 		if removeOldImage {
 			if err := b.Store.DeleteContainer(b.ContainerID); err != nil {
-				logrus.Errorf("fail to remove builder %s of %w", b.ContainerID, err)
+				logrus.Errorf("fail to remove builder %s: %v", b.ContainerID, err)
 				return err
 			}
 			if _, err := b.Store.DeleteImage(b.FromImageID, true); err != nil {
@@ -477,7 +497,7 @@ func (b *Builder) generateManifests(id string) ([]string, error) {
 func (b *Builder) setBuilderBigData(id, key string, data []byte) error {
 	err := b.Store.SetContainerBigData(id, key, data)
 	if err != nil {
-		logrus.Errorf("Failed to set BigData to builder: %w", err)
+		logrus.Errorf("Failed to set BigData to builder: %v", err)
 		return err
 	}
 	return nil
@@ -488,7 +508,7 @@ func (b *Builder) setBuilderBigData(id, key string, data []byte) error {
 func (b *Builder) builderBigData(id, key string) ([]byte, error) {
 	data, err := b.Store.ContainerBigData(id, key)
 	if err != nil {
-		logrus.Errorf("Failed to get BigData from builder: %w", err)
+		logrus.Errorf("Failed to get BigData from builder: %v", err)
 		return nil, err
 	}
 	return data, nil

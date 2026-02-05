@@ -154,11 +154,16 @@ func (a *Analyzer) Analyze(ctx context.Context, onProgress func(step string, don
 	}
 	notifyProgress(stepName, true, startTime)
 
-	// Get Entrypoints for dependency analysis (done here while we have context, though it uses Store not mount)
-	entrypoints, err := a.getImageEntrypoints(ctx)
+	// Get Image Config
+	imgConfig, err := a.getImageConfig(ctx)
 	if err != nil {
-		logrus.Debugf("Failed to get image entrypoints: %v", err)
+		logrus.Debugf("Failed to get image config: %v", err)
 	}
+
+	// Calculate entrypoints for dependency analysis
+	var entrypoints []string
+	entrypoints = append(entrypoints, imgConfig.Entrypoint...)
+	entrypoints = append(entrypoints, imgConfig.Cmd...)
 
 	// Calculate total size from layers
 	totalSize := int64(0)
@@ -173,6 +178,7 @@ func (a *Analyzer) Analyze(ctx context.Context, onProgress func(step string, don
 			Created:      time.Now(), // TODO: Get from image metadata
 			OS:           "linux",    // TODO: Get from image metadata
 			Architecture: arch,
+			Config:       imgConfig,
 		},
 		Analysis: types.AnalysisData{
 			Layers:         layers,
@@ -219,29 +225,30 @@ func (a *Analyzer) cleanup(b *builder.Builder) {
 	}
 }
 
-func (a *Analyzer) getImageEntrypoints(ctx context.Context) ([]string, error) {
+func (a *Analyzer) getImageConfig(ctx context.Context) (types.ImageConfig, error) {
 	runtime, err := libimage.RuntimeFromStore(a.Store, &libimage.RuntimeOptions{})
 	if err != nil {
-		return nil, err
+		return types.ImageConfig{}, err
 	}
 
 	img, _, err := runtime.LookupImage(a.ImageRef, nil)
 	if err != nil {
-		return nil, err
+		return types.ImageConfig{}, err
 	}
 
 	data, err := img.Inspect(ctx, nil)
 	if err != nil {
-		return nil, err
+		return types.ImageConfig{}, err
 	}
 
 	if data.Config == nil {
-		return nil, nil
+		return types.ImageConfig{}, nil
 	}
 
-	var entrypoints []string
-	entrypoints = append(entrypoints, data.Config.Entrypoint...)
-	entrypoints = append(entrypoints, data.Config.Cmd...)
-
-	return entrypoints, nil
+	return types.ImageConfig{
+		Cmd:        data.Config.Cmd,
+		Entrypoint: data.Config.Entrypoint,
+		Env:        data.Config.Env,
+		WorkingDir: data.Config.WorkingDir,
+	}, nil
 }

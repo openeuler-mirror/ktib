@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"syscall"
 )
 
@@ -60,6 +61,9 @@ func CreateCharDevice(target, name, nodeType string, major, minor uint32, mode o
 
 func CreateFifoDevice(target, name string) error {
 	path := fmt.Sprintf("%s/dev/%s", target, name)
+	if err := os.MkdirAll(fmt.Sprintf("%s/dev", target), 0755); err != nil {
+		return fmt.Errorf("failed to create dev directory: %v", err)
+	}
 	err := syscall.Mkfifo(path, 0600)
 	if err != nil {
 		return fmt.Errorf("failed to create fifo file initctl: %v", err)
@@ -68,6 +72,9 @@ func CreateFifoDevice(target, name string) error {
 }
 
 func mknod(path, nodeType string, major, minor uint32) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
 	cmd := exec.Command("/usr/bin/mknod", "-m", "666", path, nodeType, fmt.Sprint(major), fmt.Sprint(minor))
 	cmd.Stdout = nil
 	cmd.Stderr = nil

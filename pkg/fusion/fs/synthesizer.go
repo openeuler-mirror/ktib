@@ -43,22 +43,50 @@ func NewDefaultSynthesizer(store storage.Store) *DefaultSynthesizer {
 func (s *DefaultSynthesizer) Synthesize(imageRef string, plan *types.FusionPlan, outputDir string) error {
 	logrus.Infof("Synthesizing filesystem for %s to %s", imageRef, outputDir)
 
-	// 1. Build whitelist of files to keep
-	keptFiles, err := s.buildFileWhitelist(imageRef, plan)
+	// 1. Build filter for files to keep
+	filter, err := s.buildFileFilter(imageRef, plan)
 	if err != nil {
-		return fmt.Errorf("failed to build file whitelist: %w", err)
+		return fmt.Errorf("failed to build file filter: %w", err)
 	}
-	logrus.Infof("Total files to keep: %d", len(keptFiles))
 
 	// 2. Extract files from layers
-	if err := s.extractLayers(imageRef, keptFiles, outputDir); err != nil {
+	if err := s.extractLayersWithFilter(imageRef, outputDir, filter); err != nil {
 		return fmt.Errorf("failed to extract layers: %w", err)
 	}
+
+	ensureCompatShellLinks(outputDir)
 
 	return nil
 }
 
-func (s *DefaultSynthesizer) buildFileWhitelist(imageRef string, plan *types.FusionPlan) (map[string]bool, error) {
+func ensureCompatShellLinks(rootfs string) {
+	links := [][2]string{
+		{"/bin/bash", "/usr/bin/bash"},
+		{"/bin/sh", "/usr/bin/sh"},
+	}
+
+	for _, l := range links {
+		dst := filepath.Join(rootfs, filepath.FromSlash(l[0]))
+		if _, err := os.Lstat(dst); err == nil {
+			continue
+		}
+
+		srcOnDisk := filepath.Join(rootfs, filepath.FromSlash(l[1]))
+		if _, err := os.Stat(srcOnDisk); err != nil {
+			continue
+		}
+
+		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+			continue
+		}
+		_ = os.Remove(dst)
+		if err := os.Symlink(l[1], dst); err != nil {
+			logrus.Debugf("Failed to create compat symlink %s -> %s: %v", l[0], l[1], err)
+		}
+	}
+}
+
+func (s *DefaultSynthesizer) buildFileFilter(imageRef string, plan *types.FusionPlan) (func(string) bool, error) {
 	// We reuse analyze.Analyzer to get the RPM DB
 	// Note: We need a way to access the RPM DB *content*.
 	// analyze.scanRPMs works on a rootfs string.
@@ -71,12 +99,6 @@ func (s *DefaultSynthesizer) buildFileWhitelist(imageRef string, plan *types.Fus
 	defer os.RemoveAll(tmpDir)
 
 	// Extract RPM DB to tmpDir
-	// We need to find which layer has /var/lib/rpm.
-	// For simplicity, we can reuse extractLayers logic but only for /var/lib/rpm
-	// Or we use analyze.NewAnalyzer which has logic to mount/read?
-	// analyze.Analyzer uses store.Mount if possible, or we can use it to walk layers.
-
-	// Let's implement a targeted extraction for RPM DB
 	if err := s.ExtractRPMDB(imageRef, tmpDir); err != nil {
 		return nil, fmt.Errorf("failed to extract RPM DB: %w", err)
 	}
@@ -97,32 +119,53 @@ func (s *DefaultSynthesizer) buildFileWhitelist(imageRef string, plan *types.Fus
 		return nil, fmt.Errorf("failed to list packages: %w", err)
 	}
 
-	whitelist := make(map[string]bool)
+	keptFiles := make(map[string]bool)
+	droppedFiles := make(map[string]bool)
+
 	keptSet := make(map[string]bool)
 	for _, p := range plan.KeptPackages {
 		keptSet[p] = true
 	}
 
 	for _, p := range pkgList {
+		files, err := p.InstalledFiles()
+		if err != nil {
+			logrus.Warnf("Failed to get files for package %s: %v", p.Name, err)
+			continue
+		}
+
 		if keptSet[p.Name] {
-			// Add all files of this package to whitelist
-			files, err := p.InstalledFiles()
-			if err != nil {
-				logrus.Warnf("Failed to get files for package %s: %v", p.Name, err)
-				continue
-			}
+			// Add all files of this package to keptFiles
 			for _, f := range files {
-				whitelist[f.Path] = true
+				keptFiles[f.Path] = true
+			}
+		} else {
+			// Add all files of this package to droppedFiles
+			for _, f := range files {
+				droppedFiles[f.Path] = true
 			}
 		}
 	}
 
 	// Add explicit kept files from plan
 	for _, f := range plan.KeptFiles {
-		whitelist[f] = true
+		keptFiles[f] = true
 	}
 
-	return whitelist, nil
+	retainUnowned := true
+	if plan.Config != nil {
+		retainUnowned = plan.Config.Fusion.Behavior.RetainUnowned
+	}
+
+	return func(path string) bool {
+		if keptFiles[path] {
+			return true
+		}
+		if droppedFiles[path] {
+			return false
+		}
+		return retainUnowned
+	}, nil
 }
 
 func (s *DefaultSynthesizer) ExtractRPMDB(imageRef string, dest string) error {
@@ -131,12 +174,6 @@ func (s *DefaultSynthesizer) ExtractRPMDB(imageRef string, dest string) error {
 	// But RPM DB usually is modified in place.
 	return s.extractLayersWithFilter(imageRef, dest, func(path string) bool {
 		return strings.HasPrefix(path, "/var/lib/rpm") || strings.HasPrefix(path, "/usr/lib/sysimage/rpm")
-	})
-}
-
-func (s *DefaultSynthesizer) extractLayers(imageRef string, whitelist map[string]bool, outputDir string) error {
-	return s.extractLayersWithFilter(imageRef, outputDir, func(path string) bool {
-		return whitelist[path]
 	})
 }
 
