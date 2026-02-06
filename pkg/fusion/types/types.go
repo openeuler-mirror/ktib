@@ -33,6 +33,8 @@ type FSSynthesizer interface {
 	Synthesize(imageRef string, plan *FusionPlan, outputDir string) error
 	// ExtractRPMDB extracts the RPM DB from the image to a destination directory
 	ExtractRPMDB(imageRef string, dest string) error
+	// ExtractFiles extracts specific files from the image to a destination directory
+	ExtractFiles(imageRef string, files []string, outputDir string) error
 }
 
 // Verifier defines the interface for verifying the result

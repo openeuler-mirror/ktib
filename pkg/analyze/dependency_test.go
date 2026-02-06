@@ -108,3 +108,28 @@ include /etc/ld.so.conf.d/*.conf
 	// Check standard paths are still there
 	assert.Contains(t, scanner.libPaths, "/lib64")
 }
+
+func TestFindAllELFs(t *testing.T) {
+	tmpDir := t.TempDir()
+	scanner := NewDependencyScanner(tmpDir)
+
+	binDir := filepath.Join(tmpDir, "bin")
+	err := os.MkdirAll(binDir, 0755)
+	assert.NoError(t, err)
+
+	// Create fake ELF
+	fakeELF := filepath.Join(binDir, "fakeapp")
+	// \x7fELF...
+	header := []byte{0x7f, 0x45, 0x4c, 0x46}
+	err = os.WriteFile(fakeELF, header, 0755)
+	assert.NoError(t, err)
+
+	// Create non-ELF
+	err = os.WriteFile(filepath.Join(binDir, "script.sh"), []byte("#!/bin/sh"), 0755)
+	assert.NoError(t, err)
+
+	elfs, err := scanner.FindAllELFs()
+	assert.NoError(t, err)
+	assert.Contains(t, elfs, "/bin/fakeapp")
+	assert.NotContains(t, elfs, "/bin/script.sh")
+}

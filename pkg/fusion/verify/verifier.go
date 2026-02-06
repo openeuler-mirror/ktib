@@ -19,10 +19,20 @@ import (
 	"sort"
 	"strings"
 
+	"gitee.com/openeuler/ktib/pkg/analyze"
 	fusionrpm "gitee.com/openeuler/ktib/pkg/fusion/rpm"
 	rpmdb "github.com/knqyf263/go-rpmdb/pkg"
 	"github.com/sirupsen/logrus"
 )
+
+// MissingLibsError indicates that shared libraries are missing
+type MissingLibsError struct {
+	Libs []string
+}
+
+func (e *MissingLibsError) Error() string {
+	return fmt.Sprintf("found %d missing shared libraries", len(e.Libs))
+}
 
 // DefaultVerifier implements Verifier
 type DefaultVerifier struct{}
@@ -118,6 +128,11 @@ func (v *DefaultVerifier) Verify(rootfsPath string) error {
 		logrus.Info("Verification passed: All files present.")
 	}
 
+	// 3.5 Check Dependencies (Safety Net)
+	if err := v.checkDependencies(rootfsPath); err != nil {
+		return err
+	}
+
 	// 4. Run rpm -Va (External Tool Check)
 	// We run this only if rpm is available
 	if rpmPath, err := exec.LookPath("rpm"); err == nil {
@@ -165,6 +180,62 @@ func (v *DefaultVerifier) Verify(rootfsPath string) error {
 		logrus.Warn("ldconfig command not found, skipping library check")
 	}
 
+	return nil
+}
+
+func (v *DefaultVerifier) checkDependencies(rootfs string) error {
+	logrus.Info("Verifying ELF dependencies...")
+	scanner := analyze.NewDependencyScanner(rootfs)
+
+	// 1. Find all ELFs
+	elfs, err := scanner.FindAllELFs()
+	if err != nil {
+		return fmt.Errorf("failed to scan for ELF files: %w", err)
+	}
+
+	logrus.Debugf("Found %d ELF files, checking dependencies...", len(elfs))
+
+	// 2. Check missing deps
+	missing, err := scanner.CheckMissingDependencies(elfs)
+	if err != nil {
+		return fmt.Errorf("dependency check failed: %w", err)
+	}
+
+	if len(missing) > 0 {
+		logrus.Warn("Missing shared library dependencies detected (Safety Net Warning):")
+
+		// Collect all missing libs
+		var missingLibs []string
+		for lib := range missing {
+			missingLibs = append(missingLibs, lib)
+		}
+
+		// Sort for deterministic output
+		sort.Strings(missingLibs)
+
+		// Log only top 10 to prevent flooding
+		maxLog := 10
+		for i, lib := range missingLibs {
+			if i >= maxLog {
+				logrus.Warnf("  ... and %d more missing libraries", len(missingLibs)-maxLog)
+				break
+			}
+			bins := missing[lib]
+			// Limit binaries output
+			shownBins := bins
+			if len(bins) > 3 {
+				shownBins = bins[:3]
+				shownBins = append(shownBins, fmt.Sprintf("...and %d more", len(bins)-3))
+			}
+			logrus.Warnf("  %s required by: %s", lib, strings.Join(shownBins, ", "))
+		}
+		// User requested to remove blocking safety net
+		// return &MissingLibsError{Libs: missingLibs}
+		logrus.Warn("Proceeding despite missing dependencies (Safety Net disabled by user request)")
+		return nil
+	}
+
+	logrus.Info("Dependency verification passed: All ELF dependencies are satisfied.")
 	return nil
 }
 

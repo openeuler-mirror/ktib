@@ -50,24 +50,24 @@ Key Features:
 - Layer Analysis: Detailed breakdown of file changes per layer.
 - Package Scan: Detection of RPM and Python packages with metadata.
 - Waste Detection: Identification of duplicate files across layers.
-- Advisor: Rule-based optimization recommendations.`,
+- Advisor: Rule-based optimization recommendations. You can use default rules or provide your own custom rules file.`,
 		Example: ` # 1. Standard Analysis (Scan + Recommend)
   ktib analyze myimage:latest
 
- # 2. Save Analysis Report to File (JSON)
+ # 2. Use Custom Optimization Rules (Recommended for specific needs)
+  ktib analyze myimage:latest --rules /path/to/my_rules.yaml
+
+ # 3. Save Analysis Report to File (JSON)
   ktib analyze myimage:latest --output json --file report.json
 
- # 3. Separated Workflow (Useful for CI/CD or offloading analysis)
+ # 4. Separated Workflow (Useful for CI/CD or offloading analysis)
   # Step A: Collect data only (skips recommendation generation)
   ktib analyze myimage:latest --save-data raw_data.json
 
   # Step B: Generate recommendations from data (offline, no image needed)
   ktib analyze --from-data raw_data.json
 
- # 4. Advanced Options
-  # Use custom rules
-  ktib analyze myimage:latest --rules my_rules.yaml
-
+ # 5. Advanced Options
   # Only run safe checks
   ktib analyze myimage:latest --level SAFE
 

@@ -177,6 +177,18 @@ func (s *DefaultSynthesizer) ExtractRPMDB(imageRef string, dest string) error {
 	})
 }
 
+// ExtractFiles extracts specific files from the image to a destination directory
+func (s *DefaultSynthesizer) ExtractFiles(imageRef string, files []string, outputDir string) error {
+	fileSet := make(map[string]bool)
+	for _, f := range files {
+		fileSet[f] = true
+	}
+
+	return s.extractLayersWithFilter(imageRef, outputDir, func(path string) bool {
+		return fileSet[path]
+	})
+}
+
 func (s *DefaultSynthesizer) extractLayersWithFilter(imageRef string, outputDir string, filter func(string) bool) error {
 	img, err := s.Store.Image(imageRef)
 	if err != nil {

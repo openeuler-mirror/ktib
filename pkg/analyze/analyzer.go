@@ -156,6 +156,17 @@ func (a *Analyzer) Analyze(ctx context.Context, onProgress func(step string, don
 	}
 	notifyProgress(stepName, true, startTime)
 
+	// 5. ELF Analysis
+	stepName = "ELF Analysis"
+	startTime = time.Now()
+	notifyProgress(stepName, false, startTime)
+	depScanner := NewDependencyScanner(mountPoint)
+	elfDeps, err := depScanner.ScanAllDependencies()
+	if err != nil {
+		logrus.Warnf("ELF analysis failed: %v", err)
+	}
+	notifyProgress(stepName, true, startTime)
+
 	// Get Image Config
 	imgConfig, err := a.getImageConfig(ctx)
 	if err != nil {
@@ -187,6 +198,7 @@ func (a *Analyzer) Analyze(ctx context.Context, onProgress func(step string, don
 			Packages:       pkgs,
 			Filesystem:     fsInfo,
 			WasteDetection: waste,
+			ELFMetadata:    types.ELFMetadata{Dependencies: elfDeps},
 		},
 	}
 

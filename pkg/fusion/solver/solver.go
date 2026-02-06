@@ -70,6 +70,7 @@ func (s *DefaultSolver) Solve(imageRef string, cfg *config.FusionConfig) (*types
 	var mountPoint string
 	var allPackages []coretypes.Package
 	var imageConfig coretypes.ImageConfig
+	var elfMetadata *coretypes.ELFMetadata
 
 	if s.FromData != "" {
 		if s.stepUpdater != nil {
@@ -86,6 +87,7 @@ func (s *DefaultSolver) Solve(imageRef string, cfg *config.FusionConfig) (*types
 		// Append Python packages to allPackages
 		allPackages = append(allPackages, report.Analysis.Packages.Python...)
 		imageConfig = report.ImageInfo.Config
+		elfMetadata = &report.Analysis.ELFMetadata
 	} else {
 		// 1. Analyze Image to get package list
 		// Use fast mode (true) to skip heavy checksums as we only need RPM metadata
@@ -118,6 +120,7 @@ func (s *DefaultSolver) Solve(imageRef string, cfg *config.FusionConfig) (*types
 		// Append Python packages to allPackages
 		allPackages = append(allPackages, report.Analysis.Packages.Python...)
 		imageConfig = report.ImageInfo.Config
+		elfMetadata = &report.Analysis.ELFMetadata
 
 		if s.SaveData != "" {
 			if err := saveAnalysisReport(s.SaveData, report); err != nil {
@@ -180,11 +183,11 @@ func (s *DefaultSolver) Solve(imageRef string, cfg *config.FusionConfig) (*types
 
 	// 3. ELF Dynamic Library Analysis
 	if cfg.Fusion.Behavior.AutoHealLibs {
-		if mountPoint == "" {
-			logrus.Warn("auto_heal_libs enabled but mount point is unavailable (from-data mode); skipping ELF analysis")
+		if mountPoint == "" && (elfMetadata == nil || len(elfMetadata.Dependencies) == 0) {
+			logrus.Warn("auto_heal_libs enabled but mount point is unavailable (from-data mode) and no ELF metadata found; skipping ELF analysis")
 		} else {
 			var err error
-			keptList, err = s.solveELF(mountPoint, allPackages, keptList)
+			keptList, err = s.solveELF(mountPoint, elfMetadata, allPackages, keptList)
 			if err != nil {
 				logrus.Warnf("ELF analysis failed: %v", err)
 			}
@@ -280,10 +283,21 @@ func (s *DefaultSolver) resolveAppAnchors(cfg coretypes.ImageConfig, allPackages
 				if arg == "-c" && i+1 < len(args) {
 					// Found shell command string
 					cmdStr := args[i+1]
-					parts := strings.Fields(cmdStr)
-					if len(parts) > 0 {
-						// Recursively check the inner command
-						analyzeArgs(parts)
+					// Split by shell operators (&&, ||, ;, |) to handle multiple commands
+					// e.g. "./hello && python3 server.py"
+					normalizedCmd := cmdStr
+					operators := []string{"&&", "||", ";", "|"}
+					for _, op := range operators {
+						normalizedCmd = strings.ReplaceAll(normalizedCmd, op, " __ktib_split__ ")
+					}
+
+					subCmds := strings.Split(normalizedCmd, "__ktib_split__")
+					for _, subCmd := range subCmds {
+						parts := strings.Fields(subCmd)
+						if len(parts) > 0 {
+							// Recursively check the inner command
+							analyzeArgs(parts)
+						}
 					}
 				}
 			}
@@ -411,7 +425,7 @@ func saveAnalysisReport(path string, report *coretypes.AnalysisReport) error {
 	return nil
 }
 
-func (s *DefaultSolver) solveELF(mountPoint string, allPackages []coretypes.Package, keptList []string) ([]string, error) {
+func (s *DefaultSolver) solveELF(mountPoint string, elfMeta *coretypes.ELFMetadata, allPackages []coretypes.Package, keptList []string) ([]string, error) {
 	scanner := analyze.NewDependencyScanner(mountPoint)
 
 	// Map File -> Package Name
@@ -442,9 +456,29 @@ func (s *DefaultSolver) solveELF(mountPoint string, allPackages []coretypes.Pack
 		}
 
 		// Scan dependencies
-		neededLibs, err := scanner.ScanDependencies(entrypoints)
-		if err != nil {
-			return currentList, err
+		var neededLibs []string
+		var err error
+
+		if mountPoint != "" {
+			neededLibs, err = scanner.ScanDependencies(entrypoints)
+			if err != nil {
+				return currentList, err
+			}
+		} else if elfMeta != nil {
+			// Use metadata to simulate scanning
+			// elfMeta.Dependencies maps FilePath -> []ResolvedLibPaths
+			// We iterate entrypoints, look up deps, and collect unique resolved libs
+			libSet := make(map[string]struct{})
+			for _, ep := range entrypoints {
+				if deps, ok := elfMeta.Dependencies[ep]; ok {
+					for _, d := range deps {
+						libSet[d] = struct{}{}
+					}
+				}
+			}
+			for l := range libSet {
+				neededLibs = append(neededLibs, l)
+			}
 		}
 
 		// Resolve providers
