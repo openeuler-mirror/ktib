@@ -44,6 +44,13 @@ type AnalysisData struct {
 	Packages       PackageInfo    `json:"packages"`
 	Filesystem     FilesystemInfo `json:"filesystem"`
 	WasteDetection WasteDetection `json:"waste_detection"`
+	ELFMetadata    ELFMetadata    `json:"elf_metadata,omitempty"`
+}
+
+// ELFMetadata contains dependency information for ELF files
+type ELFMetadata struct {
+	// Dependencies maps a file path (inside container) to a list of resolved library paths (inside container)
+	Dependencies map[string][]string `json:"dependencies"`
 }
 
 // LayerInfo describes a single image layer

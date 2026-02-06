@@ -128,6 +128,16 @@ func TestResolveAppAnchors(t *testing.T) {
 			expected: []string{"bash", "llama_cpp-python", "python3"},
 		},
 		{
+			name:     "Shell with multiple commands (&&)",
+			config:   coretypes.ImageConfig{Cmd: []string{"/bin/sh", "-c", "./hello && python3 server.py"}},
+			expected: []string{"bash", "python3"},
+		},
+		{
+			name:     "Shell with pipe (|)",
+			config:   coretypes.ImageConfig{Cmd: []string{"/bin/sh", "-c", "python3 server.py | tee log.txt"}},
+			expected: []string{"bash", "python3"},
+		},
+		{
 			name:     "Python module resolution (llama_cpp)",
 			config:   coretypes.ImageConfig{Cmd: []string{"python3", "-m", "llama_cpp.server", "--host", "0.0.0.0"}},
 			expected: []string{"llama_cpp-python", "python3"},

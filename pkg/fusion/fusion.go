@@ -12,6 +12,7 @@
 package fusion
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -128,7 +129,24 @@ func (m *FusionManager) Run(imageRef string, outputDir string, targetTag string)
 	notifyProgress(phaseName, false, startTime)
 	logrus.Info(phaseName + "...")
 	if err := m.Verify.Verify(outputDir); err != nil {
-		return fmt.Errorf("verification failed: %w", err)
+		// Check for MissingLibsError and AutoHeal
+		var missingLibsErr *verify.MissingLibsError
+		if errors.As(err, &missingLibsErr) && m.Config.Fusion.Behavior.AutoHealLibs {
+			logrus.Warnf("Auto-heal enabled: Attempting to recover %d missing libraries from source image...", len(missingLibsErr.Libs))
+
+			// Extract missing libs
+			if extractErr := m.FS.ExtractFiles(imageRef, missingLibsErr.Libs, outputDir); extractErr != nil {
+				return fmt.Errorf("auto-heal failed to extract files: %w (original error: %v)", extractErr, err)
+			}
+
+			logrus.Info("Libraries recovered. Re-running verification...")
+			if retryErr := m.Verify.Verify(outputDir); retryErr != nil {
+				return fmt.Errorf("verification failed after auto-heal: %w", retryErr)
+			}
+			logrus.Info("Auto-heal successful!")
+		} else {
+			return fmt.Errorf("verification failed: %w", err)
+		}
 	}
 	notifyProgress(phaseName, true, startTime)
 
@@ -138,7 +156,7 @@ func (m *FusionManager) Run(imageRef string, outputDir string, targetTag string)
 		startTime = time.Now()
 		notifyProgress(phaseName, false, startTime)
 		logrus.Info(phaseName + "...")
-		if err := m.Commit.Commit(outputDir, targetTag); err != nil {
+		if err := m.Commit.Commit(outputDir, targetTag, imageRef); err != nil {
 			return fmt.Errorf("commit failed: %w", err)
 		}
 		notifyProgress(phaseName, true, startTime)

@@ -54,6 +54,11 @@ func (m *MockFS) ExtractRPMDB(imageRef string, dest string) error {
 	return args.Error(0)
 }
 
+func (m *MockFS) ExtractFiles(imageRef string, files []string, outputDir string) error {
+	args := m.Called(imageRef, files, outputDir)
+	return args.Error(0)
+}
+
 type MockRPM struct {
 	mock.Mock
 }
@@ -76,8 +81,8 @@ type MockCommit struct {
 	mock.Mock
 }
 
-func (m *MockCommit) Commit(rootfs string, targetTag string) error {
-	args := m.Called(rootfs, targetTag)
+func (m *MockCommit) Commit(rootfs string, targetTag string, sourceImage string) error {
+	args := m.Called(rootfs, targetTag, sourceImage)
 	return args.Error(0)
 }
 
@@ -103,7 +108,7 @@ func TestFusionManager_Run(t *testing.T) {
 				f.On("ExtractRPMDB", "test-image", mock.AnythingOfType("string")).Return(nil)
 				r.On("Reconstruct", mock.AnythingOfType("string"), plan, "/tmp/output").Return(nil)
 				v.On("Verify", "/tmp/output").Return(nil)
-				c.On("Commit", "/tmp/output", "new-image:latest").Return(nil)
+				c.On("Commit", "/tmp/output", "new-image:latest", "test-image").Return(nil)
 			},
 			expectedError: "",
 		},
@@ -176,7 +181,7 @@ func TestFusionManager_Run(t *testing.T) {
 				// Reconstruct fails, but flow should continue
 				r.On("Reconstruct", mock.AnythingOfType("string"), plan, "/tmp/output").Return(errors.New("reconstruct error"))
 				v.On("Verify", "/tmp/output").Return(nil)
-				c.On("Commit", "/tmp/output", "new-image:latest").Return(nil)
+				c.On("Commit", "/tmp/output", "new-image:latest", "test-image").Return(nil)
 			},
 			expectedError: "",
 		},
@@ -209,7 +214,7 @@ func TestFusionManager_Run(t *testing.T) {
 				f.On("ExtractRPMDB", "test-image", mock.AnythingOfType("string")).Return(nil)
 				r.On("Reconstruct", mock.AnythingOfType("string"), plan, "/tmp/output").Return(nil)
 				v.On("Verify", "/tmp/output").Return(nil)
-				c.On("Commit", "/tmp/output", "new-image:latest").Return(errors.New("commit error"))
+				c.On("Commit", "/tmp/output", "new-image:latest", "test-image").Return(errors.New("commit error"))
 			},
 			expectedError: "commit failed: commit error",
 		},

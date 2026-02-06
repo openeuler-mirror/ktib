@@ -13,6 +13,7 @@ package commit
 
 import (
 	"archive/tar"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -21,6 +22,7 @@ import (
 
 	"github.com/containers/buildah/define"
 	"github.com/containers/buildah/imagebuildah"
+	"github.com/containers/common/libimage"
 	"github.com/containers/image/v5/types"
 	"github.com/containers/storage"
 	"github.com/sirupsen/logrus"
@@ -29,7 +31,7 @@ import (
 
 // Committer defines interface for committing rootfs to image
 type Committer interface {
-	Commit(rootfs string, targetTag string) error
+	Commit(rootfs string, targetTag string, sourceImage string) error
 }
 
 type ImageBuildahCommitter struct {
@@ -40,7 +42,7 @@ func NewImageBuildahCommitter(store storage.Store) *ImageBuildahCommitter {
 	return &ImageBuildahCommitter{Store: store}
 }
 
-func (c *ImageBuildahCommitter) Commit(rootfs string, targetTag string) error {
+func (c *ImageBuildahCommitter) Commit(rootfs string, targetTag string, sourceImage string) error {
 	logrus.Infof("Committing rootfs %s to image %s", rootfs, targetTag)
 
 	tmpDir, err := os.MkdirTemp("", "ktib-fusion-commit-")
@@ -52,7 +54,20 @@ func (c *ImageBuildahCommitter) Commit(rootfs string, targetTag string) error {
 	dockerfilePath := filepath.Join(tmpDir, "Dockerfile")
 	tarPath := filepath.Join(tmpDir, "rootfs.tar")
 
-	if err := os.WriteFile(dockerfilePath, []byte("FROM scratch\nADD rootfs.tar /\n"), 0o644); err != nil {
+	// Base Dockerfile
+	dockerfileContent := "FROM scratch\nADD rootfs.tar /\n"
+
+	// Inherit config from source image
+	if sourceImage != "" {
+		configCmds, err := c.generateConfigCommands(sourceImage)
+		if err != nil {
+			logrus.Warnf("Failed to inherit config from %s: %v", sourceImage, err)
+		} else {
+			dockerfileContent += configCmds
+		}
+	}
+
+	if err := os.WriteFile(dockerfilePath, []byte(dockerfileContent), 0o644); err != nil {
 		return fmt.Errorf("failed to write Dockerfile: %w", err)
 	}
 
@@ -66,6 +81,7 @@ func (c *ImageBuildahCommitter) Commit(rootfs string, targetTag string) error {
 		Output:                  targetTag,
 		OutputFormat:            define.Dockerv2ImageManifest,
 		Layers:                  true,
+		Squash:                  true,
 		RemoveIntermediateCtrs:  true,
 		ForceRmIntermediateCtrs: true,
 		Runtime:                 "runc",
@@ -82,6 +98,89 @@ func (c *ImageBuildahCommitter) Commit(rootfs string, targetTag string) error {
 
 	logrus.Infof("Successfully committed image: %s", targetTag)
 	return nil
+}
+
+func (c *ImageBuildahCommitter) generateConfigCommands(imageRef string) (string, error) {
+	ctx := context.Background()
+	runtime, err := libimage.RuntimeFromStore(c.Store, &libimage.RuntimeOptions{})
+	if err != nil {
+		return "", err
+	}
+
+	img, _, err := runtime.LookupImage(imageRef, nil)
+	if err != nil {
+		return "", err
+	}
+
+	data, err := img.Inspect(ctx, nil)
+	if err != nil {
+		return "", err
+	}
+
+	if data.Config == nil {
+		return "", nil
+	}
+
+	var cmds strings.Builder
+
+	// ENV
+	for _, env := range data.Config.Env {
+		parts := strings.SplitN(env, "=", 2)
+		if len(parts) == 2 {
+			key := parts[0]
+			val := parts[1]
+			// Use JSON marshaling to handle quoting/escaping safely
+			jsonVal, _ := json.Marshal(val)
+			cmds.WriteString(fmt.Sprintf("ENV %s=%s\n", key, string(jsonVal)))
+		}
+	}
+
+	// WORKDIR
+	if data.Config.WorkingDir != "" {
+		cmds.WriteString(fmt.Sprintf("WORKDIR %s\n", data.Config.WorkingDir))
+	}
+
+	// USER
+	if data.Config.User != "" {
+		cmds.WriteString(fmt.Sprintf("USER %s\n", data.Config.User))
+	}
+
+	// CMD
+	if len(data.Config.Cmd) > 0 {
+		jsonCmd, _ := json.Marshal(data.Config.Cmd)
+		cmds.WriteString(fmt.Sprintf("CMD %s\n", string(jsonCmd)))
+	}
+
+	// ENTRYPOINT
+	if len(data.Config.Entrypoint) > 0 {
+		jsonEp, _ := json.Marshal(data.Config.Entrypoint)
+		cmds.WriteString(fmt.Sprintf("ENTRYPOINT %s\n", string(jsonEp)))
+	}
+
+	// LABEL
+	if len(data.Config.Labels) > 0 {
+		for k, v := range data.Config.Labels {
+			jsonV, _ := json.Marshal(v)
+			cmds.WriteString(fmt.Sprintf("LABEL %s=%s\n", k, string(jsonV)))
+		}
+	}
+
+	// EXPOSE
+	if len(data.Config.ExposedPorts) > 0 {
+		for p := range data.Config.ExposedPorts {
+			cmds.WriteString(fmt.Sprintf("EXPOSE %s\n", p))
+		}
+	}
+
+	// VOLUME
+	if len(data.Config.Volumes) > 0 {
+		for v := range data.Config.Volumes {
+			jsonV, _ := json.Marshal(v)
+			cmds.WriteString(fmt.Sprintf("VOLUME %s\n", string(jsonV)))
+		}
+	}
+
+	return cmds.String(), nil
 }
 
 func tarDirectory(srcDir string, tarPath string) error {

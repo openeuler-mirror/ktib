@@ -223,7 +223,7 @@ func (s *DependencyScanner) AssessFatSlim(requiredLibs []string) (int64, int64, 
 		if info.IsDir() {
 			return nil
 		}
-		
+
 		// Check if it's a library (simple check: contains .so)
 		if strings.Contains(info.Name(), ".so") {
 			size := info.Size()
@@ -254,4 +254,103 @@ func (s *DependencyScanner) AssessFatSlim(requiredLibs []string) (int64, int64, 
 	}
 
 	return totalSize, requiredSize, totalSize - requiredSize, unusedLibs
+}
+
+// CheckMissingDependencies checks for missing shared library dependencies
+// Returns a map where key is the missing library name, and value is a list of binaries requiring it.
+func (s *DependencyScanner) CheckMissingDependencies(entrypoints []string) (map[string][]string, error) {
+	missing := make(map[string][]string)
+
+	for _, ep := range entrypoints {
+		if ep == "" {
+			continue
+		}
+
+		fullPath := filepath.Join(s.Rootfs, ep)
+		if _, err := os.Stat(fullPath); err != nil {
+			// Entrypoint itself missing? Skip.
+			continue
+		}
+
+		libs, err := s.findSharedLibraries(fullPath)
+		if err != nil {
+			// Not an ELF or cannot read
+			continue
+		}
+
+		for _, lib := range libs {
+			if _, err := s.resolveLibrary(lib); err != nil {
+				// Missing!
+				missing[lib] = append(missing[lib], ep)
+			}
+		}
+	}
+
+	return missing, nil
+}
+
+// FindAllELFs finds all ELF files in the rootfs
+func (s *DependencyScanner) FindAllELFs() ([]string, error) {
+	var elfs []string
+	err := filepath.Walk(s.Rootfs, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if info.IsDir() || !info.Mode().IsRegular() {
+			return nil
+		}
+
+		// Fast check: is it ELF?
+		f, err := os.Open(path)
+		if err != nil {
+			return nil
+		}
+		defer f.Close()
+
+		b := make([]byte, 4)
+		if _, err := f.Read(b); err != nil {
+			return nil
+		}
+		if string(b) == "\x7fELF" {
+			rel, _ := filepath.Rel(s.Rootfs, path)
+			elfs = append(elfs, "/"+filepath.ToSlash(rel))
+		}
+		return nil
+	})
+	return elfs, err
+}
+
+// ScanAllDependencies finds dependencies for all ELF files in the rootfs
+// Returns a map of FilePath -> []ResolvedLibraryPath (all paths are inside container)
+func (s *DependencyScanner) ScanAllDependencies() (map[string][]string, error) {
+	elfs, err := s.FindAllELFs()
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[string][]string)
+
+	for _, elfPath := range elfs {
+		// elfPath is relative to rootfs (starts with /)
+		fullPath := filepath.Join(s.Rootfs, elfPath)
+
+		libs, err := s.findSharedLibraries(fullPath)
+		if err != nil {
+			continue
+		}
+
+		var resolved []string
+		for _, lib := range libs {
+			if path, err := s.resolveLibrary(lib); err == nil {
+				// Convert absolute host path to container path
+				rel, _ := filepath.Rel(s.Rootfs, path)
+				containerPath := filepath.ToSlash(filepath.Join("/", rel))
+				resolved = append(resolved, containerPath)
+			}
+		}
+		if len(resolved) > 0 {
+			result[elfPath] = resolved
+		}
+	}
+	return result, nil
 }

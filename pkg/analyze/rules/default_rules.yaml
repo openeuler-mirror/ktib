@@ -42,7 +42,22 @@ rules:
     action: "Keep only en_US.utf8 and zh_CN.utf8"
     description: "Unused locales"
 
-  # --- L3: Aggressive Slimming ---
+  # --- L3: Language Specific ---
+  - id: "RM_PY_CACHE"
+    match:
+      path_globs: ["**/__pycache__", "**/*.pyc"]
+    level: "OPTIMIZED"
+    action: "Remove bytecode cache"
+    description: "Python bytecode cache (safe for serverless)"
+
+  - id: "RM_PY_TESTS"
+    match:
+      path_globs: ["**/site-packages/*/test", "**/site-packages/*/tests"]
+    level: "OPTIMIZED"
+    action: "Remove test directories"
+    description: "Python package tests"
+
+  # --- L4: Aggressive Slimming ---
   - id: "RM_DEV_HEADERS"
     match:
       extensions: [".h", ".hpp", ".pc", ".a"]
@@ -57,21 +72,6 @@ rules:
     level: "AGGRESSIVE"
     action: "Use multi-stage build"
     description: "Build tools in production image"
-
-  # --- L4: Language Specific ---
-  - id: "RM_PY_CACHE"
-    match:
-      path_globs: ["**/__pycache__", "**/*.pyc"]
-    level: "OPTIMIZED"
-    action: "Remove bytecode cache"
-    description: "Python bytecode cache (safe for serverless)"
-
-  - id: "RM_PY_TESTS"
-    match:
-      path_globs: ["**/site-packages/*/test", "**/site-packages/*/tests"]
-    level: "OPTIMIZED"
-    action: "Remove test directories"
-    description: "Python package tests"
 
   # --- L5: Dependency Analysis ---
   - id: "RM_UNUSED_LIBS"
