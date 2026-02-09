@@ -55,7 +55,7 @@ Key Features:
   ktib analyze myimage:latest
 
  # 2. Use Custom Optimization Rules (Recommended for specific needs)
-  ktib analyze myimage:latest --rules /path/to/my_rules.yaml
+  ktib analyze myimage:latest --rules=/path/to/my_rules.yaml
 
  # 3. Save Analysis Report to File (JSON)
   ktib analyze myimage:latest --output json --file report.json
