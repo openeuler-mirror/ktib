@@ -1,12 +1,14 @@
 /*
-   Copyright (c) 2023 KylinSoft Co., Ltd.
-   Kylin trusted image builder(ktib) is licensed under Mulan PSL v2.
-   You can use this software according to the terms and conditions of the Mulan PSL v2.
-   You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-   THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING
-   BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-   See the Mulan PSL v2 for more details.
+Copyright (c) 2023 KylinSoft Co., Ltd.
+Kylin trusted image builder(ktib) is licensed under Mulan PSL v2.
+You can use this software according to the terms and conditions of the Mulan PSL v2.
+You may obtain a copy of Mulan PSL v2 at:
+
+	http://license.coscl.org.cn/MulanPSL2
+
+THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING
+BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+See the Mulan PSL v2 for more details.
 */
 package project
 
@@ -23,6 +25,7 @@ func TestInstallPackages(t *testing.T) {
 	}
 
 	type args struct {
+		command   string
 		yumConfig string
 		target    string
 		packages  []string
@@ -35,6 +38,7 @@ func TestInstallPackages(t *testing.T) {
 		{
 			name: "Test installation of packages",
 			args: args{
+				command:   "yum",
 				yumConfig: "/etc/yum.conf",
 				target:    "/tmp/target",
 				packages:  []string{"yum", "bash"},
@@ -44,7 +48,7 @@ func TestInstallPackages(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := InstallPackages(tt.args.yumConfig, tt.args.target, tt.args.packages...); (err != nil) != tt.wantErr {
+			if err := InstallPackages(tt.args.command, tt.args.yumConfig, tt.args.target, tt.args.packages...); (err != nil) != tt.wantErr {
 				t.Errorf("InstallPackages() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -93,6 +97,7 @@ func TestInstallPackagesUnit(t *testing.T) {
 	execCommand = mockExecCommandUnit
 
 	type args struct {
+		command   string
 		yumConfig string
 		target    string
 		packages  []string
@@ -105,6 +110,7 @@ func TestInstallPackagesUnit(t *testing.T) {
 		{
 			name: "Test successful installation",
 			args: args{
+				command:   "yum",
 				yumConfig: "/etc/yum.conf",
 				target:    "/tmp/target",
 				packages:  []string{"pkg1", "pkg2"},
@@ -114,7 +120,7 @@ func TestInstallPackagesUnit(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := InstallPackages(tt.args.yumConfig, tt.args.target, tt.args.packages...); (err != nil) != tt.wantErr {
+			if err := InstallPackages(tt.args.command, tt.args.yumConfig, tt.args.target, tt.args.packages...); (err != nil) != tt.wantErr {
 				t.Errorf("InstallPackages() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
