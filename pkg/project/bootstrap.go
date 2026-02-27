@@ -23,6 +23,7 @@ import (
 )
 
 var yumConfig = "/etc/yum.conf"
+var yumCommand = "yum"
 
 // Bootstrap defines the project bootstrap structure
 type Bootstrap struct {
@@ -148,7 +149,7 @@ func (b *Bootstrap) BuildRootfs(configFile string) error {
 	if len(packages) == 0 {
 		fmt.Println("Warning: No packages specified for installation")
 	} else {
-		if err := InstallPackages(yumConfig, target, packages...); err != nil {
+		if err := InstallPackages(yumCommand, yumConfig, target, packages...); err != nil {
 			return fmt.Errorf("failed to install packages: %v", err)
 		}
 	}

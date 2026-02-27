@@ -22,7 +22,7 @@ import (
 func CheckDnfAndCreateDev(target string) error {
 	if _, err := os.Stat("/etc/dnf/dnf.conf"); err == nil {
 		yumConfig = "/etc/dnf/dnf.conf"
-		setAlias("yum", "dnf")
+		yumCommand = "dnf"
 	}
 	// Remove target directory if exists and create new
 	err := os.RemoveAll(target)
@@ -35,25 +35,38 @@ func CheckDnfAndCreateDev(target string) error {
 	return nil
 }
 
-func setAlias(alias, command string) error {
-	cmd := exec.Command("alias", alias+"="+command)
-	cmd.Stdout = nil
-	cmd.Stderr = nil
-	return cmd.Run()
-}
 
 func CheckVarsFile(target string) error {
-	varsDir := filepath.Join(target, "etc", "yum", "vars")
-	if err := os.MkdirAll(varsDir, 0755); err != nil {
-		return fmt.Errorf("failed to create yum vars directory: %v", err)
-	}
-
-	if _, err := os.Stat("/etc/yum/vars"); err == nil {
-		cmd := exec.Command("/usr/bin/cp", "-a", "/etc/yum/vars/.", varsDir)
+	// Handle dnf vars
+	dnfVarsDir := filepath.Join(target, "etc", "dnf", "vars")
+	if _, err := os.Stat("/etc/dnf/vars"); err == nil {
+		if err := os.MkdirAll(dnfVarsDir, 0755); err != nil {
+			return fmt.Errorf("failed to create dnf vars directory: %v", err)
+		}
+		cmd := exec.Command("/usr/bin/cp", "-a", "/etc/dnf/vars/.", dnfVarsDir)
 		cmd.Stdout = nil
 		cmd.Stderr = nil
 		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("failed to copy /etc/yum/vars: %v", err)
+			return fmt.Errorf("failed to copy /etc/dnf/vars: %v", err)
+		}
+	}
+
+	// Handle yum vars
+	// Check if /etc/yum/vars is a symlink on the host
+	info, err := os.Lstat("/etc/yum/vars")
+	if err == nil {
+		// If it is a directory (not a symlink), copy it
+		if info.IsDir() && info.Mode()&os.ModeSymlink == 0 {
+			yumVarsDir := filepath.Join(target, "etc", "yum", "vars")
+			if err := os.MkdirAll(yumVarsDir, 0755); err != nil {
+				return fmt.Errorf("failed to create yum vars directory: %v", err)
+			}
+			cmd := exec.Command("/usr/bin/cp", "-a", "/etc/yum/vars/.", yumVarsDir)
+			cmd.Stdout = nil
+			cmd.Stderr = nil
+			if err := cmd.Run(); err != nil {
+				return fmt.Errorf("failed to copy /etc/yum/vars: %v", err)
+			}
 		}
 	}
 	return nil

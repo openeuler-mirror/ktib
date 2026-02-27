@@ -34,8 +34,15 @@ func TestCheckVarsFile(t *testing.T) {
 	if err != nil {
 		t.Errorf("Unexpected error return: %s", err)
 	}
+
+	// Check host condition to determine expectation
+	info, statErr := os.Lstat("/etc/yum/vars")
+	shouldExist := statErr == nil && info.IsDir() && info.Mode()&os.ModeSymlink == 0
+
 	_, err = os.Stat(filepath.Join(dir, "etc", "yum", "vars"))
-	if os.IsNotExist(err) {
-		t.Errorf("CheckVarsFile() failed to create /etc/yum/vars directory")
+	if shouldExist {
+		if os.IsNotExist(err) {
+			t.Errorf("CheckVarsFile() failed to create /etc/yum/vars directory")
+		}
 	}
 }

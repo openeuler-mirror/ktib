@@ -17,8 +17,8 @@ import (
 	"os"
 )
 
-func InstallPackages(yumConfig, target string, packages ...string) error {
-	cmd := execCommand("yum", "-c", yumConfig, "--installroot="+target, "--releasever=/", "--setopt=tsflags=nodocs",
+func InstallPackages(command, yumConfig, target string, packages ...string) error {
+	cmd := execCommand(command, "-c", yumConfig, "--installroot="+target, "--releasever=/", "--setopt=tsflags=nodocs",
 		"--setopt=group_package_types=mandatory", "--setopt=install_weak_deps=False", "-y", "install")
 	cmd.Args = append(cmd.Args, packages...)
 	cmd.Stdout = os.Stdout
@@ -29,7 +29,7 @@ func InstallPackages(yumConfig, target string, packages ...string) error {
 		return fmt.Errorf("Error executing command: %v\n", err)
 	}
 
-	cleanCmd := execCommand("/usr/bin/yum", "-c", yumConfig, "--installroot="+target, "-y", "clean", "all")
+	cleanCmd := execCommand(command, "-c", yumConfig, "--installroot="+target, "-y", "clean", "all")
 	cleanCmd.Stdout = os.Stdout
 	cleanCmd.Stderr = os.Stderr
 	if err := cleanCmd.Run(); err != nil {
