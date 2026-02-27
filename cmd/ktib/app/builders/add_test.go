@@ -1,3 +1,14 @@
+/*
+   Copyright (c) 2025 KylinSoft Co., Ltd.
+   Kylin trusted image builder(ktib) is licensed under Mulan PSL v2.
+   You can use this software according to the terms and conditions of the Mulan PSL v2.
+   You may obtain a copy of Mulan PSL v2 at:
+            http://license.coscl.org.cn/MulanPSL2
+   THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING
+   BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+   See the Mulan PSL v2 for more details.
+*/
+
 package builders
 
 import (
@@ -7,7 +18,7 @@ import (
 
 func tailOriginal(a []string) []string {
 	if len(a) >= 2 {
-		return []string(a)[1:]  // 冗余的类型转换
+		return []string(a)[1:] // 冗余的类型转换
 	}
 	return []string{}
 }
@@ -66,14 +77,17 @@ func TestTailEquivalence(t *testing.T) {
 
 			// 2. [Optional but recommended] Check if both results meet the expectation, to confirm the test itself is correct
 			if !reflect.DeepEqual(resultOriginal, tc.expected) {
-				t.Errorf("FAIL - Original Function Result Mismatch:\nExpected: %v\nGot: %v", tc.expected, resultOriginal)
+				t.Errorf(`FAIL - Original Function Result Mismatch:
+				Expected: %v
+				Got: %v`, tc.expected, resultOriginal)
 			}
 
 			// 3. Core Validation: Check if the outputs of the two functions are completely equivalent
 			if !reflect.DeepEqual(resultOriginal, resultIdiomatic) {
 				// Use Fatalf to mark the test as failed and stop the case immediately
-				t.Fatalf("CRITICAL FAIL - Functions are NOT Equivalent!\nOriginal Got: %v\nIdiomatic Got: %v",
-					resultOriginal, resultIdiomatic)
+				t.Fatalf(`CRITICAL FAIL - Functions are NOT Equivalent!
+				Original Got: %v
+				Idiomatic Got: %v`, resultOriginal, resultIdiomatic)
 			}
 
 			// Report success, and log the equivalent result
