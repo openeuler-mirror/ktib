@@ -1,3 +1,14 @@
+/*
+   Copyright (c) 2025 KylinSoft Co., Ltd.
+   Kylin trusted image builder(ktib) is licensed under Mulan PSL v2.
+   You can use this software according to the terms and conditions of the Mulan PSL v2.
+   You may obtain a copy of Mulan PSL v2 at:
+            http://license.coscl.org.cn/MulanPSL2
+   THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING
+   BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+   See the Mulan PSL v2 for more details.
+*/
+
 package project
 
 import (
@@ -147,19 +158,19 @@ func TestBootstrap_InitProjectStructure(t *testing.T) {
 
 func TestBootstrap_InitWorkDir(t *testing.T) {
 	tests := []struct {
-		name      string
-		types     string
-		wantDir   string
+		name    string
+		types   string
+		wantDir string
 	}{
 		{
-			name:      "Init baseimage workdir",
-			types:     "baseimage",
-			wantDir:   "init/baseimage",
+			name:    "Init baseimage workdir",
+			types:   "baseimage",
+			wantDir: "init/baseimage",
 		},
 		{
-			name:      "Init appimage workdir",
-			types:     "appimage",
-			wantDir:   "init/appimage",
+			name:    "Init appimage workdir",
+			types:   "appimage",
+			wantDir: "init/appimage",
 		},
 	}
 
@@ -250,7 +261,7 @@ func TestBootstrap_CleanRootfs(t *testing.T) {
 		{
 			name:      "Clean successful (Mock)",
 			buildType: "minimal",
-			setup:     func(dir string) error {
+			setup: func(dir string) error {
 				// Setup rootfs
 				rootfs := filepath.Join(dir, "rootfs")
 				if err := os.MkdirAll(rootfs, 0755); err != nil {
@@ -276,7 +287,7 @@ func TestBootstrap_CleanRootfs(t *testing.T) {
 				}
 				return nil
 			},
-			wantErr:   false,
+			wantErr: false,
 		},
 	}
 
