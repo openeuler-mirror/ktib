@@ -19,9 +19,17 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/containers/storage/pkg/reexec"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestMain(m *testing.M) {
+	if reexec.Init() {
+		return
+	}
+	os.Exit(m.Run())
+}
 
 func TestCreateTarFromDirectory(t *testing.T) {
 	t.Parallel()
@@ -115,7 +123,7 @@ func TestCreateTarFromDirectory(t *testing.T) {
 				if tt.name == "Basic file structure" {
 					assert.Contains(t, foundFiles, "file1.txt")
 					assert.Equal(t, "content1", foundFiles["file1.txt"])
-					
+
 					// path might vary slightly depending on OS separator, but we check partial match
 					foundSubFile := false
 					for name, content := range foundFiles {
@@ -175,7 +183,7 @@ CMD ["/bin/bash"]
 
 func TestBuildImage(t *testing.T) {
 	// Cannot parallelize easily due to BuildImage potentially using global state or complex dependencies
-	
+
 	tests := []struct {
 		name           string
 		setupProject   func(dir string) error
@@ -200,7 +208,7 @@ func TestBuildImage(t *testing.T) {
 				if err := os.WriteFile(filepath.Join(dir, "rootfs", "dummy"), []byte("dummy"), 0644); err != nil {
 					return err
 				}
-				
+
 				// Create files directory (optional, to test file copying logic)
 				if err := os.Mkdir(filepath.Join(dir, "files"), 0755); err != nil {
 					return err
@@ -213,7 +221,7 @@ func TestBuildImage(t *testing.T) {
 			},
 			// We expect it to pass validation and file creation, but fail at "failed to resolve Dockerfile" or "failed to get store"
 			// depending on the environment. We just ensure it is NOT the rootfs error.
-			expectedErrStr: "", 
+			expectedErrStr: "",
 		},
 	}
 
