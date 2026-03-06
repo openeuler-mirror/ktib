@@ -114,7 +114,7 @@ func TestGenerateRecommendations(t *testing.T) {
 	waste := types.WasteDetection{}
 	layers := []types.LayerInfo{}
 
-	recs := analyzer.GenerateRecommendations(layers, pkgs, fs, waste, "", nil)
+	recs := analyzer.GenerateRecommendations(layers, pkgs, fs, waste, "", nil, types.ELFMetadata{})
 
 	assert.Len(t, recs, 3) // Cache, Docs, Pkg
 
@@ -130,6 +130,52 @@ func TestGenerateRecommendations(t *testing.T) {
 	// Check 3: Pkg
 	// "vim-enhanced" matches "vim*"
 	assert.Equal(t, "RM_PKG", recs[2].Code)
+}
+
+func TestGenerateRecommendations_OfflineDependency(t *testing.T) {
+	// Setup Analyzer with custom rules
+	cfg := types.Config{
+		Strategy: types.Strategy{
+			EnableLevels: []string{"EXPERIMENTAL"},
+		},
+		Rules: []types.Rule{
+			{
+				ID: "RM_UNUSED_LIBS",
+				Match: types.Match{
+					DependencyCheck: true,
+				},
+				Level:       "EXPERIMENTAL",
+				Description: "Remove Unused Libs",
+			},
+		},
+	}
+
+	analyzer := &Analyzer{
+		Rules: cfg,
+	}
+
+	// Mock Data
+	// /bin/app depends on /lib/lib1.so
+	// /lib/lib2.so is unused
+	entrypoints := []string{"/bin/app"}
+
+	elfMetadata := types.ELFMetadata{
+		Dependencies: map[string][]string{
+			"/bin/app": {"/lib/lib1.so"},
+		},
+		Libs: []types.File{
+			{Path: "/lib/lib1.so", Size: 100},
+			{Path: "/lib/lib2.so", Size: 200},
+		},
+	}
+
+	recs := analyzer.GenerateRecommendations(nil, types.PackageInfo{}, types.FilesystemInfo{}, types.WasteDetection{}, "", entrypoints, elfMetadata)
+
+	assert.Len(t, recs, 1)
+	assert.Equal(t, "RM_UNUSED_LIBS", recs[0].Code)
+	// Savings should be size of lib2.so (200)
+	assert.Equal(t, "200 B", recs[0].Saving)
+	assert.Contains(t, recs[0].MatchedItems, "/lib/lib2.so")
 }
 
 func TestGenerateRecommendations_Whitelist(t *testing.T) {
@@ -167,7 +213,7 @@ func TestGenerateRecommendations_Whitelist(t *testing.T) {
 	waste := types.WasteDetection{}
 	layers := []types.LayerInfo{}
 
-	recs := analyzer.GenerateRecommendations(layers, pkgs, fs, waste, "", nil)
+	recs := analyzer.GenerateRecommendations(layers, pkgs, fs, waste, "", nil, types.ELFMetadata{})
 
 	assert.Len(t, recs, 1)
 	assert.Equal(t, "RM_CACHE", recs[0].Code)

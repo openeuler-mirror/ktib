@@ -83,6 +83,7 @@ func (a *Analyzer) Run(ctx context.Context, onProgress func(step string, done bo
 		report.Analysis.WasteDetection,
 		mountPoint,
 		entrypoints,
+		report.Analysis.ELFMetadata,
 	)
 	report.Recommendations = recs
 
@@ -165,6 +166,10 @@ func (a *Analyzer) Analyze(ctx context.Context, onProgress func(step string, don
 	if err != nil {
 		logrus.Warnf("ELF analysis failed: %v", err)
 	}
+	allLibs, err := depScanner.ScanAllLibraries()
+	if err != nil {
+		logrus.Warnf("Library scan failed: %v", err)
+	}
 	notifyProgress(stepName, true, startTime)
 
 	// Get Image Config
@@ -198,7 +203,7 @@ func (a *Analyzer) Analyze(ctx context.Context, onProgress func(step string, don
 			Packages:       pkgs,
 			Filesystem:     fsInfo,
 			WasteDetection: waste,
-			ELFMetadata:    types.ELFMetadata{Dependencies: elfDeps},
+			ELFMetadata:    types.ELFMetadata{Dependencies: elfDeps, Libs: allLibs},
 		},
 	}
 
