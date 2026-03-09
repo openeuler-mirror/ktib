@@ -81,7 +81,7 @@ func (s *DefaultSolver) Solve(imageRef string, cfg *config.FusionConfig) (*types
 			return nil, err
 		}
 		if report.ImageInfo.Ref != "" && report.ImageInfo.Ref != imageRef {
-			logrus.Warnf("from-data image ref '%s' differs from argument '%s'", report.ImageInfo.Ref, imageRef)
+			return nil, fmt.Errorf("from-data image ref '%s' differs from argument '%s'", report.ImageInfo.Ref, imageRef)
 		}
 		allPackages = report.Analysis.Packages.RPM
 		// Append Python packages to allPackages
