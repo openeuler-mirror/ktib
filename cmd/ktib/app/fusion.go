@@ -146,7 +146,7 @@ Workflow:
 			}
 
 			err = mgr.Run(imageRef, outputRootfs, targetTag)
-			waitFunc()
+			waitFunc(err)
 			if tempOutput != "" && err == nil {
 				_ = os.RemoveAll(tempOutput)
 			}

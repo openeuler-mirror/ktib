@@ -21,7 +21,7 @@ import (
 	"github.com/vbauerster/mpb/v8/decor"
 )
 
-func NewFusionProgressBar(totalSteps int) (func(string, bool, time.Duration), func()) {
+func NewFusionProgressBar(totalSteps int) (func(string, bool, time.Duration), func(error)) {
 	p := mpb.New(mpb.WithOutput(os.Stderr), mpb.WithWidth(60))
 
 	var currentStep string
@@ -60,7 +60,10 @@ func NewFusionProgressBar(totalSteps int) (func(string, bool, time.Duration), fu
 		bar.Increment()
 	}
 
-	waitFunc := func() {
+	waitFunc := func(err error) {
+		if err != nil {
+			bar.Abort(true)
+		}
 		if p != nil {
 			p.Wait()
 		}
