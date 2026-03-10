@@ -80,7 +80,7 @@ func (c *ImageBuildahCommitter) Commit(rootfs string, targetTag string, sourceIm
 		ContextDirectory:        tmpDir,
 		Output:                  targetTag,
 		OutputFormat:            define.Dockerv2ImageManifest,
-		Layers:                  true,
+		Layers:                  false,
 		Squash:                  true,
 		RemoveIntermediateCtrs:  true,
 		ForceRmIntermediateCtrs: true,

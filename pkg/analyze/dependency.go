@@ -20,6 +20,8 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
+
+	"gitee.com/openeuler/ktib/pkg/types"
 )
 
 // DependencyScanner handles the analysis of binary dependencies
@@ -169,6 +171,59 @@ func (s *DependencyScanner) ScanDependencies(entrypoints []string) ([]string, er
 		result = append(result, lib)
 	}
 	return result, nil
+}
+
+// ScanAllLibraries finds all shared libraries in the rootfs and returns them as a list of Files
+func (s *DependencyScanner) ScanAllLibraries() ([]types.File, error) {
+	var libs []types.File
+
+	walkFn := func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if info.IsDir() {
+			return nil
+		}
+
+		if strings.Contains(info.Name(), ".so") {
+			relPath, _ := filepath.Rel(s.Rootfs, path)
+			containerPath := filepath.ToSlash(filepath.Join("/", relPath))
+
+			var linkTarget string
+			if info.Mode()&os.ModeSymlink != 0 {
+				target, err := os.Readlink(path)
+				if err == nil {
+					var fullTarget string
+					if filepath.IsAbs(target) {
+						fullTarget = filepath.Join(s.Rootfs, target)
+					} else {
+						fullTarget = filepath.Join(filepath.Dir(path), target)
+					}
+
+					relTarget, err := filepath.Rel(s.Rootfs, fullTarget)
+					if err == nil && !strings.HasPrefix(relTarget, "..") {
+						linkTarget = filepath.ToSlash(filepath.Join("/", relTarget))
+					}
+				}
+			}
+
+			libs = append(libs, types.File{
+				Path:       containerPath,
+				Size:       info.Size(),
+				LinkTarget: linkTarget,
+			})
+		}
+		return nil
+	}
+
+	for _, prefix := range s.libPaths {
+		targetDir := filepath.Join(s.Rootfs, prefix)
+		if _, err := os.Stat(targetDir); err == nil {
+			filepath.Walk(targetDir, walkFn)
+		}
+	}
+
+	return libs, nil
 }
 
 // findSharedLibraries extracts DT_NEEDED from an ELF file

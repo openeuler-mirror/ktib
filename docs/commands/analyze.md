@@ -87,6 +87,7 @@ JSON 报告已进行精简优化，移除了冗余的依赖链信息，包含以
     - `python`: Python 包列表（Name, Version, License, **Digest**）。
   - `filesystem`: 文件系统统计（TopDirectories, FileTypes）。
   - `waste_detection`: 浪费检测（Duplicates, Caches）。
+  - `elf_metadata`: ELF 依赖分析数据（Dependencies, Libs）。
 - `recommendations`: 优化建议列表（Level, Code, Message, Command, Saving）。
 
 > **注意**：`digest` 字段为新增功能，用于提供软件包或元数据的完整性校验值（如 RPM SigMD5 或 Python Metadata SHA256）。

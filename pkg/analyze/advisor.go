@@ -112,6 +112,7 @@ func (a *Analyzer) GenerateRecommendations(
 	waste types.WasteDetection,
 	mountPoint string,
 	entrypoints []string,
+	elfMetadata types.ELFMetadata,
 ) []types.Recommendation {
 	var recs []types.Recommendation
 
@@ -233,6 +234,15 @@ func (a *Analyzer) GenerateRecommendations(
 						matchedItems = append(matchedItems, unusedLibs...)
 					}
 				}
+			} else if len(entrypoints) > 0 && len(elfMetadata.Dependencies) > 0 && len(elfMetadata.Libs) > 0 {
+				// Offline Logic
+				requiredLibs := resolveOfflineDependencies(entrypoints, elfMetadata.Dependencies)
+				potentialSaving, unusedLibs := assessOfflineFatSlim(requiredLibs, elfMetadata.Libs)
+				if potentialSaving > 0 {
+					matched = true
+					saving += potentialSaving
+					matchedItems = append(matchedItems, unusedLibs...)
+				}
 			}
 		}
 
@@ -279,4 +289,79 @@ func formatSize(bytes int64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
+func resolveOfflineDependencies(entrypoints []string, deps map[string][]string) []string {
+	required := make(map[string]struct{})
+	queue := make([]string, 0)
+	processed := make(map[string]struct{})
+
+	for _, ep := range entrypoints {
+		if ep == "" {
+			continue
+		}
+		queue = append(queue, ep)
+	}
+
+	for len(queue) > 0 {
+		curr := queue[0]
+		queue = queue[1:]
+
+		if _, ok := processed[curr]; ok {
+			continue
+		}
+		processed[curr] = struct{}{}
+
+		// Find direct dependencies
+		if libs, ok := deps[curr]; ok {
+			for _, lib := range libs {
+				// lib is resolved path
+				if _, ok := required[lib]; !ok {
+					required[lib] = struct{}{}
+					queue = append(queue, lib)
+				}
+			}
+		}
+	}
+
+	var res []string
+	for r := range required {
+		res = append(res, r)
+	}
+	return res
+}
+
+func assessOfflineFatSlim(requiredLibs []string, allLibs []types.File) (int64, []string) {
+	reqSet := make(map[string]struct{})
+	for _, r := range requiredLibs {
+		reqSet[r] = struct{}{}
+	}
+
+	// Mark link targets as required
+	changed := true
+	for changed {
+		changed = false
+		for _, lib := range allLibs {
+			if _, ok := reqSet[lib.Path]; ok {
+				if lib.LinkTarget != "" {
+					target := lib.LinkTarget
+					if _, seen := reqSet[target]; !seen {
+						reqSet[target] = struct{}{}
+						changed = true
+					}
+				}
+			}
+		}
+	}
+
+	var saving int64
+	var unused []string
+
+	for _, lib := range allLibs {
+		if _, ok := reqSet[lib.Path]; !ok {
+			saving += lib.Size
+			unused = append(unused, lib.Path)
+		}
+	}
+	return saving, unused
 }

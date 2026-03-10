@@ -22,9 +22,9 @@ type AnalysisReport struct {
 
 // ImageInfo contains basic metadata about the analyzed image
 type ImageInfo struct {
-	Ref          string    `json:"ref"`
-	Size         int64     `json:"size"`
-	OS           string    `json:"os"`
+	Ref          string      `json:"ref"`
+	Size         int64       `json:"size"`
+	OS           string      `json:"os"`
 	Created      time.Time   `json:"created"`
 	Architecture string      `json:"architecture,omitempty"`
 	Config       ImageConfig `json:"config,omitempty"`
@@ -51,6 +51,8 @@ type AnalysisData struct {
 type ELFMetadata struct {
 	// Dependencies maps a file path (inside container) to a list of resolved library paths (inside container)
 	Dependencies map[string][]string `json:"dependencies"`
+	// Libs contains all shared libraries found in the image with their sizes
+	Libs []File `json:"libs,omitempty"`
 }
 
 // LayerInfo describes a single image layer
@@ -66,8 +68,9 @@ type LayerInfo struct {
 
 // File represents a file entry with path and size
 type File struct {
-	Path string `json:"path"`
-	Size int64  `json:"size"`
+	Path       string `json:"path"`
+	Size       int64  `json:"size"`
+	LinkTarget string `json:"link_target,omitempty"`
 }
 
 // PackageInfo contains lists of installed packages

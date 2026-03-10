@@ -79,10 +79,10 @@ Workflow:
 				}
 
 				if err := os.MkdirAll(filepath.Dir(dumpConfig), 0o755); err != nil {
-					utils.CheckErr(err)
+					utils.CheckErr(fmt.Errorf("Error: %w", err))
 				}
 				if err := os.WriteFile(dumpConfig, data, 0o644); err != nil {
-					utils.CheckErr(err)
+					utils.CheckErr(fmt.Errorf("Error: %w", err))
 				}
 				fmt.Printf("Default fusion config saved to %s\n", dumpConfig)
 				return
@@ -93,20 +93,26 @@ Workflow:
 				imageRef = args[0]
 			} else if cmd.Flags().Changed("from-data") {
 				ref, err := inferImageRefFromData(fromData)
-				utils.CheckErr(err)
+				if err != nil {
+					utils.CheckErr(fmt.Errorf("Error: %w", err))
+				}
 				imageRef = ref
 			}
 			if imageRef == "" {
-				utils.CheckErr(fmt.Errorf("image reference is required (provide <image> or ensure --from-data contains image_info.ref)"))
+				utils.CheckErr(fmt.Errorf("Error: image reference is required (provide <image> or ensure --from-data contains image_info.ref)"))
 			}
 
 			// 1. Load Config
 			cfg, err := config.LoadConfig(configPath)
-			utils.CheckErr(err)
+			if err != nil {
+				utils.CheckErr(fmt.Errorf("Error: %w", err))
+			}
 
 			// Get Store
 			store, err := utils.GetStore(cmd)
-			utils.CheckErr(err)
+			if err != nil {
+				utils.CheckErr(fmt.Errorf("Error: %w", err))
+			}
 
 			// 2. Initialize Manager
 			mgr := fusion.NewFusionManager(cfg, store)
@@ -117,7 +123,7 @@ Workflow:
 			})
 
 			if targetTag == "" {
-				utils.CheckErr(fmt.Errorf("--tag is required"))
+				utils.CheckErr(fmt.Errorf("Error: --tag is required"))
 			}
 
 			totalSteps := 4
@@ -132,20 +138,24 @@ Workflow:
 			tempOutput := ""
 			if !keepOutput {
 				tmpDir, err := os.MkdirTemp("", "ktib-fusion-output-")
-				utils.CheckErr(err)
+				if err != nil {
+					utils.CheckErr(fmt.Errorf("Error: %w", err))
+				}
 				tempOutput = tmpDir
 				outputRootfs = tmpDir
 			}
 
 			err = mgr.Run(imageRef, outputRootfs, targetTag)
-			waitFunc()
+			waitFunc(err)
 			if tempOutput != "" && err == nil {
 				_ = os.RemoveAll(tempOutput)
 			}
 			if tempOutput != "" && err != nil {
 				fmt.Fprintf(os.Stderr, "fusion failed; keeping temporary rootfs at %s\n", tempOutput)
 			}
-			utils.CheckErr(err)
+			if err != nil {
+				utils.CheckErr(fmt.Errorf("Error: %w", err))
+			}
 		},
 	}
 

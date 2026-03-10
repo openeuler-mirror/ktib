@@ -286,64 +286,15 @@ func (im *ImageManager) Push(ctx context.Context, source, destination string, op
 }
 
 func (im *ImageManager) Remove(store storage.Store, images []string, op options.RemoveOption) error {
-	var allErrors []error
-	for _, arg := range images {
-		targetID := arg
-		removeName := ""
-
-		// resolve name/tag to normalized form if it's not an ID
-		if !store.Exists(targetID) {
-			if named, err := reference.ParseNormalizedNamed(arg); err == nil {
-				removeName = named.String()
-				// lookup image by name via libimage runtime to get ID
-				li, _, lerr := im.Manager.LookupImage(removeName, nil)
-				if lerr != nil {
-					allErrors = append(allErrors, lerr)
-					logrus.Errorf("no such image by name: %s", arg)
-					continue
-				}
-				targetID = li.ID()
-			} else {
-				// not an ID and cannot be parsed as name
-				allErrors = append(allErrors, err)
-				logrus.Errorf("invalid image reference: %s", arg)
-				continue
-			}
-		}
-
-		names, nerr := store.Names(targetID)
-		if nerr != nil {
-			allErrors = append(allErrors, nerr)
-			logrus.Debugf("failed to get names for image %s: %v", targetID, nerr)
-			continue
-		}
-
-		// if user passed a name and image has multiple names, untag just that name
-		if removeName != "" && len(names) > 1 {
-			// normalize to ensure the stored name matches
-			if err := store.RemoveNames(targetID, []string{removeName}); err != nil {
-				allErrors = append(allErrors, err)
-				logrus.Errorf("untag %s failed: %v", removeName, err)
-				continue
-			}
-			logrus.Infof("Untagged: %s", removeName)
-			continue
-		}
-
-		// otherwise delete the whole image by ID
-		si, ierr := store.Image(targetID)
-		if ierr != nil {
-			allErrors = append(allErrors, ierr)
-			logrus.Errorf("no such image: %s", arg)
-			continue
-		}
-		if _, derr := store.DeleteImage(si.ID, true); derr != nil {
-			allErrors = append(allErrors, derr)
-			logrus.Error(fmt.Sprintf("unable to remove image '%s': %s", arg, derr))
-			continue
-		}
+	ctx := context.Background()
+	removeOptions := &libimage.RemoveImagesOptions{
+		Force: op.Force,
 	}
-	if len(allErrors) > 0 {
+	_, errs := im.Manager.RemoveImages(ctx, images, removeOptions)
+	if len(errs) > 0 {
+		for _, err := range errs {
+			logrus.Errorf("remove image failed: %v", err)
+		}
 		return errors.New("The remove operation failed.")
 	}
 	return nil

@@ -128,13 +128,18 @@ Key Features:
 				utils.CheckErr(err)
 
 				// Run Advisor (Offline)
+				var entrypoints []string
+				entrypoints = append(entrypoints, report.ImageInfo.Config.Entrypoint...)
+				entrypoints = append(entrypoints, report.ImageInfo.Config.Cmd...)
+
 				recs := analyzer.GenerateRecommendations(
 					report.Analysis.Layers,
 					report.Analysis.Packages,
 					report.Analysis.Filesystem,
 					report.Analysis.WasteDetection,
-					"",  // No mount point
-					nil, // No entrypoints (skips dependency check)
+					"",          // No mount point
+					entrypoints, // Pass entrypoints
+					report.Analysis.ELFMetadata,
 				)
 				report.Recommendations = recs
 
@@ -230,6 +235,7 @@ Key Features:
 				report.Analysis.WasteDetection,
 				mountPoint,
 				entrypoints,
+				report.Analysis.ELFMetadata,
 			)
 			report.Recommendations = recs
 
