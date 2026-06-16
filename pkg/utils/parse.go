@@ -29,6 +29,7 @@ import (
 	ktype "gitee.com/openeuler/ktib/pkg/types"
 	"github.com/containers/buildah/define"
 	"github.com/containers/common/pkg/auth"
+	containersconfig "github.com/containers/common/pkg/config"
 	"github.com/containers/common/pkg/report"
 	"github.com/containers/image/v5/docker/reference"
 	auth_config "github.com/containers/image/v5/pkg/docker/config"
@@ -428,8 +429,20 @@ func ParseBuildOptions(cmd *cobra.Command, flags *options.BuildOptions, contextD
 		}
 	}
 
+	commonBuildOpts := &define.CommonBuildOptions{}
+	if _, err := os.Stat(containersconfig.SeccompOverridePath); err == nil {
+		commonBuildOpts.SeccompProfilePath = containersconfig.SeccompOverridePath
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return nil, err
+	} else if _, err := os.Stat(containersconfig.SeccompDefaultPath); err == nil {
+		commonBuildOpts.SeccompProfilePath = containersconfig.SeccompDefaultPath
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return nil, err
+	}
+
 	opts := define.BuildOptions{
 		AdditionalTags:          tags,
+		CommonBuildOpts:         commonBuildOpts,
 		ContextDirectory:        contextDir,
 		Err:                     stderr,
 		ForceRmIntermediateCtrs: flags.ForceRm,
