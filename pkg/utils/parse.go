@@ -442,8 +442,10 @@ func ParseBuildOptions(cmd *cobra.Command, flags *options.BuildOptions, contextD
 
 	opts := define.BuildOptions{
 		AdditionalTags:          tags,
+		AddCapabilities:         flags.CapAdd,
 		CommonBuildOpts:         commonBuildOpts,
 		ContextDirectory:        contextDir,
+		DropCapabilities:        flags.CapDrop,
 		Err:                     stderr,
 		ForceRmIntermediateCtrs: flags.ForceRm,
 		Layers:                  uselayers,

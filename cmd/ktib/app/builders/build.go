@@ -47,6 +47,8 @@ func BUILDCmd() *cobra.Command {
 	flags.StringVar(&op.Runtime, "runtime", "runc", "Runtime to use for build")
 	flags.StringVar(&op.Format, "format", utils.DefaultFormat(), "`format` of the built image's manifest and metadata. Use BUILDAH_FORMAT environment variable to override.")
 	flags.StringArrayVarP(&op.BuildArg, "build-arg", "", []string{}, "Set build-time variables")
+	flags.StringSliceVar(&op.CapAdd, "cap-add", nil, "Add capabilities for RUN instructions")
+	flags.StringSliceVar(&op.CapDrop, "cap-drop", nil, "Drop capabilities for RUN instructions")
 	flags.BoolVar(&op.TLSVerify, "tls-verify", true, "Require HTTPS and verify certificates (default true)")
 	flags.BoolVar(&op.Insecure, "insecure", false, "Allow insecure HTTP connections or HTTPS connections with invalid certificates")
 
