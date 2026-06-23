@@ -12,10 +12,11 @@
 package dockerfile
 
 import (
-	"github.com/stretchr/testify/require"
 	"os"
 	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func Test_NewDockerfilePolicy(t *testing.T) {
@@ -75,6 +76,40 @@ func Test_NewDockerfilePolicy(t *testing.T) {
 	if testPolicy.PolicyFile != testPolicyFilePath {
 		t.Errorf("预期路径为 '%s', 实际为 %s", testPolicyFilePath, testPolicy.PolicyFile)
 	}
+	require.Len(t, testPolicy.PolicyRules, 7)
+}
+
+func Test_NewDockerfilePolicy_MissingPolicySection(t *testing.T) {
+	testPolicyFilePath := "testdata/missing_policy.yaml"
+	err := os.MkdirAll("testdata", 0755)
+	require.NoError(t, err)
+
+	err = os.WriteFile(testPolicyFilePath, []byte("forbid_root:\n  enabled: true\n"), 0644)
+	require.NoError(t, err)
+	defer os.Remove(testPolicyFilePath)
+
+	_, err = NewDockerfilePolicy(testPolicyFilePath)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "invalid policy file format")
+}
+
+func Test_NewDockerfilePolicy_InvalidRuleFieldType(t *testing.T) {
+	testPolicyFilePath := "testdata/invalid_policy.yaml"
+	err := os.MkdirAll("testdata", 0755)
+	require.NoError(t, err)
+
+	content := `policy:
+  forbid_packages:
+    enabled: true
+    forbidden_packages: not-a-list`
+	err = os.WriteFile(testPolicyFilePath, []byte(content), 0644)
+	require.NoError(t, err)
+	defer os.Remove(testPolicyFilePath)
+
+	_, err = NewDockerfilePolicy(testPolicyFilePath)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "invalid yaml file")
+	require.Contains(t, err.Error(), "[]string")
 }
 
 func Test_GetPolicyRulesEnabled(t *testing.T) {
