@@ -46,8 +46,9 @@ func newSubCmdDokcerfile() *cobra.Command {
 		Use:     "dockerfile-audit",
 		Aliases: []string{"df-audit"},
 		Short:   "dockerfile-audit uses its own grammar to parse valid Dockerfiles and deconstruct all directives.",
-		Run: func(cmd *cobra.Command, arg []string) {
-			scanner.RunDockerfileAudit(args)
+		RunE: func(cmd *cobra.Command, arg []string) error {
+			_, err := scanner.RunDockerfileAudit(args)
+			return err
 		},
 	}
 	initScanDockerfileFlags(cmd)
