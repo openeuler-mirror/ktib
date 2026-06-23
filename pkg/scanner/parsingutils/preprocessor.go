@@ -14,8 +14,6 @@ package parsingutils
 import (
 	"regexp"
 	"strings"
-
-	"github.com/sirupsen/logrus"
 )
 
 type DockerfilePreprocessor struct {
@@ -41,28 +39,14 @@ func (p *DockerfilePreprocessor) normalize() {
 	p.removesLeadingNewlines()
 	p.removesLeadingSpaces()
 	p.removesTrailingSpaces()
-	envs := p.getEnvBasic()
-	p.resolveEnvs(envs)
-	envs = p.getEnvKeyValue()
-	p.resolveEnvs(envs)
-}
-
-func (p *DockerfilePreprocessor) resolveEnvs(envs map[string]string) {
-	for key, value := range envs {
-		envNames := []string{"[$]" + key, "[$]{" + key + "(-[\\S]+)?}"}
-		for _, pattern := range envNames {
-			regex := regexp.MustCompile(pattern)
-			if regex.MatchString(p.content) {
-				logrus.Debugf("Resolving env variable %s with value %s.", key, value)
-			}
-			p.content = regex.ReplaceAllString(p.content, value)
-		}
-	}
 }
 
 func (p *DockerfilePreprocessor) removeComments() {
-	comments := regexp.MustCompile(`#.*\n`)
-	p.content = comments.ReplaceAllString(p.content, "")
+	lines := strings.Split(p.content, "\n")
+	for i, line := range lines {
+		lines[i] = stripDockerfileComment(line)
+	}
+	p.content = strings.Join(lines, "\n")
 }
 
 func (p *DockerfilePreprocessor) flattenLines() {
@@ -117,7 +101,6 @@ func (p *DockerfilePreprocessor) getEnvKeyValue() map[string]string {
 	for _, line := range dockerfileLines {
 		if envMatch.MatchString(line) {
 			if lineWithKeyValues.MatchString(line) {
-				logrus.Debugf("Key value ENV match: %s", line)
 				line = strings.ReplaceAll(line, "\\ ", "#")
 				line = p.replaceSpacesInQuotes(line)
 				envs := strings.Split(line, " ")[1:]
@@ -148,4 +131,38 @@ func (p *DockerfilePreprocessor) replaceSpacesInQuotes(line string) string {
 		}
 	}
 	return result
+}
+
+func stripDockerfileComment(line string) string {
+	inSingleQuotes := false
+	inDoubleQuotes := false
+	escaped := false
+
+	for i, r := range line {
+		switch {
+		case escaped:
+			escaped = false
+		case r == '\\':
+			escaped = true
+		case r == '\'' && !inDoubleQuotes:
+			inSingleQuotes = !inSingleQuotes
+		case r == '"' && !inSingleQuotes:
+			inDoubleQuotes = !inDoubleQuotes
+		case r == '#' && !inSingleQuotes && !inDoubleQuotes && isDockerfileCommentStart(line, i):
+			return strings.TrimRight(line[:i], " \t")
+		}
+	}
+
+	return line
+}
+
+func isDockerfileCommentStart(line string, index int) bool {
+	if index == 0 {
+		return true
+	}
+	if strings.TrimSpace(line[:index]) == "" {
+		return true
+	}
+	prev := line[index-1]
+	return prev == ' ' || prev == '\t'
 }

@@ -27,14 +27,24 @@ func TestDockerfilePreprocessor_GetNormalizedContent(t *testing.T) {
 			expected: "FROM ubuntu:latest\nRUN apt-get update && apt-get install -y python3\nENV PYTHON_VERSION=3.9.0",
 		},
 		{
-			name:     "Env Substitution",
+		name:     "Keep Env References",
 			content:  "FROM ubuntu:latest\nENV PYTHON_VERSION=3.9.0\nRUN pip install python-$PYTHON_VERSION",
-			expected: "FROM ubuntu:latest\nENV PYTHON_VERSION=3.9.0\nRUN pip install python-3.9.0",
+		expected: "FROM ubuntu:latest\nENV PYTHON_VERSION=3.9.0\nRUN pip install python-$PYTHON_VERSION",
 		},
 		{
-			name:     "Env Substitution with Braces",
+		name:     "Keep Env References With Braces",
 			content:  "FROM ubuntu:latest\nENV PYTHON_VERSION=3.9.0\nRUN pip install python-${PYTHON_VERSION}",
-			expected: "FROM ubuntu:latest\nENV PYTHON_VERSION=3.9.0\nRUN pip install python-3.9.0",
+		expected: "FROM ubuntu:latest\nENV PYTHON_VERSION=3.9.0\nRUN pip install python-${PYTHON_VERSION}",
+	},
+	{
+		name:     "Preserve Hash In Quotes",
+		content:  "FROM ubuntu:latest\nRUN echo \"#not-comment\" # trailing comment",
+		expected: "FROM ubuntu:latest\nRUN echo \"#not-comment\"",
+	},
+	{
+		name:     "Preserve Hash Without Leading Whitespace",
+		content:  "FROM ubuntu:latest\nRUN echo value#fragment",
+		expected: "FROM ubuntu:latest\nRUN echo value#fragment",
 		},
 	}
 
