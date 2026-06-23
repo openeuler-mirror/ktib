@@ -523,6 +523,32 @@ func TestNewForbidPackages_Test(t *testing.T) {
 	}
 }
 
+func TestForbidPackages_TestUsesLastStageRuns(t *testing.T) {
+	rule := NewForbidPackages([]string{"curl"})
+	df := &Dockerfile{
+		Directives: []DfDirective{
+			NewFromDirective("FROM golang:1.22 AS builder"),
+			NewRunDirective("RUN apt-get update && apt-get install -y curl"),
+			NewFromDirective("FROM alpine:3.20"),
+			NewRunDirective("RUN apk add --no-cache bash"),
+		},
+	}
+
+	results := rule.Test(df.GetDirectives())
+	expected := &[]Rule{
+		{
+			Type:        FORBID_PACKAGES,
+			Details:     "Forbidden package \"curl\" is not installed.",
+			Mitigations: "",
+			Status:      "pass",
+		},
+	}
+
+	if !reflect.DeepEqual(results, expected) {
+		t.Errorf("Expected %v, got %v", expected, results)
+	}
+}
+
 func TestNewForbidSecrets(t *testing.T) {
 	secretsPatterns := []string{"123456"}
 	allowedPatterns := []string{"654321"}
