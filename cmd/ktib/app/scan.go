@@ -45,10 +45,10 @@ func newSubCmdDockerfile() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "dockerfile-audit",
 		Aliases: []string{"df-audit"},
-		Short:   "Parse and audit Dockerfiles with ktib policies",
+		Short:   "dockerfile-audit uses its own grammar to parse valid Dockerfiles and deconstruct all directives.",
 		RunE: func(cmd *cobra.Command, arg []string) error {
-			scanner.RunDockerfileAudit(args)
-			return nil
+			_, err := scanner.RunDockerfileAudit(args)
+			return err
 		},
 	}
 	initScanDockerfileFlags(cmd)

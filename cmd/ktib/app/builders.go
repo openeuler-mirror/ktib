@@ -24,16 +24,6 @@ func newCmdBuilder() *cobra.Command {
 		Args:    cobra.NoArgs,
 	}
 	cmd.AddCommand(
-		builders.ADDCmd(),
-		builders.BUILDCmd(),
-		builders.COPYCmd(),
-		builders.COMMITCmd(),
-		builders.FROMCmd(),
-		builders.LABELCmd(),
-		builders.ListBuildersCmd(),
-		builders.MOUNTCmd(),
-		builders.RUNCmd(),
-		builders.RMCmd(),
-		builders.UMOUNTCmd())
+		builders.BUILDCmd())
 	return cmd
 }

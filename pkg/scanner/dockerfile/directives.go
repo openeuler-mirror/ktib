@@ -12,7 +12,6 @@
 package dockerfile
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/url"
 	"regexp"
@@ -235,14 +234,21 @@ func NewUserDirective(rawContent string) *UserDirective {
 		Type:    USER,
 		Content: rawContent,
 	}
-	data := make(map[string]interface{})
-	if err := json.Unmarshal([]byte(rawContent), &data); err == nil {
-		if user, ok := data["user"].(string); ok {
-			directive.User = user
-		}
-		if group, ok := data["group"].(string); ok {
-			directive.Group = group
-		}
+
+	content := strings.TrimSpace(rawContent)
+	fields := strings.Fields(content)
+	if len(fields) > 0 && strings.EqualFold(fields[0], "USER") {
+		fields = fields[1:]
+	}
+	if len(fields) == 0 {
+		return &directive
+	}
+
+	userSpec := fields[0]
+	parts := strings.SplitN(userSpec, ":", 2)
+	directive.User = parts[0]
+	if len(parts) == 2 {
+		directive.Group = parts[1]
 	}
 
 	return &directive

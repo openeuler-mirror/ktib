@@ -304,11 +304,7 @@ func TestForbidRoot_Test(t *testing.T) {
 			name: "ForbidRoot root",
 			directives: map[string][]DfDirective{
 				"user": {
-					&UserDirective{
-						Content: "USER root",
-						User:    "root",
-						Group:   "root",
-					},
+				NewUserDirective("USER root"),
 				},
 			},
 			expectedRes: &[]Rule{
@@ -325,11 +321,7 @@ func TestForbidRoot_Test(t *testing.T) {
 			name: "ForbidRoot rootless",
 			directives: map[string][]DfDirective{
 				"user": {
-					&UserDirective{
-						Content: "USER rootless",
-						User:    "rootless",
-						Group:   "rootless",
-					},
+				NewUserDirective("USER rootless"),
 				},
 			},
 			expectedRes: &[]Rule{
@@ -342,7 +334,35 @@ func TestForbidRoot_Test(t *testing.T) {
 				},
 			},
 		},
-		// todo，func (rule *ForbidRoot) Test逻辑修复后，补充对user为空情景的单元测试
+	{
+		name: "ForbidRoot numeric root user",
+		directives: map[string][]DfDirective{
+			"user": {
+				NewUserDirective("USER 0:0"),
+			},
+		},
+		expectedRes: &[]Rule{
+			{
+				Type:        FORBID_ROOT,
+				Details:     "The last USER instruction elevates privileges to root.",
+				Mitigations: "Add another USER instruction before the image's entrypoint to run the application as a non-privileged user.",
+				Statement:   []string{"USER 0:0"},
+				Status:      "fail",
+			},
+		},
+	},
+	{
+		name:       "ForbidRoot missing user instruction",
+		directives: map[string][]DfDirective{},
+		expectedRes: &[]Rule{
+			{
+				Type:        FORBID_ROOT,
+				Details:     "USER instruction not found. By default, the container will run as the root user if privileges are not dropped.",
+				Mitigations: "Create a user and add a USER instruction before the image's entrypoint to run the application as a non-privileged user.",
+				Status:      "fail",
+			},
+		},
+	},
 	}
 	fr := NewForbidRoot(true)
 	for _, tc := range testCases {
@@ -520,6 +540,32 @@ func TestNewForbidPackages_Test(t *testing.T) {
 				t.Errorf("Expected %v, got %v", tc.expectedRes, res)
 			}
 		})
+	}
+}
+
+func TestForbidPackages_TestUsesLastStageRuns(t *testing.T) {
+	rule := NewForbidPackages([]string{"curl"})
+	df := &Dockerfile{
+		Directives: []DfDirective{
+			NewFromDirective("FROM golang:1.22 AS builder"),
+			NewRunDirective("RUN apt-get update && apt-get install -y curl"),
+			NewFromDirective("FROM alpine:3.20"),
+			NewRunDirective("RUN apk add --no-cache bash"),
+		},
+	}
+
+	results := rule.Test(df.GetDirectives())
+	expected := &[]Rule{
+		{
+			Type:        FORBID_PACKAGES,
+			Details:     "Forbidden package \"curl\" is not installed.",
+			Mitigations: "",
+			Status:      "pass",
+		},
+	}
+
+	if !reflect.DeepEqual(results, expected) {
+		t.Errorf("Expected %v, got %v", expected, results)
 	}
 }
 

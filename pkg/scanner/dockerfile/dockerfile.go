@@ -74,15 +74,17 @@ func (df *Dockerfile) AddDirective(directive DfDirective) {
 }
 
 func (df *Dockerfile) GetRunDirectivesLastStage() []DfDirective {
-	directives := make([]DfDirective, len(df.Directives))
-	copy(directives, df.Directives)
 	runDirectives := make([]DfDirective, 0)
-	for _, directive := range directives {
-		if directive.GetType() == RUN {
-			runDirectives = append(runDirectives, directive)
+	for _, directive := range df.Directives {
+		if directive == nil {
+			continue
 		}
 		if directive.GetType() == FROM {
-			break
+			runDirectives = runDirectives[:0]
+			continue
+		}
+		if directive.GetType() == RUN {
+			runDirectives = append(runDirectives, directive)
 		}
 	}
 	return runDirectives

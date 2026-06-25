@@ -281,6 +281,15 @@ func TestDockerfile_GetRunDirectivesLastStage(t *testing.T) {
 	// 测试用例 1: 检查 GetRunDirectivesLastStage 函数是否能正确返回最后一个阶段的 RUN 指令
 	dockerfile := &Dockerfile{
 		Directives: []DfDirective{
+			&FromDirective{
+				Type:           FROM,
+				Content:        "FROM golang:1.22 AS builder",
+				RunLastStage:   []map[string]string{},
+				Registry:       "",
+				ImageLocalName: "builder",
+				ImageTag:       "1.22",
+				ImageName:      "golang",
+			},
 			&RunDirective{
 				Type:         RUN,
 				Content:      "apt-get update",
@@ -293,7 +302,7 @@ func TestDockerfile_GetRunDirectivesLastStage(t *testing.T) {
 			},
 			&FromDirective{
 				Type:           FROM,
-				Content:        "ubuntu:latest",
+				Content:        "FROM ubuntu:latest",
 				RunLastStage:   []map[string]string{},
 				Platform:       "",
 				Registry:       "",
@@ -311,12 +320,12 @@ func TestDockerfile_GetRunDirectivesLastStage(t *testing.T) {
 
 	runDirectives := dockerfile.GetRunDirectivesLastStage()
 
-	if len(runDirectives) != 2 {
-		t.Errorf("GetRunDirectiesLastStage() received 2 instruction count, but it was actually %d", len(runDirectives))
+	if len(runDirectives) != 1 {
+		t.Errorf("GetRunDirectiesLastStage() received 1 instruction count, but it was actually %d", len(runDirectives))
 	}
-	runDirective := runDirectives[len(runDirectives)-1].(*RunDirective)
-	if runDirective.Content != "apt-get install -y curl" {
-		t.Errorf("预期最后一个 RUN 指令为 'apt-get install -y curl'，实际为 %+v", runDirective)
+	runDirective := runDirectives[0].(*RunDirective)
+	if runDirective.Content != "echo 'Hello, World!'" {
+		t.Errorf("预期最后一个阶段的 RUN 指令为 'echo 'Hello, World!''，实际为 %+v", runDirective)
 	}
 }
 

@@ -37,7 +37,8 @@ func TestGetFilesToProcess(t *testing.T) {
 		err := os.WriteFile(filePath, []byte("FROM alpine"), 0644)
 		assert.NoError(t, err)
 
-		files := getFilesToProcess(filePath)
+		files, err := getFilesToProcess(filePath)
+		assert.NoError(t, err)
 		assert.Len(t, files, 1)
 		assert.Equal(t, filePath, files[0])
 	})
@@ -60,12 +61,18 @@ func TestGetFilesToProcess(t *testing.T) {
 		err = os.WriteFile(file2, []byte("FROM ubuntu"), 0644)
 		assert.NoError(t, err)
 
-		files := getFilesToProcess(tmpDir)
+		files, err := getFilesToProcess(tmpDir)
+		assert.NoError(t, err)
 
 		// Should find both files
 		assert.Len(t, files, 2)
 		assert.Contains(t, files, file1)
 		assert.Contains(t, files, file2)
+	})
+
+	t.Run("missing path returns error", func(t *testing.T) {
+		_, err := getFilesToProcess(filepath.Join(t.TempDir(), "missing"))
+		assert.Error(t, err)
 	})
 }
 
@@ -78,9 +85,10 @@ RUN echo "hello world"`
 	assert.NoError(t, err)
 
 	filesToProcess := []string{filePath}
-	results := parse(filesToProcess)
+	results, failures := parse(filesToProcess)
 
 	assert.Len(t, results, 1)
+	assert.Empty(t, failures)
 	assert.Equal(t, filePath, results[0].Path)
 	assert.Equal(t, "Dockerfile", results[0].Filename)
 	// We expect directives: FROM and RUN to be present
@@ -103,9 +111,10 @@ RUN echo "hello world"`
 	}
 
 	filesToProcess := []string{filePath}
-	results := audit(filesToProcess, policy)
+	results, failures := audit(filesToProcess, policy)
 
 	assert.Len(t, results, 1)
+	assert.Empty(t, failures)
 	assert.Equal(t, filePath, results[0].Path)
 	assert.Equal(t, "Dockerfile", results[0].Filename)
 	assert.Equal(t, "pass", results[0].AuditOutcome)
@@ -128,10 +137,15 @@ func TestRunDockerfileAudit_ParseOnly(t *testing.T) {
 	}
 
 	// Run the function
-	RunDockerfileAudit(args)
+	summary, err := RunDockerfileAudit(args)
+	assert.NoError(t, err)
 
 	// Verify output file exists
 	assert.FileExists(t, jsonOut)
+	assert.Equal(t, 1, summary.FilesDiscovered)
+	assert.Equal(t, 1, summary.FilesSucceeded)
+	assert.Empty(t, summary.FilesFailed)
+	assert.Equal(t, jsonOut, summary.OutputFile)
 
 	// Verify content is valid JSON and contains expected data
 	content, err := os.ReadFile(jsonOut)
@@ -165,4 +179,31 @@ policy:
 	assert.Equal(t, policyFile, policy.PolicyFile)
 	// Check if rule was actually loaded
 	assert.NotEmpty(t, policy.PolicyRules)
+}
+
+func TestRunDockerfileAudit_ParseOnlyPartialFailure(t *testing.T) {
+	tmpDir := t.TempDir()
+	validDockerfile := filepath.Join(tmpDir, "Dockerfile")
+	invalidDockerfile := filepath.Join(tmpDir, "BrokenDockerfile")
+	jsonOut := filepath.Join(tmpDir, "output.json")
+
+	err := os.WriteFile(validDockerfile, []byte("FROM alpine:latest\nRUN echo hello"), 0644)
+	assert.NoError(t, err)
+	err = os.WriteFile(invalidDockerfile, []byte{}, 0644)
+	assert.NoError(t, err)
+
+	args := o.Arguments{
+		Dockerfile:  tmpDir,
+		ParseOnly:   true,
+		JSONOutfile: jsonOut,
+	}
+
+	summary, err := RunDockerfileAudit(args)
+	assert.Error(t, err)
+	assert.FileExists(t, jsonOut)
+	assert.Equal(t, 2, summary.FilesDiscovered)
+	assert.Equal(t, 1, summary.FilesSucceeded)
+	assert.Len(t, summary.FilesFailed, 1)
+	assert.Equal(t, invalidDockerfile, summary.FilesFailed[0].Path)
+	assert.Contains(t, summary.FilesFailed[0].Error, "empty")
 }

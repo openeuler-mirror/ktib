@@ -184,6 +184,27 @@ func TestNewUserDirective(t *testing.T) {
 			expected: &UserDirective{
 				Type:    USER,
 				Content: "USER john",
+				User:    "john",
+			},
+		},
+		{
+			name:       "with user and group",
+			rawContent: "USER 1000:1000",
+			expected: &UserDirective{
+				Type:    USER,
+				Content: "USER 1000:1000",
+				User:    "1000",
+				Group:   "1000",
+			},
+		},
+		{
+			name:       "with lowercase directive",
+			rawContent: "user app:ci",
+			expected: &UserDirective{
+				Type:    USER,
+				Content: "user app:ci",
+				User:    "app",
+				Group:   "ci",
 			},
 		},
 	}
