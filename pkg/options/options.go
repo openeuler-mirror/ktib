@@ -121,6 +121,8 @@ type BuildOptions struct {
 	Runtime   string
 	Format    string
 	BuildArg  []string
+	CapAdd    []string
+	CapDrop   []string
 	TLSVerify bool
 	Insecure  bool
 }

@@ -172,7 +172,9 @@ func compareBuildOptions(a, b *define.BuildOptions) bool {
 
 	// Compare all fields of the structs here
 	return compareSlices(a.AdditionalTags, b.AdditionalTags) &&
+		compareSlices(a.AddCapabilities, b.AddCapabilities) &&
 		a.ContextDirectory == b.ContextDirectory &&
+		compareSlices(a.DropCapabilities, b.DropCapabilities) &&
 		a.Err == b.Err &&
 		a.NoCache == b.NoCache &&
 		a.RemoveIntermediateCtrs == b.RemoveIntermediateCtrs &&
@@ -201,11 +203,15 @@ func TestParseBuildOptions(t *testing.T) {
 				NoCache: true,
 				Rm:      true,
 				Runtime: "docker",
+				CapAdd:  []string{"CAP_SYS_NICE"},
+				CapDrop: []string{"CAP_NET_BIND_SERVICE"},
 			},
 			contextDir: "/context",
 			expectedOpts: &define.BuildOptions{
 				AdditionalTags:         []string{"tag2"},
+				AddCapabilities:        []string{"CAP_SYS_NICE"},
 				ContextDirectory:       "/context",
+				DropCapabilities:       []string{"CAP_NET_BIND_SERVICE"},
 				Err:                    os.Stderr,
 				NoCache:                true,
 				RemoveIntermediateCtrs: true,
