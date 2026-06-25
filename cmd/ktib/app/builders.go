@@ -20,11 +20,8 @@ func newCmdBuilder() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "builders",
 		Aliases: []string{"b", "containers"},
-		Short:   "Run this command in order to operate images at local or remote",
-		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			return nil
-		},
-		Args: cobra.NoArgs,
+		Short:   "Operate on builder containers",
+		Args:    cobra.NoArgs,
 	}
 	cmd.AddCommand(
 		builders.ADDCmd(),

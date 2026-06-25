@@ -21,8 +21,9 @@ func newCmdVersion() *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",
 		Short: "Print ktib version",
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Println(cmd.Root().Version)
+			return nil
 		},
 	}
 }

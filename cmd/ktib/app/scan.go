@@ -29,25 +29,26 @@ func init() {
 func newCmdScan() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "scan",
-		Short: "Run this command to audit Dockerfile",
+		Short: "Audit Dockerfiles for compliance",
 		Long: `The scan command only supports Dockerfile static compliance auditing.
 
-example:
+Example:
   ktib scan dockerfile-audit --dockerfile /root/Dockerfile --json`,
 	}
 	cmd.AddCommand(
-		newSubCmdDokcerfile(),
+		newSubCmdDockerfile(),
 	)
 	return cmd
 }
 
-func newSubCmdDokcerfile() *cobra.Command {
+func newSubCmdDockerfile() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "dockerfile-audit",
 		Aliases: []string{"df-audit"},
-		Short:   "dockerfile-audit uses its own grammar to parse valid Dockerfiles and deconstruct all directives.",
-		Run: func(cmd *cobra.Command, arg []string) {
+		Short:   "Parse and audit Dockerfiles with ktib policies",
+		RunE: func(cmd *cobra.Command, arg []string) error {
 			scanner.RunDockerfileAudit(args)
+			return nil
 		},
 	}
 	initScanDockerfileFlags(cmd)

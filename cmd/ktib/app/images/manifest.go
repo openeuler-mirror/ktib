@@ -126,7 +126,7 @@ func newSubCmdPush() *cobra.Command {
 	var pushOptions = manifestPushOpts{}
 	cmd := &cobra.Command{
 		Use:   "push",
-		Short: "todo",
+		Short: "Push a manifest list or image index",
 		Args:  cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return manifestPush(cmd, args, pushOptions)

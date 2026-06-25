@@ -21,8 +21,10 @@ func NewCommand(version string) *cobra.Command {
 	var logLevel string
 	var logFormat string
 	cmds := &cobra.Command{
-		Use:   "ktib",
-		Short: "Kylin Trusted Image Builder",
+		Use:           "ktib",
+		Short:         "Kylin Trusted Image Builder",
+		SilenceUsage:  true,
+		SilenceErrors: true,
 		Long: dedent.Dedent(`
 
 Kylin Trusted Image Builder (ktib)
