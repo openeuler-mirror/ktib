@@ -451,12 +451,16 @@ func (rule *ForbidPrivilegedPorts) Test(dockerfileDirective map[string][]DfDirec
 }
 
 func (rule *ForbidPrivilegedPorts) getPortFromEnv(envName string, dockerfileStatements map[string][]DfDirective) *int {
+	normalizedEnvName := normalizeEnvReference(envName)
+	if normalizedEnvName == "" {
+		return nil
+	}
 	envStatements := dockerfileStatements["env"]
 	for _, statement := range envStatements {
 		var envDirectiveInterface interface{} = statement
 		if envDirective, ok := envDirectiveInterface.(*EnvDirective); ok {
 			variables := envDirective.Variables
-			if portNumberStr, exist := variables[envName]; exist {
+			if portNumberStr, exist := variables[normalizedEnvName]; exist {
 				portNumber, err := strconv.Atoi(portNumberStr)
 				if err == nil {
 					return &portNumber
@@ -465,6 +469,15 @@ func (rule *ForbidPrivilegedPorts) getPortFromEnv(envName string, dockerfileStat
 		}
 	}
 	return nil
+}
+
+func normalizeEnvReference(envName string) string {
+	normalized := strings.TrimSpace(envName)
+	normalized = strings.TrimPrefix(normalized, "$")
+	if strings.HasPrefix(normalized, "{") && strings.HasSuffix(normalized, "}") {
+		normalized = strings.TrimSuffix(strings.TrimPrefix(normalized, "{"), "}")
+	}
+	return normalized
 }
 
 type ForbidPackages struct {
