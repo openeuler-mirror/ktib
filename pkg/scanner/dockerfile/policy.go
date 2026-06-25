@@ -13,6 +13,7 @@ package dockerfile
 
 import (
 	"errors"
+	"fmt"
 	"os"
 
 	"github.com/sirupsen/logrus"
@@ -30,6 +31,45 @@ type PolicyResult struct {
 	AuditOutcome string
 	Maintainers  string
 	Path         string
+}
+
+type policyFileConfig struct {
+	Policy *policyConfig `yaml:"policy"`
+}
+
+type policyConfig struct {
+	EnforceAuthorizedRegistries registryPolicyConfig `yaml:"enforce_authorized_registries"`
+	ForbidFloatingTags          tagsPolicyConfig     `yaml:"forbid_floating_tags"`
+	ForbidInsecureRegistries    enabledPolicyConfig  `yaml:"forbid_insecure_registries"`
+	ForbidRoot                  enabledPolicyConfig  `yaml:"forbid_root"`
+	ForbidPrivilegedPorts       enabledPolicyConfig  `yaml:"forbid_privileged_ports"`
+	ForbidPackages              packagesPolicyConfig `yaml:"forbid_packages"`
+	ForbidSecrets               secretsPolicyConfig  `yaml:"forbid_secrets"`
+}
+
+type enabledPolicyConfig struct {
+	Enabled bool `yaml:"enabled"`
+}
+
+type registryPolicyConfig struct {
+	Enabled    bool     `yaml:"enabled"`
+	Registries []string `yaml:"registries"`
+}
+
+type tagsPolicyConfig struct {
+	Enabled       bool     `yaml:"enabled"`
+	ForbiddenTags []string `yaml:"forbidden_tags"`
+}
+
+type packagesPolicyConfig struct {
+	Enabled           bool     `yaml:"enabled"`
+	ForbiddenPackages []string `yaml:"forbidden_packages"`
+}
+
+type secretsPolicyConfig struct {
+	Enabled         bool     `yaml:"enabled"`
+	SecretsPatterns []string `yaml:"secrets_patterns"`
+	AllowedPatterns []string `yaml:"allowed_patterns"`
 }
 
 func NewDockerfilePolicy(policyFile string) (*Policy, error) {
@@ -78,115 +118,76 @@ func (p *Policy) EvaluateDockerfile(dockerfileObject Dockerfile) PolicyResult {
 }
 
 func (p *Policy) initRules() error {
-	var policyRules map[string]interface{}
 	yamlFile, err := os.ReadFile(p.PolicyFile)
 	if err != nil {
 		logrus.Errorf("Failed to read %s: %v", p.PolicyFile, err)
 		return errors.New("failed to read policy file")
 	}
-	err = yaml.Unmarshal(yamlFile, &policyRules)
+	var config policyFileConfig
+	err = yaml.Unmarshal(yamlFile, &config)
 	if err != nil {
 		logrus.Errorf("Failed to parse %s: %v", p.PolicyFile, err)
-		return errors.New("invalid yaml file")
+		return fmt.Errorf("invalid yaml file: %w", err)
 	}
-	policies, ok := policyRules["policy"].(map[string]interface{})
-	if !ok {
+	if config.Policy == nil {
 		logrus.Error("Invalid policy file format: missing 'policy' section")
 		return errors.New("invalid policy file format")
 	}
 
-	if enforceRegistries, ok := policies["enforce_authorized_registries"].(map[string]interface{}); ok {
-		if enabled, ok := enforceRegistries["enabled"].(bool); ok {
-			registries, ok := enforceRegistries["registries"]
-			if ok {
-				strSlice := make([]string, len(registries.([]interface{})))
-				for i, v := range registries.([]interface{}) {
-					strSlice[i] = v.(string)
-				}
-				p.PolicyRules = append(p.PolicyRules, NewEnforceRegistryPolicy(strSlice, enabled))
-			}
-		}
-	}
-
-	if forbidTags, ok := policies["forbid_floating_tags"].(map[string]interface{}); ok {
-		if enabled, ok := forbidTags["enabled"].(bool); ok && enabled {
-			tags, ok := forbidTags["forbidden_tags"]
-			if ok {
-				strSlice := make([]string, len(tags.([]interface{})))
-				for i, v := range tags.([]interface{}) {
-					strSlice[i] = v.(string)
-				}
-				p.PolicyRules = append(p.PolicyRules, NewForbidTags(strSlice))
-			}
-		}
-	}
-
-	if forbidInsecureRegistries, ok := policies["forbid_insecure_registries"].(map[string]interface{}); ok {
-		if enabled, ok := forbidInsecureRegistries["enabled"].(bool); ok && enabled {
-			insecureRegistries := NewForbidInsecureRegistries(enabled)
-			p.PolicyRules = append(p.PolicyRules, insecureRegistries)
-		}
-	}
-
-	if forbidRoot, ok := policies["forbid_root"].(map[string]interface{}); ok {
-		if enabled, ok := forbidRoot["enabled"].(bool); ok && enabled {
-			p.PolicyRules = append(p.PolicyRules, NewForbidRoot(enabled))
-		}
-	}
-
-	if forbidPrivilegedPorts, ok := policies["forbid_privileged_ports"].(map[string]interface{}); ok {
-		if enabled, ok := forbidPrivilegedPorts["enabled"].(bool); ok && enabled {
-			p.PolicyRules = append(p.PolicyRules, NewForbidPrivilegedPorts(enabled))
-		}
-	}
-
-	if forbidPackages, ok := policies["forbid_packages"].(map[string]interface{}); ok {
-		if enabled, ok := forbidPackages["enabled"].(bool); ok && enabled {
-			packages, ok := forbidPackages["forbidden_packages"]
-			if ok {
-				strSlice := make([]string, len(packages.([]interface{})))
-				for i, v := range packages.([]interface{}) {
-					strSlice[i] = v.(string)
-				}
-				p.PolicyRules = append(p.PolicyRules, NewForbidPackages(strSlice))
-			}
-		}
-	}
-	if forbidSecrets, ok := policies["forbid_secrets"].(map[string]interface{}); ok {
-		var secretsPatterns []string
-		var allowedPatterns []string
-		if enabled, ok := forbidSecrets["enabled"].(bool); ok && enabled {
-			patterns, ok := forbidSecrets["secrets_patterns"].([]interface{})
-			if ok {
-				for _, pattern := range patterns {
-					if p, ok := pattern.(string); ok {
-						secretsPatterns = append(secretsPatterns, p)
-					} else {
-						logrus.Warnf("Invalid secrets_patterns format, skipping: %v", pattern)
-						continue
-					}
-				}
-			} else {
-				logrus.Warn("Invalid secrets_patterns format. Skipping.")
-			}
-			if patterns, ok := forbidSecrets["allowed_patterns"].([]interface{}); ok {
-				for _, pattern := range patterns {
-					if p, ok := pattern.(string); ok {
-						allowedPatterns = append(allowedPatterns, p)
-					} else {
-						logrus.Warnf("Invalid allowed_patterns format, skipping: %v", pattern)
-						continue
-					}
-				}
-				forbidSecrets := NewForbidSecrets(secretsPatterns, allowedPatterns)
-				p.PolicyRules = append(p.PolicyRules, forbidSecrets)
-			}
-		}
-	} else {
-		logrus.Warn("forbid_secrets rule added but no secrets_patterns defined.")
-	}
-
+	p.PolicyRules = p.PolicyRules[:0]
+	p.addRegistryRule(config.Policy.EnforceAuthorizedRegistries)
+	p.addForbidTagsRule(config.Policy.ForbidFloatingTags)
+	p.addEnabledRule(config.Policy.ForbidInsecureRegistries, func(enabled bool) PolicyRule {
+		return NewForbidInsecureRegistries(enabled)
+	})
+	p.addEnabledRule(config.Policy.ForbidRoot, func(enabled bool) PolicyRule {
+		return NewForbidRoot(enabled)
+	})
+	p.addEnabledRule(config.Policy.ForbidPrivilegedPorts, func(enabled bool) PolicyRule {
+		return NewForbidPrivilegedPorts(enabled)
+	})
+	p.addPackagesRule(config.Policy.ForbidPackages)
+	p.addSecretsRule(config.Policy.ForbidSecrets)
 	return nil
+}
+
+func (p *Policy) addRegistryRule(cfg registryPolicyConfig) {
+	if !cfg.Enabled || len(cfg.Registries) == 0 {
+		return
+	}
+	p.PolicyRules = append(p.PolicyRules, NewEnforceRegistryPolicy(cfg.Registries, cfg.Enabled))
+}
+
+func (p *Policy) addForbidTagsRule(cfg tagsPolicyConfig) {
+	if !cfg.Enabled || len(cfg.ForbiddenTags) == 0 {
+		return
+	}
+	p.PolicyRules = append(p.PolicyRules, NewForbidTags(cfg.ForbiddenTags))
+}
+
+func (p *Policy) addEnabledRule(cfg enabledPolicyConfig, factory func(bool) PolicyRule) {
+	if !cfg.Enabled {
+		return
+	}
+	p.PolicyRules = append(p.PolicyRules, factory(cfg.Enabled))
+}
+
+func (p *Policy) addPackagesRule(cfg packagesPolicyConfig) {
+	if !cfg.Enabled || len(cfg.ForbiddenPackages) == 0 {
+		return
+	}
+	p.PolicyRules = append(p.PolicyRules, NewForbidPackages(cfg.ForbiddenPackages))
+}
+
+func (p *Policy) addSecretsRule(cfg secretsPolicyConfig) {
+	if !cfg.Enabled {
+		return
+	}
+	if len(cfg.SecretsPatterns) == 0 {
+		logrus.Warn("forbid_secrets is enabled but no secrets_patterns are defined.")
+		return
+	}
+	p.PolicyRules = append(p.PolicyRules, NewForbidSecrets(cfg.SecretsPatterns, cfg.AllowedPatterns))
 }
 
 func (p *Policy) GetPolicyRulesEnabled() []Rule {
