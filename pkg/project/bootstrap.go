@@ -80,7 +80,9 @@ func (b *Bootstrap) InitProjectStructure() error {
 	}
 
 	// Add necessary files
-	b.AddDockerfile()
+	if err := b.AddDockerfile(); err != nil {
+		return err
+	}
 	b.AddChangeInfo()
 	b.AddRemoveMinimalList()
 	b.AddUnmaskService()
@@ -163,10 +165,12 @@ func (b *Bootstrap) BuildRootfs(configFile string) error {
 	return nil
 }
 
-func (b *Bootstrap) AddDockerfile() {
+func (b *Bootstrap) AddDockerfile() error {
 	// Create Dockerfile in the dockerfile directory
 	dockerfilePath := filepath.Join(b.DestinationDir, "dockerfile")
-	os.MkdirAll(dockerfilePath, 0755)
+	if err := os.MkdirAll(dockerfilePath, 0755); err != nil {
+		return fmt.Errorf("failed to create dockerfile directory: %w", err)
+	}
 
 	// Select different Dockerfile templates based on the build type
 	if b.BuildType == "platform" || b.BuildType == "minimal" || b.BuildType == "micro" {
@@ -176,6 +180,7 @@ func (b *Bootstrap) AddDockerfile() {
 	} else {
 		b.initialize(templates.Dockerfile, "dockerfile/Dockerfile", 0755)
 	}
+	return nil
 }
 
 func (b *Bootstrap) AddRemoveMinimalList() {

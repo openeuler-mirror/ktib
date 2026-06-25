@@ -220,7 +220,9 @@ func TestBootstrap_AddMethods(t *testing.T) {
 	os.MkdirAll(filepath.Join(tmpDir, "files"), 0755)
 
 	t.Run("AddDockerfile", func(t *testing.T) {
-		b.AddDockerfile()
+		if err := b.AddDockerfile(); err != nil {
+			t.Fatalf("AddDockerfile failed: %v", err)
+		}
 		verifyFile(filepath.Join(tmpDir, "dockerfile", "Dockerfile"))
 	})
 
