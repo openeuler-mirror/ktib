@@ -304,11 +304,7 @@ func TestForbidRoot_Test(t *testing.T) {
 			name: "ForbidRoot root",
 			directives: map[string][]DfDirective{
 				"user": {
-					&UserDirective{
-						Content: "USER root",
-						User:    "root",
-						Group:   "root",
-					},
+				NewUserDirective("USER root"),
 				},
 			},
 			expectedRes: &[]Rule{
@@ -325,11 +321,7 @@ func TestForbidRoot_Test(t *testing.T) {
 			name: "ForbidRoot rootless",
 			directives: map[string][]DfDirective{
 				"user": {
-					&UserDirective{
-						Content: "USER rootless",
-						User:    "rootless",
-						Group:   "rootless",
-					},
+				NewUserDirective("USER rootless"),
 				},
 			},
 			expectedRes: &[]Rule{
@@ -342,7 +334,35 @@ func TestForbidRoot_Test(t *testing.T) {
 				},
 			},
 		},
-		// todo，func (rule *ForbidRoot) Test逻辑修复后，补充对user为空情景的单元测试
+	{
+		name: "ForbidRoot numeric root user",
+		directives: map[string][]DfDirective{
+			"user": {
+				NewUserDirective("USER 0:0"),
+			},
+		},
+		expectedRes: &[]Rule{
+			{
+				Type:        FORBID_ROOT,
+				Details:     "The last USER instruction elevates privileges to root.",
+				Mitigations: "Add another USER instruction before the image's entrypoint to run the application as a non-privileged user.",
+				Statement:   []string{"USER 0:0"},
+				Status:      "fail",
+			},
+		},
+	},
+	{
+		name:       "ForbidRoot missing user instruction",
+		directives: map[string][]DfDirective{},
+		expectedRes: &[]Rule{
+			{
+				Type:        FORBID_ROOT,
+				Details:     "USER instruction not found. By default, the container will run as the root user if privileges are not dropped.",
+				Mitigations: "Create a user and add a USER instruction before the image's entrypoint to run the application as a non-privileged user.",
+				Status:      "fail",
+			},
+		},
+	},
 	}
 	fr := NewForbidRoot(true)
 	for _, tc := range testCases {
