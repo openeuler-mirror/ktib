@@ -37,14 +37,8 @@ func newCmdProject() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "project",
 		Aliases: []string{"p"},
-		Short:   "Run this command in order to create a base project or app project",
-		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			return nil
-		},
-		PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
-			return nil
-		},
-		Args: cobra.NoArgs,
+		Short:   "Manage project initialization and image build workflows",
+		Args:    cobra.NoArgs,
 	}
 	cmd.AddCommand(
 		newSubCmdDefaultConfig(),
