@@ -165,9 +165,6 @@ func addCommandToScriptAndRun(target string, config Config) error {
 }
 
 func RemoveUnnecessaryFiles(target string) error {
-	for _, i := range unnecessaryFiles {
-		fmt.Println(i)
-	}
 	if err := removeAllFiles(target, unnecessaryFiles); err != nil {
 		return err
 	}
@@ -176,7 +173,7 @@ func RemoveUnnecessaryFiles(target string) error {
 		return err
 	}
 
-	if err := os.MkdirAll(filepath.Join(target, "/var/cache/ldconfig"), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(target, "var/cache/ldconfig"), 0755); err != nil {
 		return err
 	}
 	return nil
@@ -199,7 +196,9 @@ func CleanupRootfsPath(target string) error {
 	if err == nil && len(rpmHistoryFiles) > 0 {
 		fmt.Println("Cleaning up RPM database history...")
 		for _, file := range rpmHistoryFiles {
-			os.Remove(file)
+			if err := os.Remove(file); err != nil && !os.IsNotExist(err) {
+				return fmt.Errorf("failed to remove RPM history file %s: %w", file, err)
+			}
 		}
 	}
 
@@ -207,31 +206,51 @@ func CleanupRootfsPath(target string) error {
 	fmt.Println("Cleaning up temporary files and log files...")
 
 	logDir := filepath.Join(target, "var/log")
-	if _, err := os.Stat(logDir); !os.IsNotExist(err) {
+	if _, err := os.Stat(logDir); err == nil {
 		fmt.Printf("Emptying directory: %s\n", logDir)
-		os.RemoveAll(logDir)
-		os.MkdirAll(logDir, 0755)
+		if err := os.RemoveAll(logDir); err != nil {
+			return fmt.Errorf("failed to remove log directory: %w", err)
+		}
+		if err := os.MkdirAll(logDir, 0755); err != nil {
+			return fmt.Errorf("failed to recreate log directory: %w", err)
+		}
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("failed to stat log directory: %w", err)
 	}
 
 	tmpDir := filepath.Join(target, "tmp")
-	if _, err := os.Stat(tmpDir); !os.IsNotExist(err) {
+	if _, err := os.Stat(tmpDir); err == nil {
 		fmt.Printf("Emptying directory: %s\n", tmpDir)
-		os.RemoveAll(tmpDir)
-		os.MkdirAll(tmpDir, 0755)
+		if err := os.RemoveAll(tmpDir); err != nil {
+			return fmt.Errorf("failed to remove tmp directory: %w", err)
+		}
+		if err := os.MkdirAll(tmpDir, 0755); err != nil {
+			return fmt.Errorf("failed to recreate tmp directory: %w", err)
+		}
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("failed to stat tmp directory: %w", err)
 	}
 
 	// 3. Delete nologin file
 	nologinFile := filepath.Join(target, "run/nologin")
-	if _, err := os.Stat(nologinFile); !os.IsNotExist(err) {
+	if _, err := os.Stat(nologinFile); err == nil {
 		fmt.Printf("Deleting file: %s\n", nologinFile)
-		os.Remove(nologinFile)
+		if err := os.Remove(nologinFile); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("failed to remove nologin file: %w", err)
+		}
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("failed to stat nologin file: %w", err)
 	}
 
 	// 4. Clean up bash history
 	bashHistoryPath := filepath.Join(target, "root/.bash_history")
-	if _, err := os.Stat(bashHistoryPath); !os.IsNotExist(err) {
+	if _, err := os.Stat(bashHistoryPath); err == nil {
 		fmt.Printf("Emptying file: %s\n", bashHistoryPath)
-		os.WriteFile(bashHistoryPath, []byte(""), 0644)
+		if err := os.WriteFile(bashHistoryPath, []byte(""), 0644); err != nil {
+			return fmt.Errorf("failed to clear bash history: %w", err)
+		}
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("failed to stat bash history file: %w", err)
 	}
 
 	return nil
@@ -311,7 +330,12 @@ func RemoveUnnecessaryPackages(target string, imageType string, removeMinimalLis
 	err = cmd.Run()
 
 	// Clean up script
-	os.Remove(scriptPath)
+	if removeErr := os.Remove(scriptPath); removeErr != nil && !os.IsNotExist(removeErr) {
+		if err != nil {
+			return fmt.Errorf("failed to execute package removal script: %v; also failed to remove script: %w", err, removeErr)
+		}
+		return fmt.Errorf("failed to remove package removal script: %w", removeErr)
+	}
 
 	if err != nil {
 		return fmt.Errorf("failed to execute package removal script: %v", err)
@@ -362,7 +386,12 @@ func UnmaskServices(target string, unmaskServicePath string) error {
 	err = cmd.Run()
 
 	// Clean up script
-	os.Remove(scriptPath)
+	if removeErr := os.Remove(scriptPath); removeErr != nil && !os.IsNotExist(removeErr) {
+		if err != nil {
+			return fmt.Errorf("failed to execute service unmasking script: %v; also failed to remove script: %w", err, removeErr)
+		}
+		return fmt.Errorf("failed to remove service unmasking script: %w", removeErr)
+	}
 
 	if err != nil {
 		return fmt.Errorf("failed to execute service unmasking script: %v", err)
@@ -387,7 +416,14 @@ func ConfigurePipAndRemovePycache(target string, imageType string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	err := cmd.Run()
-	os.Remove(scriptPath)
+
+	if removeErr := os.Remove(scriptPath); removeErr != nil && !os.IsNotExist(removeErr) {
+		if err != nil {
+			return fmt.Errorf("failed to execute Python configuration script: %v; also failed to remove script: %w", err, removeErr)
+		}
+		return fmt.Errorf("failed to remove Python configuration script: %w", removeErr)
+	}
+
 	if err != nil {
 		return fmt.Errorf("failed to execute Python configuration script: %v", err)
 	}
