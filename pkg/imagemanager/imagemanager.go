@@ -199,6 +199,9 @@ func (im *ImageManager) Pull(imageName string) error {
 	if err != nil {
 		return err
 	}
+	if len(images) == 0 {
+		return fmt.Errorf("pull succeeded but no image was returned for %q", imageName)
+	}
 	fmt.Printf("%s\n", images[0].ID())
 	return nil
 }
