@@ -19,8 +19,6 @@ import (
 	"strings"
 	"time"
 
-	"gitee.com/openeuler/ktib/pkg/builder"
-	"gitee.com/openeuler/ktib/pkg/options"
 	"gitee.com/openeuler/ktib/pkg/types"
 	"github.com/containers/common/libimage"
 	"github.com/containers/storage"
@@ -125,13 +123,13 @@ func (a *Analyzer) Analyze(ctx context.Context, onProgress func(step string, don
 	stepName = "Image Mount"
 	startTime = time.Now()
 	notifyProgress(stepName, false, startTime)
-	b, mountPoint, err := a.mount()
+	ctrID, mountPoint, err := a.mount()
 	if err != nil {
 		return nil, "", nil, noopCleanup, fmt.Errorf("failed to mount image: %w", err)
 	}
 	// We do NOT defer cleanup here; we pass it back.
 	cleanup := func() {
-		a.cleanup(b)
+		a.cleanup(ctrID)
 	}
 	notifyProgress(stepName, true, startTime)
 
@@ -220,40 +218,43 @@ func sanitizeArch(arch string) string {
 	return arch
 }
 
-func (a *Analyzer) mount() (*builder.Builder, string, error) {
+func (a *Analyzer) mount() (containerID, mountPoint string, _ error) {
 	suffix := make([]byte, 4)
 	if _, err := rand.Read(suffix); err != nil {
-		return nil, "", fmt.Errorf("failed to generate random suffix: %w", err)
+		return "", "", fmt.Errorf("failed to generate random suffix: %w", err)
 	}
 	containerName := fmt.Sprintf("%s-analyze-%s", "ktib", hex.EncodeToString(suffix))
 
-	opts := builder.BuilderOptions{
-		FromImage: a.ImageRef,
-		Container: containerName,
-	}
-
-	b, err := builder.NewBuilder(a.Store, opts)
+	imageID := ""
+	img, err := a.Store.Image(a.ImageRef)
 	if err != nil {
-		return nil, "", err
+		return "", "", fmt.Errorf("failed to look up image %q: %w", a.ImageRef, err)
+	}
+	imageID = img.ID
+
+	ctr, err := a.Store.CreateContainer("", []string{containerName}, imageID, "", "", &storage.ContainerOptions{})
+	if err != nil {
+		return "", "", fmt.Errorf("failed to create container: %w", err)
 	}
 
-	if err := b.Mount(""); err != nil {
-		b.Remove(options.RemoveOption{Force: true})
-		return nil, "", err
+	mountPoint, err = a.Store.Mount(ctr.ID, "")
+	if err != nil {
+		_ = a.Store.DeleteContainer(ctr.ID)
+		return "", "", fmt.Errorf("failed to mount container: %w", err)
 	}
 
-	return b, b.MountPoint, nil
+	return ctr.ID, mountPoint, nil
 }
 
-func (a *Analyzer) cleanup(b *builder.Builder) {
-	if b == nil {
+func (a *Analyzer) cleanup(containerID string) {
+	if containerID == "" {
 		return
 	}
-	if err := b.UMount(); err != nil {
-		logrus.Warnf("Failed to unmount builder %s: %v", b.ID, err)
+	if _, err := a.Store.Unmount(containerID, false); err != nil {
+		logrus.Warnf("Failed to unmount container %s: %v", containerID, err)
 	}
-	if err := b.Remove(options.RemoveOption{Force: true}); err != nil {
-		logrus.Warnf("Failed to remove builder %s: %v", b.ID, err)
+	if err := a.Store.DeleteContainer(containerID); err != nil {
+		logrus.Warnf("Failed to remove container %s: %v", containerID, err)
 	}
 }
 

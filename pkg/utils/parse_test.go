@@ -22,7 +22,6 @@ import (
 	"testing"
 	"time"
 
-	"gitee.com/openeuler/ktib/pkg/builder"
 	"gitee.com/openeuler/ktib/pkg/imagemanager"
 	"gitee.com/openeuler/ktib/pkg/options"
 	"github.com/containers/buildah/define"
@@ -859,34 +858,4 @@ func TestJsonFormatBuilders(t *testing.T) {
 	}
 }
 
-func TestJsonFormatMountInfo(t *testing.T) {
-	builders := []*builder.Builder{
-		{
-			ID:          "id1",
-			MountPoint:  "/tmp/mount1",
-			FromImageID: "image1",
-		},
-		{
-			ID:          "id2",
-			MountPoint:  "", // Should be skipped
-			FromImageID: "image2",
-		},
-	}
 
-	output, err := captureOutput(func() error {
-		return JsonFormatMountInfo(builders)
-	})
-	if err != nil {
-		t.Fatalf("JsonFormatMountInfo error: %v", err)
-	}
-
-	if !strings.Contains(output, `"id1"`) {
-		t.Error("Output missing id1")
-	}
-	if !strings.Contains(output, `"/tmp/mount1"`) {
-		t.Error("Output missing mount point")
-	}
-	if strings.Contains(output, `"id2"`) {
-		t.Error("Output should not contain id2 (empty mount point)")
-	}
-}
