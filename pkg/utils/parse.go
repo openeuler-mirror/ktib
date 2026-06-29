@@ -23,7 +23,6 @@ import (
 	"syscall"
 	"time"
 
-	"gitee.com/openeuler/ktib/pkg/builder"
 	"gitee.com/openeuler/ktib/pkg/imagemanager"
 	"gitee.com/openeuler/ktib/pkg/options"
 	ktype "gitee.com/openeuler/ktib/pkg/types"
@@ -365,25 +364,7 @@ func JsonFormatBuilders(containers []container.Container, ops options.BuildersOp
 	return nil
 }
 
-func JsonFormatMountInfo(builders []*builder.Builder) error {
-	var jsonBuilders []ktype.JsonBuilder
-	for _, b := range builders {
-		if b.MountPoint != "" {
-			jsonBuilders = append(jsonBuilders,
-				ktype.JsonBuilder{
-					ID:      b.ID,
-					Mount:   b.MountPoint,
-					ImageID: b.FromImageID,
-				})
-		}
-	}
-	data, err := json.MarshalIndent(jsonBuilders, "", "    ")
-	if err != nil {
-		return err
-	}
-	fmt.Printf("%s\n", data)
-	return nil
-}
+
 
 func ParseBuildOptions(cmd *cobra.Command, flags *options.BuildOptions, contextDir string, dockerfilePaths []string) (*define.BuildOptions, error) {
 	var output string
