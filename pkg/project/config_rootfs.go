@@ -26,7 +26,6 @@ var execCommand = exec.Command
 
 var unnecessaryFiles = []string{
 	// **************locales**********************
-	"/usr/lib/locale",
 	"/usr/share/locale",
 	"/lib/gconv",
 	"/lib64/gconv",
@@ -164,9 +163,65 @@ func addCommandToScriptAndRun(target string, config Config) error {
 	return nil
 }
 
-func RemoveUnnecessaryFiles(target string) error {
+func parseLocaleConfig(localeConfig string) string {
+	parts := strings.Split(localeConfig, " ")
+	if len(parts) > 1 {
+		return parts[len(parts)-1]
+	}
+	return localeConfig
+}
+
+func localeToLibDirName(locale string) string {
+	return strings.Replace(locale, ".UTF-8", ".utf8", 1)
+}
+
+func containsString(list []string, item string) bool {
+	for _, s := range list {
+		if s == item {
+			return true
+		}
+	}
+	return false
+}
+
+func filterLocaleDir(target, dirPath string, keepNames []string) error {
+	fullPath := filepath.Join(target, dirPath)
+	entries, err := os.ReadDir(fullPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	for _, entry := range entries {
+		if !containsString(keepNames, entry.Name()) {
+			removePath := filepath.Join(fullPath, entry.Name())
+			fmt.Println(removePath)
+			if err := os.RemoveAll(removePath); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func RemoveUnnecessaryFiles(target string, localeConfig string) error {
 	if err := removeAllFiles(target, unnecessaryFiles); err != nil {
 		return err
+	}
+
+	localeName := parseLocaleConfig(localeConfig)
+	if localeName != "" {
+		keepNames := []string{"C.utf8", localeToLibDirName(localeName)}
+		if err := filterLocaleDir(target, "/usr/lib/locale", keepNames); err != nil {
+			return err
+		}
+	} else {
+		localePath := filepath.Join(target, "/usr/lib/locale")
+		fmt.Println(localePath)
+		if err := os.RemoveAll(localePath); err != nil {
+			return err
+		}
 	}
 
 	if err := os.MkdirAll(filepath.Join(target, "var/cache/yum"), 0755); err != nil {

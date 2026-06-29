@@ -157,7 +157,7 @@ func TestRemoveUnnecessaryFiles(t *testing.T) {
 		t.Fatalf("Failed to create dummy file: %v", err)
 	}
 
-	err = RemoveUnnecessaryFiles(tempDir)
+	err = RemoveUnnecessaryFiles(tempDir, "")
 	if err != nil {
 		t.Fatalf("RemoveUnnecessaryFiles failed: %v", err)
 	}
@@ -176,6 +176,149 @@ func TestRemoveUnnecessaryFiles(t *testing.T) {
 		path := filepath.Join(tempDir, dir)
 		if _, err := os.Stat(path); os.IsNotExist(err) {
 			t.Errorf("Directory %s should have been recreated", dir)
+		}
+	}
+}
+
+func TestRemoveUnnecessaryFilesWithLocale(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "locale_filter_test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// 创建 /usr/lib/locale 目录结构
+	localeDir := filepath.Join(tempDir, "usr/lib/locale")
+	if err := os.MkdirAll(localeDir, 0755); err != nil {
+		t.Fatalf("Failed to create locale dir: %v", err)
+	}
+
+	// 创建多个 locale 子目录
+	for _, name := range []string{"C.utf8", "en_US.utf8", "zh_CN.utf8", "en_GB.utf8"} {
+		subDir := filepath.Join(localeDir, name)
+		if err := os.MkdirAll(subDir, 0755); err != nil {
+			t.Fatalf("Failed to create %s: %v", name, err)
+		}
+		dummy := filepath.Join(subDir, "LC_CTYPE")
+		if err := os.WriteFile(dummy, []byte("data"), 0644); err != nil {
+			t.Fatalf("Failed to create file in %s: %v", name, err)
+		}
+	}
+
+	// 创建 locale-archive
+	archive := filepath.Join(localeDir, "locale-archive")
+	if err := os.WriteFile(archive, []byte("archive-data"), 0644); err != nil {
+		t.Fatalf("Failed to create locale-archive: %v", err)
+	}
+
+	// 创建 doc 目录（应该被全删）
+	docDir := filepath.Join(tempDir, "usr/share/doc")
+	if err := os.MkdirAll(docDir, 0755); err != nil {
+		t.Fatalf("Failed to create doc dir: %v", err)
+	}
+
+	// 测试 locale 为 en_US.UTF-8
+	err = RemoveUnnecessaryFiles(tempDir, "en_US.UTF-8")
+	if err != nil {
+		t.Fatalf("RemoveUnnecessaryFiles with locale failed: %v", err)
+	}
+
+	// 验证 C.utf8 保留
+	cDir := filepath.Join(localeDir, "C.utf8")
+	if _, err := os.Stat(cDir); os.IsNotExist(err) {
+		t.Errorf("C.utf8 should be preserved")
+	}
+
+	// 验证 en_US.utf8 保留
+	enDir := filepath.Join(localeDir, "en_US.utf8")
+	if _, err := os.Stat(enDir); os.IsNotExist(err) {
+		t.Errorf("en_US.utf8 should be preserved")
+	}
+
+	// 验证 zh_CN.utf8 被删除
+	zhDir := filepath.Join(localeDir, "zh_CN.utf8")
+	if _, err := os.Stat(zhDir); !os.IsNotExist(err) {
+		t.Errorf("zh_CN.utf8 should be removed")
+	}
+
+	// 验证 en_GB.utf8 被删除
+	gbDir := filepath.Join(localeDir, "en_GB.utf8")
+	if _, err := os.Stat(gbDir); !os.IsNotExist(err) {
+		t.Errorf("en_GB.utf8 should be removed")
+	}
+
+	// 验证 locale-archive 被删除
+	if _, err := os.Stat(archive); !os.IsNotExist(err) {
+		t.Errorf("locale-archive should be removed")
+	}
+
+	// 验证 doc 目录被全删
+	if _, err := os.Stat(docDir); !os.IsNotExist(err) {
+		t.Errorf("doc directory should be removed")
+	}
+}
+
+func TestRemoveUnnecessaryFilesNoLocale(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "locale_nolocale_test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// 创建 /usr/lib/locale 目录
+	localeDir := filepath.Join(tempDir, "usr/lib/locale")
+	if err := os.MkdirAll(filepath.Join(localeDir, "C.utf8"), 0755); err != nil {
+		t.Fatalf("Failed to create C.utf8: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(localeDir, "en_US.utf8"), 0755); err != nil {
+		t.Fatalf("Failed to create en_US.utf8: %v", err)
+	}
+
+	// locale 为空，应该全删
+	err = RemoveUnnecessaryFiles(tempDir, "")
+	if err != nil {
+		t.Fatalf("RemoveUnnecessaryFiles without locale failed: %v", err)
+	}
+
+	// 验证 /usr/lib/locale 被全删
+	if _, err := os.Stat(localeDir); !os.IsNotExist(err) {
+		t.Errorf("locale directory should be completely removed when no locale is specified")
+		}
+}
+
+func TestLocaleToLibDirName(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"en_US.UTF-8", "en_US.utf8"},
+		{"zh_CN.UTF-8", "zh_CN.utf8"},
+		{"C.UTF-8", "C.utf8"},
+		{"en_GB.UTF-8", "en_GB.utf8"},
+		{"en_US", "en_US"},
+	}
+	for _, tt := range tests {
+		result := localeToLibDirName(tt.input)
+		if result != tt.expected {
+			t.Errorf("localeToLibDirName(%s) = %s, want %s", tt.input, result, tt.expected)
+		}
+	}
+}
+
+func TestParseLocaleConfig(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"%_install_langs en_US.UTF-8", "en_US.UTF-8"},
+		{"%_install_langs zh_CN.UTF-8", "zh_CN.UTF-8"},
+		{"en_US.UTF-8", "en_US.UTF-8"},
+		{"", ""},
+	}
+	for _, tt := range tests {
+		result := parseLocaleConfig(tt.input)
+		if result != tt.expected {
+			t.Errorf("parseLocaleConfig(%s) = %s, want %s", tt.input, result, tt.expected)
 		}
 	}
 }
