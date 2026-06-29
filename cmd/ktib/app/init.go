@@ -283,6 +283,7 @@ func newSubCmdBuildRootfs() *cobra.Command {
 func newSubCmdCleanRootfs() *cobra.Command {
 	var option struct {
 		imageType string
+		locale    string
 	}
 
 	validImageTypes := utils.ValidImageTypes
@@ -291,12 +292,15 @@ func newSubCmdCleanRootfs() *cobra.Command {
 		Use:     "clean-rootfs",
 		Aliases: []string{"cr"},
 		Short:   "Clean rootfs by removing files, optional packages, and unmasking services",
-		Long:    "Clean-rootfs removes locales/docs/caches/logs/tmp, optionally removes packages per type (e.g., minimal), unmask services, and performs final cleanup. Use --type to apply type-specific rules.",
+		Long:    "Clean-rootfs removes locales/docs/caches/logs/tmp, optionally removes packages per type (e.g., minimal), unmask services, and performs final cleanup. Use --type to apply type-specific rules. Use --locale to preserve locale data for the specified locale.",
 		Example: ` # Clean rootfs with minimal rules
   ktib project clean-rootfs --type minimal /path/to/project
 
  # Clean rootfs for init/platform types
-  ktib project clean-rootfs --type init /path/to/project`,
+  ktib project clean-rootfs --type init /path/to/project
+
+ # Clean rootfs preserving locale data
+  ktib project clean-rootfs --locale en_US.UTF-8 /path/to/project`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) < 1 {
 				logrus.Println("The number of parameters passed in is incorrect")
@@ -312,6 +316,10 @@ func newSubCmdCleanRootfs() *cobra.Command {
 						option.imageType, strings.Join(validImageTypes, ", "))
 				}
 				boot.BuildType = option.imageType
+			}
+
+			if option.locale != "" {
+				boot.Locale = option.locale
 			}
 
 			// Execute the cleanup operation
@@ -333,6 +341,7 @@ func newSubCmdCleanRootfs() *cobra.Command {
 	// Ensure flags are correctly added to the command's flag set
 	cmd.Flags().StringVar(&option.imageType, "type", "",
 		fmt.Sprintf("Type of image (%s)", strings.Join(validImageTypes, ", ")))
+	cmd.Flags().StringVar(&option.locale, "locale", "", "保留指定 locale 的数据目录（如 en_US.UTF-8），未指定则全删")
 
 	// Add auto-completion for image type flag
 	cmd.RegisterFlagCompletionFunc("type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {

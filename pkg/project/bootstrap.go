@@ -30,6 +30,7 @@ type Bootstrap struct {
 	DestinationDir string // Destination directory
 	ImageName      string // Image name
 	BuildType      string // Build type
+	Locale         string // Locale configuration
 }
 
 // Config defines the configuration file structure
@@ -161,6 +162,9 @@ func (b *Bootstrap) BuildRootfs(configFile string) error {
 		return fmt.Errorf("failed to configure system: %v", err)
 	}
 
+	// 保存 locale 配置到 Bootstrap，供 CleanRootfs 使用
+	b.Locale = config.Locale
+
 	fmt.Println("rootfs build complete, please run 'ktib project clean-rootfs' to clean unnecessary files and packages")
 	return nil
 }
@@ -234,7 +238,7 @@ func (b *Bootstrap) CleanRootfs() error {
 		fmt.Printf("Warning: Failed to remove unnecessary packages: %v\n", err)
 	}
 	// 2. Remove unnecessary files
-	if err := RemoveUnnecessaryFiles(target); err != nil {
+	if err := RemoveUnnecessaryFiles(target, b.Locale); err != nil {
 		fmt.Printf("Failed to remove unnecessary files: %v\n", err)
 	}
 
