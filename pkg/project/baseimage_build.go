@@ -18,6 +18,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gitee.com/openeuler/ktib/pkg/options"
 	"gitee.com/openeuler/ktib/pkg/utils"
@@ -30,6 +31,11 @@ func (b *Bootstrap) BuildImage(imageName, tag string) error {
 	rootfsDir := filepath.Join(b.DestinationDir, "rootfs")
 	if _, err := os.Stat(rootfsDir); os.IsNotExist(err) {
 		return fmt.Errorf("rootfs directory does not exist, please run 'ktib project build-rootfs' first")
+	}
+
+	// locale fallback：如果 b.Locale 为空，尝试从 rootfs 的 /etc/locale.conf 自动读取
+	if b.Locale == "" {
+		b.resolveLocaleFromRootfs(rootfsDir)
 	}
 
 	// Create a temporary directory for the build
@@ -70,6 +76,18 @@ func (b *Bootstrap) BuildImage(imageName, tag string) error {
 		dockerfileContent := "FROM scratch\nADD rootfs.tar /\nCMD [\"" + cmd + "\"]\n"
 		if err := os.WriteFile(dockerfilePath, []byte(dockerfileContent), 0644); err != nil {
 			return fmt.Errorf("failed to create Dockerfile: %v", err)
+		}
+	}
+
+	// 注入或修改 Dockerfile 中的 ENV LANG
+	if localeEnv := parseLocaleConfig(b.Locale); localeEnv != "" {
+		content, err := os.ReadFile(dockerfilePath)
+		if err != nil {
+			return fmt.Errorf("failed to read Dockerfile for locale injection: %v", err)
+		}
+		content = []byte(injectOrReplaceEnvLang(string(content), localeEnv))
+		if err := os.WriteFile(dockerfilePath, []byte(content), 0644); err != nil {
+			return fmt.Errorf("failed to write Dockerfile with locale: %v", err)
 		}
 	}
 
@@ -243,4 +261,68 @@ ADD rootfs.tar /
 CMD ["/bin/bash"]
 `
 	return os.WriteFile(dockerfilePath, []byte(content), 0644)
+}
+
+// resolveLocaleFromRootfs 从 rootfs 的 /etc/locale.conf 自动读取 locale 信息
+// 仅在 b.Locale 为空时作为 fallback 使用
+func (b *Bootstrap) resolveLocaleFromRootfs(rootfsDir string) {
+	localeConfPath := filepath.Join(rootfsDir, "etc", "locale.conf")
+	data, err := os.ReadFile(localeConfPath)
+	if err != nil {
+		return
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+
+		// 跳过空行和注释行
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		// 忽略等号前的空格/制表符：匹配 "LANG=...", "LANG =...", "LANG  =..."
+		// 使用 Cut 分割 key=value，key 部分 trim 后须为 "LANG"
+		key, value, found := strings.Cut(line, "=")
+		if !found {
+			continue
+		}
+		if strings.TrimSpace(key) != "LANG" {
+			continue
+		}
+
+		// 剥离行内注释（第一个未引用的 # 及之后的内容）
+		localeValue := stripInlineComment(value)
+
+		// 剥离外层引号
+		localeValue = strings.Trim(localeValue, "\"'")
+		localeValue = strings.TrimSpace(localeValue)
+
+		if localeValue != "" {
+			b.Locale = "%_install_langs " + localeValue
+			return
+		}
+	}
+}
+
+// stripInlineComment 剥离行内注释，保留引号内的 #。
+// 简单实现：不处理转义引号，仅处理不被引号包裹的 #。
+func stripInlineComment(s string) string {
+	inSingle := false
+	inDouble := false
+	for i, ch := range s {
+		switch ch {
+		case '\'':
+			if !inDouble {
+				inSingle = !inSingle
+			}
+		case '"':
+			if !inSingle {
+				inDouble = !inDouble
+			}
+		case '#':
+			if !inSingle && !inDouble {
+				return strings.TrimRight(s[:i], " \t")
+			}
+		}
+	}
+	return s
 }

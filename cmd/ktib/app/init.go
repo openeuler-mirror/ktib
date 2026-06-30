@@ -356,13 +356,17 @@ func newSubCmdBuild() *cobra.Command {
 	var option struct {
 		imageName string
 		tag       string
+		locale    string
 	}
 	cmd := &cobra.Command{
 		Use:   "build",
 		Short: "Build the container image from the prepared rootfs",
-		Long:  "Build packages rootfs.tar, resolves Dockerfile (prefers project/dockerfile/Dockerfile) and uses buildah to produce the image with the given name:tag.",
+		Long:  "Build packages rootfs.tar, resolves Dockerfile (prefers project/dockerfile/Dockerfile) and uses buildah to produce the image with the given name:tag. Use --locale to inject ENV LANG into the Dockerfile.",
 		Example: ` # Build container image for a project
   ktib project build --name myimage --tag latest /path/to/project
+
+ # Build with locale injection
+  ktib project build --locale zh_CN.UTF-8 /path/to/project
 
  # Build with defaults
   ktib project build /path/to/project`,
@@ -374,6 +378,9 @@ func newSubCmdBuild() *cobra.Command {
 
 			// Execute image build
 			boot := project.NewBootstrap(args[0])
+			if option.locale != "" {
+				boot.Locale = "%_install_langs " + option.locale
+			}
 			return boot.BuildImage(option.imageName, option.tag)
 		},
 		Args: cobra.MinimumNArgs(1),
@@ -381,6 +388,7 @@ func newSubCmdBuild() *cobra.Command {
 	flags := cmd.Flags()
 	flags.StringVar(&option.imageName, "name", "ktib-image", "name of the container image")
 	flags.StringVar(&option.tag, "tag", "latest", "tag of the container image")
+	flags.StringVar(&option.locale, "locale", "", "Inject ENV LANG into Dockerfile (e.g., en_US.UTF-8, zh_CN.UTF-8)")
 	return cmd
 }
 

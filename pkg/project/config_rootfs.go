@@ -175,6 +175,99 @@ func localeToLibDirName(locale string) string {
 	return strings.Replace(locale, ".UTF-8", ".utf8", 1)
 }
 
+// injectOrReplaceEnvLang 注入或替换 Dockerfile 中的 ENV LANG 行
+// 支持 ENV LANG=xxx（独立行）、ENV LANG=xxx OTHER=yyy（LANG在行首）、ENV OTHER=yyy LANG=xxx（LANG在行中）
+// 多变量 ENV 行中的 LANG 会被拆出为独立行，其余变量保留
+// 如果整份 Dockerfile 无 LANG，在 CMD 行之前插入
+func injectOrReplaceEnvLang(content string, localeValue string) string {
+	if content == "" {
+		return "ENV LANG=" + localeValue
+	}
+
+	// 检测行尾风格：优先使用 \r\n，否则用 \n
+	lineSep := "\n"
+	if strings.Contains(content, "\r\n") {
+		lineSep = "\r\n"
+	}
+
+	envLangLine := "ENV LANG=" + localeValue
+	lines := strings.Split(content, lineSep)
+
+	needInsert := true // 是否需要插入独立的 ENV LANG 行
+	var result []string
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if !strings.HasPrefix(trimmed, "ENV ") {
+			result = append(result, line)
+			continue
+		}
+
+		envContent := trimmed[4:] // 去掉 "ENV "
+		// 词边界匹配：LANG= 必须是独立 key，只匹配行首 "LANG=" 或前面是空格 " LANG="
+		// 避免子串误伤：MY_LANG=（前面不是空格/行首）、值中包含的 LANG=
+		var langIdx int
+		if strings.HasPrefix(envContent, "LANG=") {
+			langIdx = 0
+		} else if idx := strings.Index(envContent, " LANG="); idx != -1 {
+			langIdx = idx + 1
+		} else {
+			langIdx = -1
+		}
+		if langIdx == -1 {
+			result = append(result, line)
+			continue
+		}
+
+		// 找到 LANG= 值的结束位置：下一个空格或行尾
+		valStart := langIdx + 5 // len("LANG=")
+		valEnd := strings.Index(envContent[valStart:], " ")
+		if valEnd == -1 {
+			valEnd = len(envContent)
+		} else {
+			valEnd = valStart + valEnd
+		}
+
+		remainingBefore := strings.TrimSpace(envContent[:langIdx])
+		remainingAfter := strings.TrimSpace(envContent[valEnd:])
+
+		if remainingBefore == "" && remainingAfter == "" {
+			// 只有 LANG 一个变量，直接替换整行
+			result = append(result, envLangLine)
+			needInsert = false
+		} else {
+			// 有其他变量，移除 LANG 部分，保留原行其他变量，LANG 拆为独立行稍后插入
+			var remaining string
+			if remainingBefore != "" && remainingAfter != "" {
+				remaining = remainingBefore + " " + remainingAfter
+			} else {
+				remaining = remainingBefore + remainingAfter
+			}
+			result = append(result, "ENV " + remaining)
+			// needInsert 保持 true，后续会在 CMD 前插入
+		}
+	}
+
+	// 需要插入独立的 ENV LANG 行（多变量拆出或原本不存在）
+	if needInsert {
+		var inserted []string
+		insertDone := false
+		for _, line := range result {
+			trimmed := strings.TrimSpace(line)
+			if !insertDone && strings.HasPrefix(trimmed, "CMD ") {
+				inserted = append(inserted, envLangLine)
+				insertDone = true
+			}
+			inserted = append(inserted, line)
+		}
+		if !insertDone {
+			inserted = append(inserted, envLangLine)
+		}
+		result = inserted
+	}
+
+	return strings.Join(result, lineSep)
+}
+
 func containsString(list []string, item string) bool {
 	for _, s := range list {
 		if s == item {
