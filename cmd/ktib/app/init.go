@@ -17,7 +17,6 @@ import (
 	"strings"
 
 	"gitee.com/openeuler/ktib/pkg/project"
-	"gitee.com/openeuler/ktib/pkg/utils"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	//"gopkg.in/yaml.v2"
@@ -59,7 +58,7 @@ func newSubCmdDefaultConfig() *cobra.Command {
 	}
 
 	// Define valid image types
-	validImageTypes := []string{"micro", "minimal", "platform", "init"}
+	validImageTypes := project.ValidImageTypes()
 
 	cmd := &cobra.Command{
 		Use:     "default_config",
@@ -97,15 +96,15 @@ func newSubCmdDefaultConfig() *cobra.Command {
 				}
 			}
 
-			return runDefaultConfig(outputFileName, option.timezone, option.locale, option.imageType)
+			return project.WriteDefaultConfig(outputFileName, option.timezone, option.locale, option.imageType)
 		},
 		Args: cobra.NoArgs,
 	}
 	cmd.SetOut(os.Stdout)
 	// Add timezone option
-	cmd.Flags().StringVar(&option.timezone, "timezone", "Asia/Shanghai", "Set the timezone for the configuration (e.g., Asia/Shanghai, America/New_York, Europe/London)")
+	cmd.Flags().StringVar(&option.timezone, "timezone", project.DefaultTimezone, "Set the timezone for the configuration (e.g., Asia/Shanghai, America/New_York, Europe/London)")
 	// Add locale option
-	cmd.Flags().StringVar(&option.locale, "locale", "en_US.UTF-8", "Set the locale for the configuration (e.g., en_US.UTF-8, zh_CN.UTF-8, en_GB.UTF-8)")
+	cmd.Flags().StringVar(&option.locale, "locale", project.DefaultLocale, "Set the locale for the configuration (e.g., en_US.UTF-8, zh_CN.UTF-8, en_GB.UTF-8)")
 	// Add type option
 	cmd.Flags().StringVar(&option.imageType, "type", "",
 		fmt.Sprintf("Type of image (%s)", strings.Join(validImageTypes, ", ")))
@@ -116,79 +115,6 @@ func newSubCmdDefaultConfig() *cobra.Command {
 	})
 
 	return cmd
-}
-
-// runDefaultConfig executes the operation to generate the default configuration
-func runDefaultConfig(outputFileName, timezone, locale, imageType string) error {
-	// Get the corresponding package list based on the type
-	packages := getPackagesByType(imageType)
-
-	yamlContent := fmt.Sprintf(`packages:
-  install_pkgs:
-%s
-network: 
-    networking: yes
-    hostname: localhost.localdomain
-locale: "%%_install_langs %s"
-timezone: "%s"
-`, packages, locale, timezone)
-	data := []byte(yamlContent)
-	err := os.WriteFile(outputFileName, data, 0644)
-	if err != nil {
-		return fmt.Errorf("failed to write config file %s: %v", outputFileName, err)
-	}
-	return nil
-}
-
-// getPackagesByType returns the corresponding package list based on the type (in YAML content format)
-func getPackagesByType(imageType string) string {
-	var packages []string
-
-	switch imageType {
-	case "init":
-		// init type: includes package manager, most basic tools, and systemd debugging tools
-		packages = []string{
-			"yum",
-			"vim-minimal",
-			"dbus-daemon",
-			"kbd",
-			"util-linux",
-		}
-	case "platform":
-		// platform type: suitable for traditional business scenarios, includes package manager and most basic tools image
-		packages = []string{
-			"yum",
-			"vim-minimal",
-			"shadow",
-		}
-	case "minimal":
-		// minimal type: minimal installation, includes only necessary basic packages, does not include Python
-		packages = []string{
-			"microdnf",
-			"vim-minimal",
-		}
-	case "micro":
-		// micro type: ultra-minimal installation, includes only the most core packages
-		packages = []string{
-			"coreutils",
-		}
-	default:
-		// Default to using the package list for platform type
-		packages = []string{
-			"yum",
-			"vim-minimal",
-			"shadow",
-		}
-	}
-
-	// Format the package list into YAML format
-	var packagesYAML string
-	for _, pkg := range packages {
-		packagesYAML += fmt.Sprintf("    - %s\n", pkg)
-	}
-	packagesYAML += "    # You can add more packages\n    # - package1\n    # - package2"
-
-	return packagesYAML
 }
 
 // newSubCmdInit creates the subcommand for initializing the project structure
@@ -211,9 +137,9 @@ func newSubCmdInit() *cobra.Command {
 		},
 		Args: cobra.MinimumNArgs(1),
 	}
-	types := utils.ValidImageTypes
+	types := project.ValidImageTypes()
 	flags := cmd.Flags()
-	flags.StringVar(&option.BuildType, "type", "platform", "Type of image ("+strings.Join(types, ", ")+")")
+	flags.StringVar(&option.BuildType, "type", project.DefaultProjectImageType, "Type of image ("+strings.Join(types, ", ")+")")
 	cmd.RegisterFlagCompletionFunc("type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return types, cobra.ShellCompDirectiveDefault
 	})
@@ -226,21 +152,10 @@ func runInit(c *cobra.Command, args []string, option InitOption) error {
 		logrus.Println("The number of parameters passed in is incorrect")
 		return c.Help()
 	}
-	boot := project.NewBootstrap(args[0])
-
-	if option.BuildType != "" {
-		validTypes := utils.ValidImageTypes
-		if !utils.IsValidImageType(option.BuildType) {
-			return fmt.Errorf("invalid image type: %s. Valid types include: %s", option.BuildType, strings.Join(validTypes, ", "))
-		}
-		boot.BuildType = option.BuildType
-	}
-
-	// Use the new method to initialize the project structure
-	if err := boot.InitProjectStructure(); err != nil {
-		return err
-	}
-	return nil
+	return project.NewWorkflowService().InitProject(project.ProjectWorkflowRequest{
+		ProjectDir: args[0],
+		ImageType:  option.BuildType,
+	})
 }
 
 // newSubCmdBuildRootfs creates the subcommand for building rootfs
@@ -263,13 +178,10 @@ func newSubCmdBuildRootfs() *cobra.Command {
 				logrus.Println("The number of parameters passed in is incorrect")
 				return cmd.Help()
 			}
-			if option.configFile == "" {
-				return fmt.Errorf("when building rootfs, you need to specify the --config")
-			}
-
-			// Execute rootfs build
-			boot := project.NewBootstrap(args[0])
-			return boot.BuildRootfs(option.configFile)
+			return project.NewWorkflowService().BuildRootfs(project.ProjectWorkflowRequest{
+				ProjectDir: args[0],
+				ConfigPath: option.configFile,
+			})
 		},
 		Args: cobra.MinimumNArgs(1),
 	}
@@ -286,7 +198,7 @@ func newSubCmdCleanRootfs() *cobra.Command {
 		locale    string
 	}
 
-	validImageTypes := utils.ValidImageTypes
+	validImageTypes := project.ValidImageTypes()
 
 	cmd := &cobra.Command{
 		Use:     "clean-rootfs",
@@ -307,28 +219,11 @@ func newSubCmdCleanRootfs() *cobra.Command {
 				return cmd.Help()
 			}
 
-			boot := project.NewBootstrap(args[0])
-
-			// If image type is specified, perform validation and set it
-			if option.imageType != "" {
-				if !utils.IsValidImageType(option.imageType) {
-					return fmt.Errorf("invalid image type: %s. Valid types include: %s",
-						option.imageType, strings.Join(validImageTypes, ", "))
-				}
-				boot.BuildType = option.imageType
-			}
-
-			if option.locale != "" {
-				boot.Locale = option.locale
-			}
-
-			// Execute the cleanup operation
-			if err := boot.CleanRootfs(); err != nil {
-				return fmt.Errorf("failed to clean rootfs: %v", err)
-			}
-
-			logrus.Println("Successfully cleaned rootfs")
-			return nil
+			return project.NewWorkflowService().CleanRootfs(project.ProjectWorkflowRequest{
+				ProjectDir: args[0],
+				ImageType:  option.imageType,
+				Locale:     option.locale,
+			})
 		},
 		Args: cobra.MinimumNArgs(1),
 		// Add path completion for the clean-rootfs command
@@ -375,19 +270,18 @@ func newSubCmdBuild() *cobra.Command {
 				logrus.Println("The number of parameters passed in is incorrect")
 				return cmd.Help()
 			}
-
-			// Execute image build
-			boot := project.NewBootstrap(args[0])
-			if option.locale != "" {
-				boot.Locale = "%_install_langs " + option.locale
-			}
-			return boot.BuildImage(option.imageName, option.tag)
+			return project.NewWorkflowService().BuildImage(project.ProjectWorkflowRequest{
+				ProjectDir: args[0],
+				ImageName:  option.imageName,
+				Tag:        option.tag,
+				Locale:     option.locale,
+			})
 		},
 		Args: cobra.MinimumNArgs(1),
 	}
 	flags := cmd.Flags()
-	flags.StringVar(&option.imageName, "name", "ktib-image", "name of the container image")
-	flags.StringVar(&option.tag, "tag", "latest", "tag of the container image")
+	flags.StringVar(&option.imageName, "name", project.DefaultImageName, "name of the container image")
+	flags.StringVar(&option.tag, "tag", project.DefaultImageTag, "tag of the container image")
 	flags.StringVar(&option.locale, "locale", "", "Inject ENV LANG into Dockerfile (e.g., en_US.UTF-8, zh_CN.UTF-8)")
 	return cmd
 }

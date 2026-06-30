@@ -12,12 +12,7 @@
 package app
 
 import (
-	"fmt"
-	"path/filepath"
-	"strings"
-
 	"gitee.com/openeuler/ktib/pkg/project"
-	"gitee.com/openeuler/ktib/pkg/utils"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -37,61 +32,16 @@ func runMake(cmd *cobra.Command, args []string, option makeOption) error {
 		logrus.Println("The number of parameters passed in is incorrect")
 		return cmd.Help()
 	}
-	if option.init {
-		boot := project.NewBootstrap(args[0])
-		if option.imageType != "" {
-			if !utils.IsValidImageType(option.imageType) {
-				return fmt.Errorf("invalid image type: %s. Valid types include: %s", option.imageType, strings.Join(utils.ValidImageTypes, ", "))
-			}
-			boot.BuildType = option.imageType
-		}
-		if err := boot.InitProjectStructure(); err != nil {
-			return err
-		}
-		if option.config == "" {
-			option.config = filepath.Join(args[0], "config.yml")
-			if err := runDefaultConfig(option.config, option.timezone, option.locale, option.imageType); err != nil {
-				return err
-			}
-		}
-	}
-	if option.config == "" {
-		return fmt.Errorf("when building rootfs, you need to specify the --config")
-	}
-	boot := project.NewBootstrap(args[0])
-	if option.imageType != "" {
-		if !utils.IsValidImageType(option.imageType) {
-			return fmt.Errorf("invalid image type: %s. Valid types include: %s", option.imageType, strings.Join(utils.ValidImageTypes, ", "))
-		}
-		boot.BuildType = option.imageType
-	}
-
-	logrus.Println("Building rootfs ...")
-	if err := boot.BuildRootfs(option.config); err != nil {
-		return err
-	}
-
-	logrus.Println("Cleaning rootfs ...")
-	if err := boot.CleanRootfs(); err != nil {
-		return err
-	}
-
-	imageName := option.imageName
-	if imageName == "" {
-		imageName = "ktib-image"
-	}
-	tag := option.tag
-	if tag == "" {
-		tag = "latest"
-	}
-
-	logrus.Println("Building image ...")
-	if err := boot.BuildImage(imageName, tag); err != nil {
-		return err
-	}
-
-	logrus.Println("Make completed")
-	return nil
+	return project.NewWorkflowService().MakeImage(project.ProjectWorkflowRequest{
+		ProjectDir: args[0],
+		ImageType:  option.imageType,
+		ConfigPath: option.config,
+		ImageName:  option.imageName,
+		Tag:        option.tag,
+		Init:       option.init,
+		Timezone:   option.timezone,
+		Locale:     option.locale,
+	})
 }
 
 func newCmdMake() *cobra.Command {
@@ -122,15 +72,15 @@ func newCmdMake() *cobra.Command {
 	flags := cmd.Flags()
 	flags.StringVar(&options.config, "config", "", "path to config file (optional with --init; default writes project/config.yml)")
 	flags.BoolVar(&options.init, "init", false, "init project structure before build; generate default config when not set")
-	flags.StringVar(&options.imageType, "type", "platform", "Type of image (micro|minimal|platform|init)")
+	flags.StringVar(&options.imageType, "type", project.DefaultProjectImageType, "Type of image (micro|minimal|platform|init)")
 	cmd.RegisterFlagCompletionFunc("type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		return utils.ValidImageTypes, cobra.ShellCompDirectiveDefault
+		return project.ValidImageTypes(), cobra.ShellCompDirectiveDefault
 	})
-	flags.StringVar(&options.imageName, "name", "ktib-image", "name of the container image")
-	flags.StringVar(&options.tag, "tag", "latest", "tag of the container image")
+	flags.StringVar(&options.imageName, "name", project.DefaultImageName, "name of the container image")
+	flags.StringVar(&options.tag, "tag", project.DefaultImageTag, "tag of the container image")
 	// Add timezone option
-	flags.StringVar(&options.timezone, "timezone", "Asia/Shanghai", "Set the timezone for the configuration (e.g., Asia/Shanghai, America/New_York, Europe/London)")
+	flags.StringVar(&options.timezone, "timezone", project.DefaultTimezone, "Set the timezone for the configuration (e.g., Asia/Shanghai, America/New_York, Europe/London)")
 	// Add locale option
-	flags.StringVar(&options.locale, "locale", "en_US.UTF-8", "Set the locale for the configuration (e.g., en_US.UTF-8, zh_CN.UTF-8, en_GB.UTF-8)")
+	flags.StringVar(&options.locale, "locale", project.DefaultLocale, "Set the locale for the configuration (e.g., en_US.UTF-8, zh_CN.UTF-8, en_GB.UTF-8)")
 	return cmd
 }

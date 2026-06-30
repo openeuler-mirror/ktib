@@ -48,7 +48,7 @@ type Config struct {
 
 // NewBootstrap creates a new Bootstrap instance
 func NewBootstrap(dir string) *Bootstrap {
-	return &Bootstrap{DestinationDir: dir, BuildType: "platform"}
+	return &Bootstrap{DestinationDir: dir, BuildType: DefaultProjectImageType}
 }
 
 // InitProjectStructure initializes the project directory structure
