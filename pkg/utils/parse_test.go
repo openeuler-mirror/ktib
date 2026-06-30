@@ -578,7 +578,7 @@ func TestSortImages(t *testing.T) {
 			ops:           options.ImagesOption{NoTrunc: true},
 			expectedLen:   1,
 			expectedRepos: []string{"repo"},
-			expectedIDs:   []string{"123456789012"}, // Truncated to 12 chars when NoTrunc is true (based on code logic)
+			expectedIDs:   []string{"12345678901234567890"},
 		},
 		{
 			name: "Multiple names",
