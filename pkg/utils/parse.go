@@ -172,14 +172,8 @@ func sortImages(imgs []*imagemanager.Image, ops options.ImagesOption) ([]imageRe
 
 		imgID := img.OriImage.ID
 		if !ops.NoTrunc {
-			// NoTrunc=false (default): truncate to 10 characters
 			if len(imgID) > 10 {
 				imgID = imgID[:10]
-			}
-		} else {
-			// NoTrunc=true: truncate to 12 characters
-			if len(imgID) > 12 {
-				imgID = imgID[:12]
 			}
 		}
 
