@@ -275,6 +275,56 @@ func TestParseBuildOptions(t *testing.T) {
 	}
 }
 
+func TestParseBuildOptionsInvalidBuildArg(t *testing.T) {
+	cmd := &cobra.Command{}
+	cmd.Flags().String("tag", "", "")
+
+	_, err := ParseBuildOptions(cmd, &options.BuildOptions{
+		Format:   "oci",
+		BuildArg: []string{"INVALID"},
+	}, "/context", nil)
+	if err == nil {
+		t.Fatal("expected invalid build-arg error, got nil")
+	}
+	if !strings.Contains(err.Error(), "must be in KEY=VALUE format") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestParseBuildOptionsUsesRegistryAuthForTLSDecision(t *testing.T) {
+	tempDir := t.TempDir()
+	authFile := filepath.Join(tempDir, "auth.json")
+	dockerfilePath := filepath.Join(tempDir, "Dockerfile")
+
+	if err := os.WriteFile(authFile, []byte(`{"auths":{"cr.kylinos.cn":{"auth":"dXNlcjpwYXNz"}}}`), 0600); err != nil {
+		t.Fatalf("failed to write auth file: %v", err)
+	}
+	if err := os.WriteFile(dockerfilePath, []byte("FROM cr.kylinos.cn/library/base:latest\n"), 0644); err != nil {
+		t.Fatalf("failed to write dockerfile: %v", err)
+	}
+
+	t.Setenv("REGISTRY_AUTH_FILE", authFile)
+
+	cmd := &cobra.Command{}
+	cmd.Flags().String("tag", "", "")
+
+	opts, err := ParseBuildOptions(cmd, &options.BuildOptions{
+		Format: "oci",
+	}, tempDir, []string{dockerfilePath})
+	if err != nil {
+		t.Fatalf("ParseBuildOptions() error = %v", err)
+	}
+	if opts.SystemContext == nil {
+		t.Fatal("expected system context to be set")
+	}
+	if opts.SystemContext.AuthFilePath != authFile {
+		t.Fatalf("expected auth file path %q, got %q", authFile, opts.SystemContext.AuthFilePath)
+	}
+	if opts.SystemContext.DockerInsecureSkipTLSVerify != types.OptionalBoolTrue {
+		t.Fatalf("expected TLS verify flag to be true when registry credentials match, got %v", opts.SystemContext.DockerInsecureSkipTLSVerify)
+	}
+}
+
 func TestHumanSize(t *testing.T) {
 	tests := []struct {
 		input    int64
@@ -481,6 +531,37 @@ FROM cr.kylinos.cn/my/image:latest
 	} else {
 		if repos[0] != expected[0] {
 			t.Errorf("Expected repo %s, got %s", expected[0], repos[0])
+		}
+	}
+}
+
+func TestParseDockerfileFromImageComplexReferences(t *testing.T) {
+	tempDir := t.TempDir()
+	dockerfilePath := filepath.Join(tempDir, "Dockerfile")
+
+	content := `
+# Comment
+FROM registry.example.com:5000/ns/app@sha256:abcdef1234567890
+FROM ubuntu:22.04 AS base
+RUN echo hello
+FROM cr.kylinos.cn/team/image:latest # inline comment
+`
+	if err := os.WriteFile(dockerfilePath, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	repos, err := ParseDockerfileFromImage(dockerfilePath)
+	if err != nil {
+		t.Fatalf("ParseDockerfileFromImage failed: %v", err)
+	}
+
+	expected := []string{"registry.example.com:5000", "cr.kylinos.cn"}
+	if len(repos) != len(expected) {
+		t.Fatalf("Expected %d repos, got %d: %v", len(expected), len(repos), repos)
+	}
+	for i := range expected {
+		if repos[i] != expected[i] {
+			t.Fatalf("Expected repo %s, got %s", expected[i], repos[i])
 		}
 	}
 }
@@ -857,5 +938,3 @@ func TestJsonFormatBuilders(t *testing.T) {
 		t.Error("JSON output missing builder name")
 	}
 }
-
-
