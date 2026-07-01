@@ -25,7 +25,7 @@ const (
 	DefaultImageName        = "ktib-image"
 	DefaultImageTag         = "latest"
 	DefaultTimezone         = "Asia/Shanghai"
-	DefaultLocale           = "en_US.UTF-8"
+	DefaultLocale           = "C.UTF-8"
 	DefaultConfigFileName   = "config.yml"
 )
 

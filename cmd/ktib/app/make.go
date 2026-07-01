@@ -81,6 +81,6 @@ func newCmdMake() *cobra.Command {
 	// Add timezone option
 	flags.StringVar(&options.timezone, "timezone", project.DefaultTimezone, "Set the timezone for the configuration (e.g., Asia/Shanghai, America/New_York, Europe/London)")
 	// Add locale option
-	flags.StringVar(&options.locale, "locale", project.DefaultLocale, "Set the locale for the configuration (e.g., en_US.UTF-8, zh_CN.UTF-8, en_GB.UTF-8)")
+	flags.StringVar(&options.locale, "locale", project.DefaultLocale, "Set the locale for the configuration (e.g., C.UTF-8, zh_CN.UTF-8, en_GB.UTF-8)")
 	return cmd
 }

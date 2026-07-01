@@ -90,13 +90,13 @@ func ConfigureRootfs(target string, config Config) error {
 		// Set system locale environment
 		localePath := filepath.Join(target, "/etc/locale.conf")
 		// Extract locale code from config.Locale
-		// Assuming format is "%_install_langs en_US.UTF-8"
+		// Assuming format is "%_install_langs C.UTF-8"
 		localeParts := strings.Split(config.Locale, " ")
 		localeValue := ""
 		if len(localeParts) > 1 {
 			localeValue = fmt.Sprintf("LANG=%s\n", localeParts[len(localeParts)-1])
 		} else {
-			localeValue = "LANG=en_US.UTF-8\n" // Default value
+			localeValue = "LANG=C.UTF-8\n" // Default value
 		}
 
 		// Ensure directory exists
