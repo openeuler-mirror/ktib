@@ -33,7 +33,7 @@ func PullCmd() *cobra.Command {
 	var op options.PullOption
 	cmd := &cobra.Command{
 		Use:   "pull",
-		Short: "Pull an images or a repository from a registry",
+		Short: "Pull an image or a repository from a registry",
 		Long: `'pull' command downloads an image or repository from a Docker registry.
 You need to specify the name of the image or repository you want to pull.
 

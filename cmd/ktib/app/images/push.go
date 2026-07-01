@@ -48,7 +48,7 @@ func PushCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "push",
-		Short: "Push an images or a repository to a registry",
+		Short: "Push an image or a repository to a registry",
 		Args:  cobra.MinimumNArgs(1),
 		RunE:  push,
 	}

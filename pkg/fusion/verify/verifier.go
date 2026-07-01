@@ -65,7 +65,6 @@ func (v *DefaultVerifier) Verify(rootfsPath string) error {
 	}
 
 	logrus.Infof("Verifying %d packages...", len(pkgList))
-	errors := 0
 	warnings := 0
 	missingByPkg := make(map[string]int)
 
@@ -92,9 +91,6 @@ func (v *DefaultVerifier) Verify(rootfsPath string) error {
 		}
 	}
 
-	if errors > 0 {
-		return fmt.Errorf("verification failed with %d errors", errors)
-	}
 	if warnings > 0 {
 		type kv struct {
 			name  string

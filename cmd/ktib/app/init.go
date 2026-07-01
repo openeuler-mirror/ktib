@@ -91,7 +91,7 @@ func newSubCmdDefaultConfig() *cobra.Command {
 					}
 				}
 				if !valid {
-					return fmt.Errorf("invalid image type: %s。Valid types include: %s",
+					return fmt.Errorf("invalid image type: %s. Valid types include: %s",
 						option.imageType, strings.Join(validImageTypes, ", "))
 				}
 			}
