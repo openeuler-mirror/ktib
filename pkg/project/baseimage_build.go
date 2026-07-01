@@ -237,10 +237,12 @@ func createTarFromDirectory(sourceDir, tarFilePath string) error {
 			if err != nil {
 				return fmt.Errorf("failed to open file: %v", err)
 			}
-			defer file.Close()
-
 			if _, err := io.Copy(tarWriter, file); err != nil {
+				file.Close()
 				return fmt.Errorf("failed to write file content: %v", err)
+			}
+			if err := file.Close(); err != nil {
+				return fmt.Errorf("failed to close file: %v", err)
 			}
 		}
 
