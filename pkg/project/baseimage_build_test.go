@@ -251,3 +251,139 @@ func TestBuildImage(t *testing.T) {
 		})
 	}
 }
+
+func TestStripInlineComment(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"无注释", "en_US.UTF-8", "en_US.UTF-8"},
+		{"行内注释", "en_US.UTF-8  # comment after", "en_US.UTF-8"},
+		{"注释前无空格", "en_US.UTF-8# comment", "en_US.UTF-8"},
+		{"等号后的值带注释", "en_US.UTF-8   # some explanation", "en_US.UTF-8"},
+		{"单引号保护 #", "'en_US.UTF-8#safe'", "'en_US.UTF-8#safe'"},
+		{"双引号保护 #", "\"en_US.UTF-8#safe\"", "\"en_US.UTF-8#safe\""},
+		{"值本身就含 #（无引号）", "en_US.UTF-8#bad", "en_US.UTF-8"},
+		{"多空格后注释", "  en_US.UTF-8  #  comment  ", "  en_US.UTF-8"},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			result := stripInlineComment(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestResolveLocaleFromRootfs(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		content    string
+		wantLocale string
+	}{
+		{
+			name:       "标准格式",
+			content:    "LANG=en_US.UTF-8",
+			wantLocale: "%_install_langs en_US.UTF-8",
+		},
+		{
+			name:       "等号前有空格",
+			content:    "LANG = en_US.UTF-8",
+			wantLocale: "%_install_langs en_US.UTF-8",
+		},
+		{
+			name:       "等号前有制表符",
+			content:    "LANG\t=\ten_US.UTF-8",
+			wantLocale: "%_install_langs en_US.UTF-8",
+		},
+		{
+			name:       "双引号包裹的值",
+			content:    `LANG="en_US.UTF-8"`,
+			wantLocale: "%_install_langs en_US.UTF-8",
+		},
+		{
+			name:       "单引号包裹的值",
+			content:    `LANG='en_US.UTF-8'`,
+			wantLocale: "%_install_langs en_US.UTF-8",
+		},
+		{
+			name:       "值带行内注释",
+			content:    "LANG=en_US.UTF-8  # zh_CN.UTF-8 is default",
+			wantLocale: "%_install_langs en_US.UTF-8",
+		},
+		{
+			name:       "值带行内注释（等号前空格）",
+			content:    "LANG = en_US.UTF-8  # comment",
+			wantLocale: "%_install_langs en_US.UTF-8",
+		},
+		{
+			name:       "文件不存在",
+			content:    "__FILE_NOT_CREATED__",
+			wantLocale: "",
+		},
+		{
+			name:       "文件为空",
+			content:    "",
+			wantLocale: "",
+		},
+		{
+			name:       "无 LANG 行",
+			content:    "LC_ALL=en_US.UTF-8\nLC_TIME=C",
+			wantLocale: "",
+		},
+		{
+			name:       "LANG 被注释掉",
+			content:    "# LANG=en_US.UTF-8",
+			wantLocale: "",
+		},
+		{
+			name:       "多行取第一个 LANG",
+			content:    "LC_ALL=C\nLANG=zh_CN.UTF-8\nLANG=en_US.UTF-8",
+			wantLocale: "%_install_langs zh_CN.UTF-8",
+		},
+		{
+			name:       "带多余空行",
+			content:    "\n\nLANG=en_US.UTF-8\n\n",
+			wantLocale: "%_install_langs en_US.UTF-8",
+		},
+		{
+			name:       "引号内的 # 保留",
+			content:    `LANG="en_US.UTF-8#safe"`,
+			wantLocale: "%_install_langs en_US.UTF-8#safe",
+		},
+		{
+			name:       "CRLF 行尾",
+			content:    "LANG=en_US.UTF-8\r\nLC_ALL=C\r\n",
+			wantLocale: "%_install_langs en_US.UTF-8",
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			rootfsDir := t.TempDir()
+			if tt.content != "__FILE_NOT_CREATED__" {
+				localeConfDir := filepath.Join(rootfsDir, "etc")
+				require.NoError(t, os.MkdirAll(localeConfDir, 0755))
+				require.NoError(t, os.WriteFile(filepath.Join(localeConfDir, "locale.conf"), []byte(tt.content), 0644))
+			}
+
+			b := &Bootstrap{Locale: ""}
+			b.resolveLocaleFromRootfs(rootfsDir)
+
+			if tt.wantLocale == "" {
+				assert.Empty(t, b.Locale, "预期 Locale 为空，得到 %q", b.Locale)
+			} else {
+				assert.Equal(t, tt.wantLocale, b.Locale)
+			}
+		})
+	}
+}
+

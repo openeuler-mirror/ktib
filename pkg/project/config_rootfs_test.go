@@ -487,3 +487,97 @@ func TestConfigurePipAndRemovePycache(t *testing.T) {
 		}
 	}
 }
+
+func TestInjectOrReplaceEnvLang(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		input       string
+		localeValue string
+		expected    string
+	}{
+		{
+			name:        "无 LANG，有 CMD 行，在 CMD 前插入",
+			input:       "FROM scratch\nADD rootfs.tar /\nCMD [\"/bin/bash\"]\n",
+			localeValue: "en_US.UTF-8",
+			expected:    "FROM scratch\nADD rootfs.tar /\nENV LANG=en_US.UTF-8\nCMD [\"/bin/bash\"]\n",
+		},
+		{
+			name:        "已有独立 ENV LANG，替换值",
+			input:       "FROM scratch\nENV LANG=zh_CN.UTF-8\nCMD [\"/bin/bash\"]\n",
+			localeValue: "en_US.UTF-8",
+			expected:    "FROM scratch\nENV LANG=en_US.UTF-8\nCMD [\"/bin/bash\"]\n",
+		},
+		{
+			name:        "多变量 ENV 行包含 LANG，拆分为独立行",
+			input:       "FROM scratch\nENV LANG=zh_CN.UTF-8 LC_ALL=C\nCMD [\"/bin/bash\"]\n",
+			localeValue: "en_US.UTF-8",
+			expected:    "FROM scratch\nENV LC_ALL=C\nENV LANG=en_US.UTF-8\nCMD [\"/bin/bash\"]\n",
+		},
+		{
+			name:        "多变量 LANG 在中间",
+			input:       "FROM scratch\nENV LC_ALL=C LANG=zh_CN.UTF-8 LC_TIME=C\nCMD [\"/bin/bash\"]\n",
+			localeValue: "en_US.UTF-8",
+			expected:    "FROM scratch\nENV LC_ALL=C LC_TIME=C\nENV LANG=en_US.UTF-8\nCMD [\"/bin/bash\"]\n",
+		},
+		{
+			name:        "多变量 LANG 在末尾",
+			input:       "FROM scratch\nENV LC_ALL=C LC_TIME=C LANG=zh_CN.UTF-8\nCMD [\"/bin/bash\"]\n",
+			localeValue: "en_US.UTF-8",
+			expected:    "FROM scratch\nENV LC_ALL=C LC_TIME=C\nENV LANG=en_US.UTF-8\nCMD [\"/bin/bash\"]\n",
+		},
+		{
+			name:        "子串不误伤（MY_LANG 不应匹配）",
+			input:       "FROM scratch\nENV MY_LANG=zh_CN.UTF-8\nCMD [\"/bin/bash\"]\n",
+			localeValue: "en_US.UTF-8",
+			expected:    "FROM scratch\nENV MY_LANG=zh_CN.UTF-8\nENV LANG=en_US.UTF-8\nCMD [\"/bin/bash\"]\n",
+		},
+		{
+			name:        "空 Dockerfile",
+			input:       "",
+			localeValue: "en_US.UTF-8",
+			expected:    "ENV LANG=en_US.UTF-8",
+		},
+		{
+			name:        "仅 ENV 无 LANG",
+			input:       "FROM scratch\nENV LC_ALL=C",
+			localeValue: "en_US.UTF-8",
+			expected:    "FROM scratch\nENV LC_ALL=C\nENV LANG=en_US.UTF-8",
+		},
+		{
+			name:        "CRLF 行尾",
+			input:       "FROM scratch\r\nENV LANG=zh_CN.UTF-8\r\nCMD [\"/bin/bash\"]\r\n",
+			localeValue: "en_US.UTF-8",
+			expected:    "FROM scratch\r\nENV LANG=en_US.UTF-8\r\nCMD [\"/bin/bash\"]\r\n",
+		},
+		{
+			name:        "引号值保留",
+			input:       "FROM scratch\nCMD [\"/bin/bash\"]\n",
+			localeValue: `"en_US.UTF-8"`,
+			expected:    "FROM scratch\nENV LANG=\"en_US.UTF-8\"\nCMD [\"/bin/bash\"]\n",
+		},
+		{
+			name:        "LANG 值带空格的多变量行，仅替换值部分",
+			input:       "FROM scratch\nENV LC_ALL=C LANG=zh_CN.UTF-8",
+			localeValue: "en_US.UTF-8",
+			expected:    "FROM scratch\nENV LC_ALL=C\nENV LANG=en_US.UTF-8",
+		},
+		{
+			name:        "无 LANG，无 CMD 行，追加到末尾",
+			input:       "FROM scratch\nADD rootfs.tar /",
+			localeValue: "en_US.UTF-8",
+			expected:    "FROM scratch\nADD rootfs.tar /\nENV LANG=en_US.UTF-8",
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			result := injectOrReplaceEnvLang(tt.input, tt.localeValue)
+			if result != tt.expected {
+				t.Errorf("injectOrReplaceEnvLang()\ngot:  %q\nwant: %q", result, tt.expected)
+			}
+		})
+	}
+}
