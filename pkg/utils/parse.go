@@ -221,8 +221,12 @@ func sortContainers(containers []container.Container) ([]containerReport, error)
 		} else {
 			containerName = ""
 		}
+		id := c.ID
+		if len(id) > 10 {
+			id = id[:10]
+		}
 		containerReports = append(containerReports, containerReport{
-			ID:      c.ID[:10],
+			ID:      id,
 			Names:   containerName,
 			LayerID: c.LayerID,
 			ImageID: c.ImageID,
