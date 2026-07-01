@@ -104,7 +104,7 @@ func newSubCmdDefaultConfig() *cobra.Command {
 	// Add timezone option
 	cmd.Flags().StringVar(&option.timezone, "timezone", project.DefaultTimezone, "Set the timezone for the configuration (e.g., Asia/Shanghai, America/New_York, Europe/London)")
 	// Add locale option
-	cmd.Flags().StringVar(&option.locale, "locale", project.DefaultLocale, "Set the locale for the configuration (e.g., en_US.UTF-8, zh_CN.UTF-8, en_GB.UTF-8)")
+	cmd.Flags().StringVar(&option.locale, "locale", project.DefaultLocale, "Set the locale for the configuration (e.g., C.UTF-8, zh_CN.UTF-8, en_GB.UTF-8)")
 	// Add type option
 	cmd.Flags().StringVar(&option.imageType, "type", "",
 		fmt.Sprintf("Type of image (%s)", strings.Join(validImageTypes, ", ")))
@@ -212,7 +212,7 @@ func newSubCmdCleanRootfs() *cobra.Command {
   ktib project clean-rootfs --type init /path/to/project
 
  # Clean rootfs preserving locale data
-  ktib project clean-rootfs --locale en_US.UTF-8 /path/to/project`,
+  ktib project clean-rootfs --locale C.UTF-8 /path/to/project`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) < 1 {
 				logrus.Println("The number of parameters passed in is incorrect")
@@ -236,7 +236,7 @@ func newSubCmdCleanRootfs() *cobra.Command {
 	// Ensure flags are correctly added to the command's flag set
 	cmd.Flags().StringVar(&option.imageType, "type", "",
 		fmt.Sprintf("Type of image (%s)", strings.Join(validImageTypes, ", ")))
-	cmd.Flags().StringVar(&option.locale, "locale", "", "保留指定 locale 的数据目录（如 en_US.UTF-8），未指定则全删")
+	cmd.Flags().StringVar(&option.locale, "locale", "", "保留指定 locale 的数据目录（如 C.UTF-8），未指定则全删")
 
 	// Add auto-completion for image type flag
 	cmd.RegisterFlagCompletionFunc("type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
@@ -282,7 +282,7 @@ func newSubCmdBuild() *cobra.Command {
 	flags := cmd.Flags()
 	flags.StringVar(&option.imageName, "name", project.DefaultImageName, "name of the container image")
 	flags.StringVar(&option.tag, "tag", project.DefaultImageTag, "tag of the container image")
-	flags.StringVar(&option.locale, "locale", "", "Inject ENV LANG into Dockerfile (e.g., en_US.UTF-8, zh_CN.UTF-8)")
+	flags.StringVar(&option.locale, "locale", "", "Inject ENV LANG into Dockerfile (e.g., C.UTF-8, zh_CN.UTF-8)")
 	return cmd
 }
 

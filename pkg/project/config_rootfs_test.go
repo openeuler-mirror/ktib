@@ -87,7 +87,7 @@ func TestConfigureRootfs(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	config := Config{
-		Locale:   "en_US.UTF-8",
+		Locale:   "C.UTF-8",
 		Timezone: "Asia/Shanghai",
 	}
 	config.Network.NETWORKING = "yes"
@@ -217,8 +217,8 @@ func TestRemoveUnnecessaryFilesWithLocale(t *testing.T) {
 		t.Fatalf("Failed to create doc dir: %v", err)
 	}
 
-	// 测试 locale 为 en_US.UTF-8
-	err = RemoveUnnecessaryFiles(tempDir, "en_US.UTF-8")
+	// 测试 locale 为 C.UTF-8
+	err = RemoveUnnecessaryFiles(tempDir, "C.UTF-8")
 	if err != nil {
 		t.Fatalf("RemoveUnnecessaryFiles with locale failed: %v", err)
 	}
@@ -229,10 +229,10 @@ func TestRemoveUnnecessaryFilesWithLocale(t *testing.T) {
 		t.Errorf("C.utf8 should be preserved")
 	}
 
-	// 验证 en_US.utf8 保留
+	// 验证 en_US.utf8 被删除（locale 为 C.UTF-8，非 en_US）
 	enDir := filepath.Join(localeDir, "en_US.utf8")
-	if _, err := os.Stat(enDir); os.IsNotExist(err) {
-		t.Errorf("en_US.utf8 should be preserved")
+	if _, err := os.Stat(enDir); !os.IsNotExist(err) {
+		t.Errorf("en_US.utf8 should be removed when locale is C.UTF-8")
 	}
 
 	// 验证 zh_CN.utf8 被删除
