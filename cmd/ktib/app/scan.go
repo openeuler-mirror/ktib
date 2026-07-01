@@ -58,7 +58,7 @@ func newSubCmdDockerfile() *cobra.Command {
 func initScanDockerfileFlags(cmd *cobra.Command) {
 	flag := cmd.Flags()
 	flag.StringVar(&args.PolicyFile, "policy", PolicyYaml, "The dockerfile policy to use for the audit.")
-	flag.StringVar(&args.Dockerfile, "dockerfile", "", "The DockerfileMsg to audit. Can be both a file or a directory.")
+	flag.StringVar(&args.Dockerfile, "dockerfile", "", "The Dockerfile to audit. Can be both a file or a directory.")
 	flag.BoolVar(&args.ParseOnly, "parse-only", false, "Simply parse Dockerfile(s) and return the content, without applying any policy.")
 	flag.StringVar(&args.JSONOutfile, "output", "dockerfile-audit.json", "Path to the JSON output file.")
 	flag.BoolVar(&args.Verbose, "verbose", false, "Enables debug output.")
