@@ -456,7 +456,10 @@ func ParseBuildOptions(cmd *cobra.Command, flags *options.BuildOptions, contextD
 
 	// Get logged-in authentication information
 	credentials, err := auth_config.GetAllCredentials(opts.SystemContext)
-	if err != nil || len(credentials) == 0 {
+	if err != nil {
+		return nil, fmt.Errorf("get credentials: %w", err)
+	}
+	if len(credentials) == 0 {
 		// If there is no authentication information, use the default TLS verification setting
 		opts.SystemContext.DockerInsecureSkipTLSVerify = types.OptionalBoolFalse
 	} else {
